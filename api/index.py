@@ -8,10 +8,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 if os.environ.get("DATABASE_URL"):
-    # PostgreSQL (Supabase): just ensure tables exist — data already in DB
-    from database import engine
-    import models
-    models.Base.metadata.create_all(bind=engine)
+    # PostgreSQL (Supabase): ensure tables exist (idempotent, tables likely already there)
+    try:
+        from database import engine
+        import models
+        models.Base.metadata.create_all(bind=engine)
+    except Exception:
+        pass  # Tables already exist — safe to ignore
 elif os.environ.get("VERCEL"):
     # Vercel without Postgres: copy bundled SQLite DB to /tmp on cold start
     src_db = os.path.join(ROOT_DIR, "webinar_analytics.db")

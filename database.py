@@ -1,17 +1,26 @@
 import os
+import ssl
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 if DATABASE_URL:
-    # PostgreSQL (Supabase) — serverless-safe settings
+    # PostgreSQL (Supabase) via pg8000 (pure-Python, no C deps — safe on Vercel)
+    # Ensure we use the pg8000 dialect
+    pg_url = DATABASE_URL.replace("postgresql://", "postgresql+pg8000://", 1)
+
+    # SSL context for Supabase
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+
     engine = create_engine(
-        DATABASE_URL,
+        pg_url,
         pool_pre_ping=True,
         pool_size=1,
         max_overflow=0,
-        connect_args={"sslmode": "require"},
+        connect_args={"ssl_context": ssl_ctx},
     )
 else:
     # Local fallback: SQLite
