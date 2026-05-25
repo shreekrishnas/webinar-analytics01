@@ -14,9 +14,14 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    models.Base.metadata.create_all(bind=engine)
-    from seed_data import seed_database
-    seed_database()
+    # Only seed in local dev; production (VERCEL / DATABASE_URL) is pre-seeded
+    if not os.environ.get("DATABASE_URL") and not os.environ.get("VERCEL"):
+        try:
+            models.Base.metadata.create_all(bind=engine)
+            from seed_data import seed_database
+            seed_database()
+        except Exception:
+            pass
     yield
 
 

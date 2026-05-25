@@ -8,25 +8,27 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 if os.environ.get("DATABASE_URL"):
-    # PostgreSQL (Supabase): ensure tables exist (idempotent, tables likely already there)
+    # PostgreSQL (Supabase): tables already exist — nothing to do at startup
+    pass
+elif os.environ.get("VERCEL"):
+    # Vercel without Postgres: copy bundled SQLite DB to /tmp on cold start
+    try:
+        src_db = os.path.join(ROOT_DIR, "webinar_analytics.db")
+        dst_db = "/tmp/webinar_analytics.db"
+        if os.path.exists(src_db):
+            shutil.copy2(src_db, dst_db)
+    except Exception as e:
+        print("SQLite copy error:", e, file=sys.stderr)
+else:
+    # Local dev: normal init + seeding
     try:
         from database import engine
         import models
         models.Base.metadata.create_all(bind=engine)
-    except Exception:
-        pass  # Tables already exist — safe to ignore
-elif os.environ.get("VERCEL"):
-    # Vercel without Postgres: copy bundled SQLite DB to /tmp on cold start
-    src_db = os.path.join(ROOT_DIR, "webinar_analytics.db")
-    dst_db = "/tmp/webinar_analytics.db"
-    if os.path.exists(src_db):
-        shutil.copy2(src_db, dst_db)
-else:
-    # Local dev: normal init + seeding
-    from database import engine
-    import models
-    models.Base.metadata.create_all(bind=engine)
-    from seed_data import seed_database
-    seed_database()
+        from seed_data import seed_database
+        seed_database()
+    except Exception as e:
+        import traceback
+        print("Local init error:", traceback.format_exc(), file=sys.stderr)
 
 from main import app
