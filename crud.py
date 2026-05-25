@@ -148,6 +148,8 @@ def _to_detail(db: Session, w: models.Webinar) -> schemas.WebinarDetail:
         duplicates_removed=s["duplicates_removed"],
         unmatched_attendees=s["unmatched_attendees"],
         status=w.status,
+        has_registration_data=_has_data(db, w.id, "registrations"),
+        has_attendee_data=_has_data(db, w.id, "attendees"),
         registration_by_source=_reg_by_source(db, w.id),
         duration_breakdown=_duration_breakdown(db, w.id),
         upload_logs=_upload_logs(db, w.id),

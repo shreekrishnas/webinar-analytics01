@@ -86,6 +86,8 @@ class WebinarDetail(BaseModel):
     duplicates_removed: int
     unmatched_attendees: int
     status: str
+    has_registration_data: bool
+    has_attendee_data: bool
     registration_by_source: List[RegistrationBreakdown]
     duration_breakdown: List[DurationBreakdown]
     upload_logs: List[UploadLogOut]
