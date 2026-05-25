@@ -1,0 +1,155 @@
+from pydantic import BaseModel, ConfigDict
+from typing import Optional, List
+from datetime import date, datetime as _dt
+
+
+# ── Breakdowns ────────────────────────────────────────────────────────────────
+
+class RegistrationBreakdown(BaseModel):
+    source: str
+    count: int
+    percentage: float
+
+
+class DurationBreakdown(BaseModel):
+    range: str
+    count: int
+    percentage: float
+
+
+# ── Upload log ────────────────────────────────────────────────────────────────
+
+class UploadLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    file_type: str
+    filename: Optional[str] = None
+    original_count: int
+    final_count: int
+    duplicates_removed: int
+    unmatched_attendees: int
+    uploaded_at: _dt
+
+
+class UploadResult(BaseModel):
+    original_count: int
+    final_count: int
+    duplicates_removed: int
+    unmatched_attendees: int
+    message: str
+
+
+# ── Webinar ───────────────────────────────────────────────────────────────────
+
+class WebinarCreate(BaseModel):
+    title: str
+    date: date
+    time: Optional[str] = None
+    description: Optional[str] = None
+    speaker_name: str   # will find existing or create new speaker
+    speaker_email: Optional[str] = None
+    status: str = "upcoming"
+
+
+class WebinarSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    date: date
+    time: Optional[str] = None
+    speaker_name: str
+    speaker_id: int
+    total_registrations: int
+    total_attendees: int
+    attendance_rate: float
+    status: str
+    has_registration_data: bool
+    has_attendee_data: bool
+
+
+class WebinarDetail(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    date: date
+    time: Optional[str] = None
+    description: Optional[str] = None
+    speaker_name: str
+    speaker_id: int
+    total_registrations: int
+    total_attendees: int
+    attendance_rate: float
+    no_shows: int
+    duplicates_removed: int
+    unmatched_attendees: int
+    status: str
+    registration_by_source: List[RegistrationBreakdown]
+    duration_breakdown: List[DurationBreakdown]
+    upload_logs: List[UploadLogOut]
+
+
+# ── Speaker ───────────────────────────────────────────────────────────────────
+
+class Speaker(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    email: Optional[str] = None
+    bio: Optional[str] = None
+    total_webinars: int
+
+
+class WebinarInSpeaker(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    date: date
+    time: Optional[str] = None
+    description: Optional[str] = None
+    total_registrations: int
+    total_attendees: int
+    attendance_rate: float
+    no_shows: int
+    duplicates_removed: int
+    status: str
+    registration_by_source: List[RegistrationBreakdown]
+    duration_breakdown: List[DurationBreakdown]
+
+
+class SpeakerDetail(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    email: Optional[str] = None
+    bio: Optional[str] = None
+    total_webinars: int
+    webinars: List[WebinarInSpeaker]
+
+
+# ── Platform stats ────────────────────────────────────────────────────────────
+
+class PlatformStats(BaseModel):
+    total_webinars: int
+    total_speakers: int
+    total_registrations: int
+    total_attendees: int
+    upcoming_webinars: int
+    overall_attendance_rate: float
+
+
+# ── Leaderboard ───────────────────────────────────────────────────────────────
+
+class LeaderboardEntry(BaseModel):
+    rank: int
+    name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    webinars_attended: int
+    total_duration_minutes: int
+    score: int
