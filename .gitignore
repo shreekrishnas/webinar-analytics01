@@ -15,12 +15,13 @@ env/
 .venv/
 .env/
 
-# SQLite databases
-*.db
+# SQLite databases (include main DB for Vercel deployment)
 *.db-shm
 *.db-wal
 *.sqlite
 *.sqlite3
+# Include the real database so Vercel can serve actual data
+!webinar_analytics.db
 
 # Environment variables
 .env
@@ -41,3 +42,6 @@ Thumbs.db
 
 # Claude
 .claude/
+
+.vercel
+.env*
