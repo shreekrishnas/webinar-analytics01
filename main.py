@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File
 from fastapi.staticfiles import StaticFiles
@@ -7,6 +8,8 @@ from typing import Optional, List
 
 from database import engine, SessionLocal
 import models, crud, schemas
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 @asynccontextmanager
@@ -30,12 +33,12 @@ def get_db():
 
 # ── Static files & root ───────────────────────────────────────────────────────
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 
 
 @app.get("/", include_in_schema=False)
 async def root():
-    return FileResponse("static/index.html")
+    return FileResponse(os.path.join(BASE_DIR, "static", "index.html"))
 
 
 # ── Platform stats ────────────────────────────────────────────────────────────
