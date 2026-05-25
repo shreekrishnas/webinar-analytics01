@@ -279,11 +279,9 @@ function _drawWebinarDetail(w) {
   const badgeCls = w.status === 'completed' ? 'completed' : w.status === 'upcoming' ? 'upcoming' : 'incomplete';
 
   // Smart upload section:
-  // – completed webinars → never show upload (data collection is closed)
-  // – upcoming/other    → show only cards for data types still missing
-  const isCompleted = w.status === 'completed';
-  const showRegUpload = !isCompleted && !w.has_registration_data;
-  const showAttUpload = !isCompleted && !w.has_attendee_data;
+  // Show upload card only if that data type is missing — regardless of status
+  const showRegUpload = !w.has_registration_data;
+  const showAttUpload = !w.has_attendee_data;
   const showUploadSection = showRegUpload || showAttUpload;
 
   const uploadSVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>';
@@ -374,18 +372,6 @@ function _drawWebinarDetail(w) {
     </div>`;
   }).join('');
 
-  // Source chart
-  const maxSrc = Math.max(...(w.registration_by_source || []).map(s => s.count), 1);
-  const srcRows = (w.registration_by_source || []).map(s => {
-    const c = SRC_COLORS[s.source] || '#94a3b8';
-    return `<div class="src-row">
-      <span class="src-dot" style="background:${c}"></span>
-      <span class="src-lbl">${esc(s.source)}</span>
-      <div class="src-track"><div class="src-fill" style="width:${Math.round(s.count/maxSrc*100)}%;background:${c}"></div></div>
-      <span class="src-pct">${s.percentage}%</span>
-      <span class="src-cnt">${fmt(s.count)}</span>
-    </div>`;
-  }).join('');
 
   // Upload logs
   const logsHTML = (w.upload_logs || []).length ? `
@@ -448,12 +434,6 @@ function _drawWebinarDetail(w) {
         <span class="sec-title">Analysis</span>
       </div>
       ${analysisHTML}
-
-      ${srcRows ? `
-      <div class="source-section">
-        <div class="source-section-title">Registration by Source</div>
-        ${srcRows}
-      </div>` : ''}
 
       ${durRows ? `
       <div class="dur-section">
