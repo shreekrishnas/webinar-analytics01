@@ -21,11 +21,16 @@ if DATABASE_URL:
     ssl_ctx.check_hostname = False
     ssl_ctx.verify_mode = ssl.CERT_NONE
 
+    # pool_size=2 reuses connections across warm Lambda invocations.
+    # pool_recycle=240 drops connections before Supabase's 5-min idle timeout
+    # so stale connections are never handed to a request.
+    # pool_pre_ping removed — the recycle window handles staleness without
+    # an extra SELECT 1 round-trip on every warm request.
     engine = create_engine(
         pg_url,
-        pool_pre_ping=True,
-        pool_size=1,
+        pool_size=2,
         max_overflow=0,
+        pool_recycle=240,
         connect_args={"ssl_context": ssl_ctx},
     )
 else:

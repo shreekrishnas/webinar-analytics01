@@ -3,111 +3,164 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WebinarIQ — Webinar Analytics</title>
+  <title>WebinarIQ — Analytics Platform</title>
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <link rel="stylesheet" href="/static/styles.css?v=9" />
+  <link rel="stylesheet" href="/static/styles.css?v=13" />
 </head>
 <body>
 
 <div class="app">
 
-  <!-- ── SIDEBAR ─────────────────────────────────────────────────────── -->
+  <!-- ── SIDEBAR ───────────────────────────────────────────────── -->
   <aside class="sidebar" id="sidebar">
 
-    <div class="sb-top">
-      <button class="sb-brand" onclick="nav('home')" title="WebinarIQ">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Brand -->
+    <div class="sb-brand" onclick="nav('home')">
+      <div class="sb-logo-mark">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="2" y="3" width="20" height="14" rx="2"/>
           <path d="M8 21h8M12 17v4"/>
-          <path d="M9.5 9l1.5 1.5L13.5 8"/>
+          <polyline points="9.5 9 11 10.5 14.5 7.5"/>
         </svg>
-      </button>
+      </div>
+      <span class="sb-brand-name">WebinarIQ</span>
     </div>
 
+    <!-- Search / Command Palette trigger -->
+    <button class="sb-search-btn" onclick="openCmdPalette()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Search...</span>
+      <kbd class="sb-kbd">⌘K</kbd>
+    </button>
+
+    <!-- Navigation -->
     <nav class="sb-nav">
-      <button class="sb-icon active" data-page="home" onclick="nav('home')" title="Dashboard">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-          <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+      <div class="sb-nav-label">Menu</div>
+      <button class="sb-link active" data-page="home" onclick="nav('home')">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
         </svg>
+        Dashboard
       </button>
-      <button class="sb-icon" data-page="analytics" onclick="nav('analytics')" title="Analytics">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="20" x2="18" y2="10"/>
-          <line x1="12" y1="20" x2="12" y2="4"/>
-          <line x1="6" y1="20" x2="6" y2="14"/>
-          <line x1="2" y1="20" x2="22" y2="20"/>
+      <button class="sb-link" data-page="analytics" onclick="nav('analytics')">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+          <line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/>
         </svg>
+        Analytics
       </button>
-      <button class="sb-icon" data-page="speakers" onclick="nav('speakers')" title="Speakers">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <button class="sb-link" data-page="speakers" onclick="nav('speakers')">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
           <circle cx="9" cy="7" r="4"/>
           <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
           <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
         </svg>
+        Speakers
       </button>
-      <button class="sb-icon" data-page="leaderboard" onclick="nav('leaderboard')" title="Leaderboard">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <button class="sb-link" data-page="leaderboard" onclick="nav('leaderboard')">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
-          <path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
+          <path d="M4 22h16"/>
+          <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
           <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
           <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
         </svg>
+        Leaderboard
       </button>
     </nav>
 
-    <div class="sb-foot">
-      <div class="sb-user-av" title="ShreeKrishna">S</div>
-      <button class="sb-icon sb-logout" title="Settings" onclick="showToast('Settings coming soon')">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-        </svg>
+    <!-- Recent Webinars -->
+    <div class="sb-recents" id="sb-recents">
+      <div class="sb-nav-label">Recent</div>
+      <div id="sb-recent-list">
+        <div class="sb-recent-placeholder">Loading...</div>
+      </div>
+    </div>
+
+    <div class="sb-spacer"></div>
+
+    <!-- Footer -->
+    <div class="sb-footer">
+      <div class="sb-user">
+        <div class="sb-user-av">S</div>
+        <div class="sb-user-info">
+          <div class="sb-user-name">ShreeKrishna</div>
+          <div class="sb-user-role">Platform Admin</div>
+        </div>
+      </div>
+      <button class="sb-theme-btn" onclick="toggleDark()" title="Toggle theme">
+        <svg id="dark-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
     </div>
 
   </aside>
 
-  <!-- ── MAIN ───────────────────────────────────────────────────────── -->
+  <!-- ── MAIN ──────────────────────────────────────────────────── -->
   <div class="main-wrap">
 
     <!-- Topbar -->
     <header class="topbar">
-      <div class="tb-user">
-        <div class="tb-av">S</div>
-        <div class="tb-info">
-          <span class="tb-name" id="tb-greeting">Good morning, ShreeKrishna!</span>
-          <span class="tb-sub">Webinar Analytics Platform</span>
-        </div>
+      <div class="tb-left">
+        <button class="tb-hamburger" id="tb-hamburger" onclick="toggleMobileSidebar()" title="Menu">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <nav class="tb-breadcrumb" id="tb-breadcrumb" aria-label="breadcrumb">
+          <span class="tb-bc-home" onclick="nav('home')">WebinarIQ</span>
+        </nav>
       </div>
-
-      <div class="tb-search-wrap">
-        <svg class="tb-search-ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input class="tb-search" id="tb-search" type="text" placeholder="Search webinars or speakers…" oninput="onSearch(this.value)" />
+      <div class="tb-center">
+        <button class="tb-search-pill" onclick="openCmdPalette()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Search webinars, speakers…
+          <kbd>⌘K</kbd>
+        </button>
       </div>
-
       <div class="tb-right">
-        <button class="tb-dark-btn" id="dark-btn" onclick="toggleDark()" title="Toggle dark mode">
-          <svg id="dark-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <button class="btn btn-primary btn-sm" onclick="openWebinarModal()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Webinar
         </button>
       </div>
     </header>
 
     <!-- Content -->
     <main class="content" id="content">
-      <div class="pg-loading"><div class="spinner"></div><p>Loading…</p></div>
+      <div class="pg-loading"><div class="spinner"></div><p>Loading your dashboard…</p></div>
     </main>
 
   </div>
 </div>
 
-<!-- ── NEW WEBINAR MODAL ──────────────────────────────────────────── -->
+<!-- ── MOBILE SIDEBAR OVERLAY ────────────────────────────────── -->
+<div class="mob-overlay" id="mob-overlay" onclick="toggleMobileSidebar()"></div>
+
+<!-- ── COMMAND PALETTE ────────────────────────────────────────── -->
+<div class="cmd-overlay" id="cmd-overlay" onclick="closeCmdPalette()">
+  <div class="cmd-box" onclick="event.stopPropagation()">
+    <div class="cmd-header">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="cmd-input" class="cmd-input" placeholder="Search webinars, speakers, actions…" oninput="onCmdSearch(this.value)" autocomplete="off" />
+      <button class="cmd-esc" onclick="closeCmdPalette()">ESC</button>
+    </div>
+    <div class="cmd-results" id="cmd-results"></div>
+    <div class="cmd-footer">
+      <span><kbd>↑↓</kbd> navigate</span>
+      <span><kbd>↵</kbd> open</span>
+      <span><kbd>ESC</kbd> close</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── NEW WEBINAR MODAL ──────────────────────────────────────── -->
 <div class="modal-overlay" id="modal-overlay" onclick="closeWebinarModal()">
   <div class="modal-box" onclick="event.stopPropagation()">
     <div class="modal-head">
-      <h3 class="modal-title">Add New Webinar</h3>
+      <div>
+        <h3 class="modal-title">Add New Webinar</h3>
+        <p class="modal-sub">Fill in the details to create a new webinar session</p>
+      </div>
       <button class="modal-close" onclick="closeWebinarModal()">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
@@ -115,7 +168,7 @@
     <div class="modal-body">
       <div class="form-field">
         <label class="form-label">Webinar Name <span class="req">*</span></label>
-        <input class="form-input" id="nw-title" type="text" placeholder="e.g. Personal Finance 101" />
+        <input class="form-input" id="nw-title" type="text" placeholder="e.g. Personal Finance Masterclass" />
       </div>
       <div class="form-row">
         <div class="form-field">
@@ -135,28 +188,50 @@
       <div class="form-field">
         <label class="form-label">Status</label>
         <select class="form-select" id="nw-status">
-          <option value="upcoming">Upcoming</option>
-          <option value="completed">Completed</option>
+          <option value="upcoming">📅 Upcoming</option>
+          <option value="completed">✅ Completed</option>
         </select>
       </div>
       <div class="form-field">
         <label class="form-label">Description <span class="opt">(optional)</span></label>
-        <textarea class="form-textarea" id="nw-desc" placeholder="Brief description…" rows="2"></textarea>
+        <textarea class="form-textarea" id="nw-desc" placeholder="Brief description of this webinar…" rows="2"></textarea>
       </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="closeWebinarModal()">Cancel</button>
       <button class="btn btn-primary" onclick="submitWebinarModal()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Create Webinar
       </button>
     </div>
   </div>
 </div>
 
-<!-- ── TOAST ─────────────────────────────────────────────────────── -->
+<!-- ── ATTENDEE PROFILE DRAWER ───────────────────────────────── -->
+<div class="att-overlay" id="att-overlay" onclick="closeAttendeeModal()">
+  <div class="att-drawer" id="att-drawer" onclick="event.stopPropagation()">
+    <div class="att-drawer-head">
+      <div class="att-drawer-person">
+        <div class="att-drawer-av" id="att-av"></div>
+        <div>
+          <div class="att-drawer-name" id="att-name"></div>
+          <div class="att-drawer-meta" id="att-meta"></div>
+        </div>
+      </div>
+      <button class="modal-close" onclick="closeAttendeeModal()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="att-drawer-stats" id="att-stats"></div>
+    <div class="att-drawer-body" id="att-body">
+      <div class="pg-loading"><div class="spinner"></div><p>Loading…</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOAST ──────────────────────────────────────────────────── -->
 <div class="toast" id="toast"></div>
 
-<script src="/static/app.js?v=9"></script>
+<script src="/static/app.js?v=13"></script>
 </body>
 </html>

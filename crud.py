@@ -11,35 +11,41 @@ import schemas
 # ── Shared helpers ────────────────────────────────────────────────────────────
 
 def _webinar_stats(db: Session, webinar_id: int) -> dict:
-    total_reg = db.query(func.count(models.Registration.id)).filter(
-        models.Registration.webinar_id == webinar_id
-    ).scalar() or 0
-
-    total_att = db.query(func.count(models.Attendance.id)).filter(
-        and_(
-            models.Attendance.webinar_id == webinar_id,
-            models.Attendance.attended == True,
-        )
-    ).scalar() or 0
-
+    """Single-query stats for one webinar (used for detail pages)."""
+    sql = text("""
+        SELECT
+            COALESCE(r_stats.total_reg, 0)  AS total_registrations,
+            COALESCE(a_stats.total_att, 0)  AS total_attendees,
+            COALESCE(ul_dup.dup_removed, 0) AS duplicates_removed,
+            COALESCE(ul_unm.unmatched, 0)   AS unmatched_attendees
+        FROM (SELECT 1) base
+        LEFT JOIN (
+            SELECT COUNT(*) AS total_reg
+            FROM registrations WHERE webinar_id = :wid
+        ) r_stats ON TRUE
+        LEFT JOIN (
+            SELECT COUNT(*) AS total_att
+            FROM attendances WHERE webinar_id = :wid AND attended = TRUE
+        ) a_stats ON TRUE
+        LEFT JOIN (
+            SELECT SUM(duplicates_removed) AS dup_removed
+            FROM upload_logs WHERE webinar_id = :wid
+        ) ul_dup ON TRUE
+        LEFT JOIN (
+            SELECT SUM(unmatched_attendees) AS unmatched
+            FROM upload_logs WHERE webinar_id = :wid AND file_type = 'attendees'
+        ) ul_unm ON TRUE
+    """)
+    row = db.execute(sql, {"wid": webinar_id}).fetchone()
+    total_reg = int(row.total_registrations or 0)
+    total_att = int(row.total_attendees or 0)
     rate = round(total_att / total_reg * 100, 1) if total_reg > 0 else 0.0
-
-    # Sum duplicates removed from upload logs
-    dup_log = db.query(func.sum(models.UploadLog.duplicates_removed)).filter(
-        models.UploadLog.webinar_id == webinar_id
-    ).scalar() or 0
-
-    unmatched_log = db.query(func.sum(models.UploadLog.unmatched_attendees)).filter(
-        models.UploadLog.webinar_id == webinar_id,
-        models.UploadLog.file_type == "attendees",
-    ).scalar() or 0
-
     return {
         "total_registrations": total_reg,
         "total_attendees": total_att,
         "attendance_rate": rate,
-        "duplicates_removed": dup_log,
-        "unmatched_attendees": unmatched_log,
+        "duplicates_removed": int(row.duplicates_removed or 0),
+        "unmatched_attendees": int(row.unmatched_attendees or 0),
     }
 
 
@@ -62,35 +68,37 @@ def _reg_by_source(db: Session, webinar_id: int) -> List[schemas.RegistrationBre
 
 
 def _duration_breakdown(db: Session, webinar_id: int) -> List[schemas.DurationBreakdown]:
-    attendances = db.query(models.Attendance).filter(
-        and_(
-            models.Attendance.webinar_id == webinar_id,
-            models.Attendance.attended == True,
-        )
-    ).all()
-
-    buckets = {"0–15 min": 0, "15–30 min": 0, "30–45 min": 0, "45–60 min": 0, "60+ min": 0}
-    for a in attendances:
-        d = a.duration_minutes or 0
-        if d < 15:
-            buckets["0–15 min"] += 1
-        elif d < 30:
-            buckets["15–30 min"] += 1
-        elif d < 45:
-            buckets["30–45 min"] += 1
-        elif d < 60:
-            buckets["45–60 min"] += 1
-        else:
-            buckets["60+ min"] += 1
-
-    total = len(attendances)
+    """Use SQL aggregation — avoids loading thousands of rows into Python."""
+    sql = text("""
+        SELECT
+            SUM(CASE WHEN COALESCE(duration_minutes, 0) < 15  THEN 1 ELSE 0 END) AS b0_15,
+            SUM(CASE WHEN COALESCE(duration_minutes, 0) >= 15
+                      AND COALESCE(duration_minutes, 0) < 30  THEN 1 ELSE 0 END) AS b15_30,
+            SUM(CASE WHEN COALESCE(duration_minutes, 0) >= 30
+                      AND COALESCE(duration_minutes, 0) < 45  THEN 1 ELSE 0 END) AS b30_45,
+            SUM(CASE WHEN COALESCE(duration_minutes, 0) >= 45
+                      AND COALESCE(duration_minutes, 0) < 60  THEN 1 ELSE 0 END) AS b45_60,
+            SUM(CASE WHEN COALESCE(duration_minutes, 0) >= 60 THEN 1 ELSE 0 END) AS b60_plus,
+            COUNT(*) AS total
+        FROM attendances
+        WHERE webinar_id = :wid AND attended = TRUE
+    """)
+    row = db.execute(sql, {"wid": webinar_id}).fetchone()
+    total = int(row.total or 0)
+    buckets = [
+        ("0–15 min",  int(row.b0_15  or 0)),
+        ("15–30 min", int(row.b15_30 or 0)),
+        ("30–45 min", int(row.b30_45 or 0)),
+        ("45–60 min", int(row.b45_60 or 0)),
+        ("60+ min",   int(row.b60_plus or 0)),
+    ]
     return [
         schemas.DurationBreakdown(
-            range=k,
-            count=v,
-            percentage=round(v / total * 100, 1) if total else 0.0,
+            range=label,
+            count=cnt,
+            percentage=round(cnt / total * 100, 1) if total else 0.0,
         )
-        for k, v in buckets.items()
+        for label, cnt in buckets
     ]
 
 
@@ -159,7 +167,6 @@ def _to_detail(db: Session, w: models.Webinar) -> schemas.WebinarDetail:
 # ── Webinar CRUD ──────────────────────────────────────────────────────────────
 
 def create_webinar(db: Session, webinar_in: schemas.WebinarCreate) -> models.Webinar:
-    # Find or create speaker
     speaker = db.query(models.Speaker).filter(
         func.lower(models.Speaker.name) == webinar_in.speaker_name.strip().lower()
     ).first()
@@ -205,8 +212,59 @@ def get_webinars_by_name(db: Session, name: str) -> List[schemas.WebinarSummary]
 
 
 def get_all_webinars(db: Session) -> List[schemas.WebinarSummary]:
-    webinars = db.query(models.Webinar).order_by(models.Webinar.date.desc()).all()
-    return [_to_summary(db, w) for w in webinars]
+    """
+    Single bulk query replaces 62 × 6 = 372 individual queries.
+    All stats fetched in one round-trip via LEFT JOINs.
+    """
+    sql = text("""
+        SELECT
+            w.id,
+            w.title,
+            w.date,
+            w.time,
+            w.status,
+            COALESCE(w.speaker_id, 0)           AS speaker_id,
+            COALESCE(s.name, 'Unknown')          AS speaker_name,
+            COALESCE(r_stats.total_reg,  0)      AS total_registrations,
+            COALESCE(a_stats.total_att,  0)      AS total_attendees,
+            CASE WHEN r_stats.total_reg  > 0 THEN 1 ELSE 0 END AS has_reg,
+            CASE WHEN a_stats.total_att  > 0 THEN 1 ELSE 0 END AS has_att
+        FROM webinars w
+        LEFT JOIN speakers s ON s.id = w.speaker_id
+        LEFT JOIN (
+            SELECT webinar_id, COUNT(*) AS total_reg
+            FROM registrations
+            GROUP BY webinar_id
+        ) r_stats ON r_stats.webinar_id = w.id
+        LEFT JOIN (
+            SELECT webinar_id, COUNT(*) AS total_att
+            FROM attendances
+            WHERE attended = TRUE
+            GROUP BY webinar_id
+        ) a_stats ON a_stats.webinar_id = w.id
+        ORDER BY w.date DESC
+    """)
+    rows = db.execute(sql).fetchall()
+    result = []
+    for row in rows:
+        reg  = int(row.total_registrations or 0)
+        att  = int(row.total_attendees or 0)
+        rate = round(att / reg * 100, 1) if reg > 0 else 0.0
+        result.append(schemas.WebinarSummary(
+            id=row.id,
+            title=row.title,
+            date=row.date,
+            time=row.time,
+            speaker_name=row.speaker_name,
+            speaker_id=int(row.speaker_id or 0),
+            total_registrations=reg,
+            total_attendees=att,
+            attendance_rate=rate,
+            status=row.status,
+            has_registration_data=bool(row.has_reg),
+            has_attendee_data=bool(row.has_att),
+        ))
+    return result
 
 
 def get_webinar_detail(db: Session, webinar_id: int) -> Optional[schemas.WebinarDetail]:
@@ -278,27 +336,19 @@ def _normalise_cols(df: pd.DataFrame) -> pd.DataFrame:
     """Lowercase + strip column names, try to map common variants."""
     df.columns = [str(c).strip().lower().replace(' ', '_').replace('-', '_') for c in df.columns]
     rename_map = {
-        # name variants
         'full_name': 'name', 'participant_name': 'name', 'attendee_name': 'name',
         'first_name': 'first', 'last_name': 'last',
-        # email variants
         'email_address': 'email', 'user_email': 'email', 'e_mail': 'email',
-        # phone variants
         'phone_number': 'phone', 'mobile': 'phone', 'mobile_number': 'phone',
         'contact_number': 'phone', 'whatsapp': 'phone',
-        # duration variants
         'duration_(minutes)': 'duration_minutes', 'duration_mins': 'duration_minutes',
         'time_in_session_(minutes)': 'duration_minutes', 'duration': 'duration_minutes',
-        # join/leave variants
         'join_time': 'joined_at', 'join_at': 'joined_at', 'time_joined': 'joined_at',
         'leave_time': 'left_at', 'leave_at': 'left_at', 'time_left': 'left_at',
-        # date variants
         'registration_date': 'registered_at', 'date': 'registered_at',
-        # source variants
         'registration_source': 'source', 'channel': 'source',
     }
     df = df.rename(columns=rename_map)
-    # Build 'name' from first+last if not present
     if 'name' not in df.columns and 'first' in df.columns:
         last = df.get('last', '')
         df['name'] = (df['first'].fillna('') + ' ' + last.fillna('')).str.strip()
@@ -309,14 +359,12 @@ def _dedup_df(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     """Remove duplicates; returns (clean_df, n_removed). Uses email first, then phone/name."""
     original = len(df)
     if 'email' in df.columns:
-        # Normalise email: lowercase + strip; keep row with longest duration if available
         df['_email_norm'] = df['email'].fillna('').str.lower().str.strip()
         non_empty = df[df['_email_norm'] != '']
         if 'duration_minutes' in df.columns:
             non_empty = non_empty.sort_values('duration_minutes', ascending=False)
         non_empty = non_empty.drop_duplicates(subset='_email_norm', keep='first')
         empty_email = df[df['_email_norm'] == '']
-        # For rows without email, dedup by phone then name
         if 'phone' in empty_email.columns:
             empty_email = empty_email.copy()
             empty_email['_phone_norm'] = empty_email['phone'].fillna('').str.strip()
@@ -345,7 +393,6 @@ def _dedup_df(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
 def process_registration_upload(
     db: Session, webinar_id: int, content: bytes, filename: str
 ) -> schemas.UploadResult:
-    # Parse file
     try:
         if filename.lower().endswith('.csv'):
             df = pd.read_csv(io.BytesIO(content))
@@ -356,16 +403,12 @@ def process_registration_upload(
 
     df = _normalise_cols(df)
     original_count = len(df)
-
-    # Deduplicate
     df, dups_removed = _dedup_df(df)
 
-    # Clear existing seeded/uploaded registrations for this webinar
     db.query(models.Attendance).filter(models.Attendance.webinar_id == webinar_id).delete()
     db.query(models.Registration).filter(models.Registration.webinar_id == webinar_id).delete()
     db.flush()
 
-    # Insert registrations
     now = datetime.utcnow()
     for _, row in df.iterrows():
         name = str(row.get('name', 'Unknown')).strip() or 'Unknown'
@@ -389,7 +432,6 @@ def process_registration_upload(
             registered_at=reg_at,
         ))
 
-    # Log upload
     db.query(models.UploadLog).filter(
         models.UploadLog.webinar_id == webinar_id,
         models.UploadLog.file_type == "registrations",
@@ -418,7 +460,6 @@ def process_registration_upload(
 def process_attendee_upload(
     db: Session, webinar_id: int, content: bytes, filename: str
 ) -> schemas.UploadResult:
-    # Parse file
     try:
         if filename.lower().endswith('.csv'):
             df = pd.read_csv(io.BytesIO(content))
@@ -429,15 +470,11 @@ def process_attendee_upload(
 
     df = _normalise_cols(df)
     original_count = len(df)
-
-    # Deduplicate attendees
     df, dups_removed = _dedup_df(df)
 
-    # Clear existing attendances
     db.query(models.Attendance).filter(models.Attendance.webinar_id == webinar_id).delete()
     db.flush()
 
-    # Build email → registration_id lookup
     reg_by_email = {}
     for r in db.query(models.Registration).filter(models.Registration.webinar_id == webinar_id).all():
         if r.email:
@@ -472,14 +509,11 @@ def process_attendee_upload(
         except Exception:
             pass
 
-        # If duration not in file but join/leave exist, compute
         if duration is None and joined_at and left_at:
             duration = max(0, int((left_at - joined_at).total_seconds() / 60))
 
-        # Match to registration
         reg_id = reg_by_email.get(email) if email else None
 
-        # If no match, create a ghost registration so data isn't lost
         if reg_id is None:
             ghost = models.Registration(
                 webinar_id=webinar_id,
@@ -502,12 +536,10 @@ def process_attendee_upload(
             attended=True,
         ))
 
-    # Update webinar status to completed if it was upcoming
     w = db.query(models.Webinar).filter(models.Webinar.id == webinar_id).first()
     if w and w.status == "upcoming":
         w.status = "completed"
 
-    # Log upload
     db.query(models.UploadLog).filter(
         models.UploadLog.webinar_id == webinar_id,
         models.UploadLog.file_type == "attendees",
@@ -541,50 +573,44 @@ def get_leaderboard(
     webinar_id: Optional[int] = None,
     limit: int = 50,
 ) -> List[schemas.LeaderboardEntry]:
-    """
-    Group attendees by normalised email (case-insensitive). Same person attending
-    multiple webinars is counted once per webinar.
-
-    Score per webinar attended:
-      base  = 10 pts
-      +5    if avg session >= 60 min
-      +3    if avg session >= 45 min
-      +1    if avg session >= 30 min
-    """
-    # Use raw SQL via text() so we can use LOWER() and proper deduplication
-    # Build the WHERE clause dynamically
-    where_parts = ["a.attended = 1"]
+    extra_where = ""
     params: dict = {"lim": limit}
 
     if webinar_id:
-        where_parts.append("r.webinar_id = :webinar_id")
+        extra_where = "AND r.webinar_id = :webinar_id"
         params["webinar_id"] = webinar_id
     elif speaker_id:
-        where_parts.append("""
-            r.webinar_id IN (
-                SELECT id FROM webinars WHERE speaker_id = :speaker_id
-            )
-        """)
+        extra_where = "AND r.webinar_id IN (SELECT id FROM webinars WHERE speaker_id = :speaker_id)"
         params["speaker_id"] = speaker_id
 
-    where_clause = " AND ".join(where_parts)
-
+    # CTE normalises the email_key once so GROUP BY can reference it by name —
+    # required by PostgreSQL strict GROUP BY rules (SQLite allowed the alias).
     sql = text(f"""
+        WITH norm AS (
+            SELECT
+                r.email,
+                r.attendee_name,
+                r.phone,
+                r.webinar_id,
+                a.duration_minutes,
+                CASE
+                    WHEN TRIM(COALESCE(r.email, '')) = ''
+                    THEN 'noemail_' || CAST(r.id AS VARCHAR)
+                    ELSE LOWER(TRIM(r.email))
+                END AS email_key
+            FROM registrations r
+            JOIN attendances a ON a.registration_id = r.id
+            WHERE a.attended = TRUE {extra_where}
+        )
         SELECT
-            LOWER(TRIM(COALESCE(r.email, '')))   AS email_key,
-            MIN(r.email)                          AS email,
-            MIN(r.attendee_name)                  AS name,
-            MIN(r.phone)                          AS phone,
-            COUNT(DISTINCT r.webinar_id)          AS webinars_attended,
-            COALESCE(SUM(a.duration_minutes), 0)  AS total_duration
-        FROM registrations r
-        JOIN attendances a ON a.registration_id = r.id
-        WHERE {where_clause}
-        GROUP BY
-            CASE
-                WHEN TRIM(COALESCE(r.email, '')) = '' THEN 'noemail_' || r.id
-                ELSE LOWER(TRIM(r.email))
-            END
+            email_key,
+            MIN(email)            AS email,
+            MIN(attendee_name)    AS name,
+            MIN(phone)            AS phone,
+            COUNT(DISTINCT webinar_id)          AS webinars_attended,
+            COALESCE(SUM(duration_minutes), 0)  AS total_duration
+        FROM norm
+        GROUP BY email_key
         ORDER BY webinars_attended DESC, total_duration DESC
         LIMIT :lim
     """)
@@ -611,28 +637,85 @@ def get_leaderboard(
     return result
 
 
+# ── Attendee profile ─────────────────────────────────────────────────────────
+
+def get_attendee_profile(db: Session, email: str) -> Optional[schemas.AttendeeProfile]:
+    """Return all webinars attended by a person identified by email."""
+    email_norm = email.lower().strip()
+    sql = text("""
+        SELECT
+            MIN(r.attendee_name)  AS name,
+            r.email,
+            MIN(r.phone)          AS phone,
+            w.id                  AS webinar_id,
+            w.title,
+            w.date,
+            w.time,
+            COALESCE(s.name, 'Unknown') AS speaker_name,
+            a.duration_minutes
+        FROM registrations r
+        JOIN attendances a ON a.registration_id = r.id
+        JOIN webinars w    ON w.id = r.webinar_id
+        LEFT JOIN speakers s ON s.id = w.speaker_id
+        WHERE LOWER(TRIM(COALESCE(r.email, ''))) = :email
+          AND a.attended = TRUE
+        GROUP BY r.email, w.id, w.title, w.date, w.time, s.name, a.duration_minutes
+        ORDER BY w.date DESC
+    """)
+    rows = db.execute(sql, {"email": email_norm}).fetchall()
+    if not rows:
+        return None
+
+    webinar_list = [
+        schemas.AttendeeWebinarItem(
+            webinar_id=row.webinar_id,
+            title=row.title,
+            date=row.date,
+            time=row.time,
+            speaker_name=row.speaker_name,
+            duration_minutes=row.duration_minutes,
+        )
+        for row in rows
+    ]
+
+    total_dur = sum(w.duration_minutes or 0 for w in webinar_list)
+    n = len(webinar_list)
+    avg_dur = total_dur / n if n else 0
+    bonus = 5 if avg_dur >= 60 else 3 if avg_dur >= 45 else 1 if avg_dur >= 30 else 0
+    score = n * (10 + bonus)
+
+    return schemas.AttendeeProfile(
+        name=rows[0].name or "Unknown",
+        email=rows[0].email,
+        phone=rows[0].phone,
+        webinars_attended=n,
+        total_duration_minutes=total_dur,
+        score=score,
+        webinars=webinar_list,
+    )
+
+
 # ── Platform stats ────────────────────────────────────────────────────────────
 
 def get_platform_stats(db: Session) -> schemas.PlatformStats:
-    total_webinars = db.query(func.count(models.Webinar.id)).scalar() or 0
-    total_speakers = db.query(func.count(models.Speaker.id)).scalar() or 0
-    total_reg = db.query(func.count(models.Registration.id)).scalar() or 0
-    total_att = (
-        db.query(func.count(models.Attendance.id))
-        .filter(models.Attendance.attended == True)
-        .scalar() or 0
-    )
-    upcoming = (
-        db.query(func.count(models.Webinar.id))
-        .filter(models.Webinar.status == "upcoming")
-        .scalar() or 0
-    )
+    """Single query for all platform-level counts."""
+    sql = text("""
+        SELECT
+            (SELECT COUNT(*) FROM webinars)                            AS total_webinars,
+            (SELECT COUNT(*) FROM speakers)                            AS total_speakers,
+            (SELECT COUNT(*) FROM registrations)                       AS total_reg,
+            (SELECT COUNT(*) FROM attendances WHERE attended = TRUE)   AS total_att,
+            (SELECT COUNT(*) FROM webinars WHERE status = 'upcoming')  AS upcoming
+    """)
+    row = db.execute(sql).fetchone()
+    total_reg = int(row.total_reg or 0)
+    total_att = int(row.total_att or 0)
     rate = round(total_att / total_reg * 100, 1) if total_reg else 0.0
     return schemas.PlatformStats(
-        total_webinars=total_webinars,
-        total_speakers=total_speakers,
+        total_webinars=int(row.total_webinars or 0),
+        total_speakers=int(row.total_speakers or 0),
         total_registrations=total_reg,
         total_attendees=total_att,
-        upcoming_webinars=upcoming,
+        upcoming_webinars=int(row.upcoming or 0),
         overall_attendance_rate=rate,
     )

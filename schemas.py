@@ -155,3 +155,24 @@ class LeaderboardEntry(BaseModel):
     webinars_attended: int
     total_duration_minutes: int
     score: int
+
+
+# ── Attendee profile ──────────────────────────────────────────────────────────
+
+class AttendeeWebinarItem(BaseModel):
+    webinar_id: int
+    title: str
+    date: date
+    time: Optional[str] = None
+    speaker_name: str
+    duration_minutes: Optional[int] = None
+
+
+class AttendeeProfile(BaseModel):
+    name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    webinars_attended: int
+    total_duration_minutes: int
+    score: int
+    webinars: List[AttendeeWebinarItem]

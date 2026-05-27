@@ -79,9 +79,16 @@ async function loadAll() {
 function nav(page, sub) {
   S.page = page;
   S.sub  = sub ?? null;
-  document.querySelectorAll('.sb-icon[data-page]').forEach(b =>
+  document.querySelectorAll('.sb-link[data-page]').forEach(b =>
     b.classList.toggle('active', b.dataset.page === page)
   );
+  setBreadcrumb(page, sub);
+  closeCmdPalette();
+  // Close mobile sidebar when navigating
+  const sidebar = document.getElementById('sidebar');
+  if (sidebar && sidebar.classList.contains('mobile-open')) {
+    toggleMobileSidebar();
+  }
   switch (page) {
     case 'home':        renderHome();              break;
     case 'analytics':   renderAnalytics();         break;
@@ -93,7 +100,15 @@ function nav(page, sub) {
 }
 
 function setContent(html) {
-  document.getElementById('content').innerHTML = html;
+  const el = document.getElementById('content');
+  el.innerHTML = html;
+  // Trigger animations after content is painted
+  requestAnimationFrame(() => {
+    animateCards('.wb-card, .spk-card');
+    animateBars();
+    runCountUps();
+    decorateLeaderboardRows();
+  });
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -143,27 +158,27 @@ function renderHome() {
       <!-- Stats strip -->
       <div class="stats-strip">
         <div class="ss-item">
-          <span class="ss-val">${total}</span>
+          <span class="ss-val" data-countup="${total}">0</span>
           <span class="ss-lbl">Total Webinars</span>
         </div>
         <div class="ss-item">
-          <span class="ss-val" style="color:#2563eb">${fmt(totalReg)}</span>
+          <span class="ss-val" style="color:#2563eb" data-countup="${totalReg}">0</span>
           <span class="ss-lbl">Registrations</span>
         </div>
         <div class="ss-item">
-          <span class="ss-val" style="color:#059669">${fmt(totalAtt)}</span>
+          <span class="ss-val" style="color:#059669" data-countup="${totalAtt}">0</span>
           <span class="ss-lbl">Attendees</span>
         </div>
         <div class="ss-item">
-          <span class="ss-val" style="color:#7c3aed">${avgRate}%</span>
-          <span class="ss-lbl">Avg. Rate</span>
+          <span class="ss-val" style="color:#7c3aed" data-countup="${avgRate}">0</span>
+          <span class="ss-lbl">Avg. Rate %</span>
         </div>
         <div class="ss-item">
-          <span class="ss-val" style="color:#d97706">${upcoming}</span>
+          <span class="ss-val" style="color:#d97706" data-countup="${upcoming}">0</span>
           <span class="ss-lbl">Upcoming</span>
         </div>
         <div class="ss-item">
-          <span class="ss-val" style="color:#059669">${completed}</span>
+          <span class="ss-val" style="color:#059669" data-countup="${completed}">0</span>
           <span class="ss-lbl">Completed</span>
         </div>
       </div>
@@ -540,27 +555,27 @@ function renderAnalytics() {
       <div class="stats-row">
         <div class="stat-card">
           <div class="stat-label">Total Webinars</div>
-          <div class="stat-value">${fmt(st.total_webinars)}</div>
+          <div class="stat-value" data-countup="${st.total_webinars}">0</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Total Speakers</div>
-          <div class="stat-value">${fmt(st.total_speakers)}</div>
+          <div class="stat-value" data-countup="${st.total_speakers}">0</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Total Registrations</div>
-          <div class="stat-value">${fmt(st.total_registrations)}</div>
+          <div class="stat-value" data-countup="${st.total_registrations}">0</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Total Attendees</div>
-          <div class="stat-value">${fmt(st.total_attendees)}</div>
+          <div class="stat-value" data-countup="${st.total_attendees}">0</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Upcoming Webinars</div>
-          <div class="stat-value" style="color:#d97706">${fmt(st.upcoming_webinars)}</div>
+          <div class="stat-value" style="color:#d97706" data-countup="${st.upcoming_webinars}">0</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Avg. Attendance Rate</div>
-          <div class="stat-value" style="color:#7c3aed">${fmtPct(st.overall_attendance_rate)}</div>
+          <div class="stat-value" style="color:#7c3aed" data-countup="${st.overall_attendance_rate}">0</div>
         </div>
       </div>
 
@@ -761,16 +776,24 @@ async function renderLeaderboard(speakerId, webinarId) {
             </tr>
           </thead>
           <tbody>
-            ${lb.map(e => `
+            ${lb.map(e => {
+              // Use single-quoted strings in onclick to avoid breaking the HTML attribute
+              const safeEmail = (e.email||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+              const safeName  = (e.name ||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+              const nameCell = e.email
+                ? `<span class="lb-name-link" onclick="openAttendeeModal('${safeEmail}','${safeName}')" title="Click to view attended webinars">${esc(e.name)}</span>`
+                : `<span class="lb-name-link no-email" title="No email — cannot look up profile">${esc(e.name)}</span>`;
+              return `
               <tr>
                 <td>${rankHTML(e.rank)}</td>
-                <td><div class="lb-name">${esc(e.name)}</div></td>
+                <td>${nameCell}</td>
                 <td><div class="lb-email">${esc(e.email||'—')}</div></td>
                 <td><div class="lb-email">${esc(e.phone||'—')}</div></td>
                 <td style="text-align:center;font-weight:600;color:#059669">${e.webinars_attended}</td>
                 <td style="text-align:center;color:var(--text-2)">${e.total_duration_minutes}</td>
                 <td><span class="lb-score">⭐ ${e.score}</span></td>
-              </tr>`).join('')}
+              </tr>`;
+            }).join('')}
           </tbody>
         </table>
       </div>` : `<div class="lb-empty">No attendance data yet.<br>Upload attendee files to populate the leaderboard.</div>`;
@@ -909,6 +932,357 @@ function onSearch(q) {
   else if (S.page === 'speakers') renderSpeakers();
 }
 
+/* ── Toast ──────────────────────────────────────────────────────────────── */
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast show${type==='error'?' error':''}`;
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.className = 'toast'; }, 3000);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ATTENDEE PROFILE DRAWER
+══════════════════════════════════════════════════════════════════════════ */
+async function openAttendeeModal(email, name) {
+  // Show the drawer immediately with a loading state
+  const overlay = document.getElementById('att-overlay');
+  const avEl    = document.getElementById('att-av');
+  const nameEl  = document.getElementById('att-name');
+  const metaEl  = document.getElementById('att-meta');
+  const statsEl = document.getElementById('att-stats');
+  const bodyEl  = document.getElementById('att-body');
+
+  const color = avColor(name);
+  avEl.style.background  = color;
+  avEl.textContent       = initials(name);
+  nameEl.textContent     = name;
+  metaEl.textContent     = email;
+  statsEl.innerHTML      = '';
+  bodyEl.innerHTML       = '<div class="pg-loading"><div class="spinner"></div><p>Loading…</p></div>';
+
+  overlay.classList.add('open');
+
+  try {
+    const profile = await api('/api/attendee?email=' + encodeURIComponent(email));
+
+    // Stats bar
+    statsEl.innerHTML = `
+      <div class="att-stat-item">
+        <div class="att-stat-val" style="color:#059669">${profile.webinars_attended}</div>
+        <div class="att-stat-lbl">Webinars</div>
+      </div>
+      <div class="att-stat-item">
+        <div class="att-stat-val" style="color:#6366f1">${profile.total_duration_minutes}</div>
+        <div class="att-stat-lbl">Total Min</div>
+      </div>
+      <div class="att-stat-item">
+        <div class="att-stat-val" style="color:#d97706">⭐ ${profile.score}</div>
+        <div class="att-stat-lbl">Score</div>
+      </div>`;
+
+    if (profile.phone) metaEl.textContent = `${email}  ·  ${profile.phone}`;
+
+    // Webinar cards — max duration used for the bar scale
+    const maxDur = Math.max(...profile.webinars.map(w => w.duration_minutes || 0), 1);
+
+    const cards = profile.webinars.map(w => {
+      const dur     = w.duration_minutes || 0;
+      const barPct  = Math.round(dur / maxDur * 100);
+      const durTxt  = dur ? `${dur} min` : 'Duration not recorded';
+      const wbTitle = esc(w.title);
+      const wbDate  = fmtDate(w.date);
+      const spkName = esc(w.speaker_name);
+      return `
+        <div class="att-wb-card" onclick="closeAttendeeModal();nav('webinar',${w.webinar_id})" title="Open webinar">
+          <div class="att-wb-card-title">${wbTitle}</div>
+          <div class="att-wb-card-meta">
+            <span>${wbDate}</span>
+            <span class="att-wb-card-meta-dot"></span>
+            <span>${spkName}</span>
+          </div>
+          ${dur ? `
+          <div class="att-wb-dur">
+            <div class="att-wb-dur-bar"><div class="att-wb-dur-fill" style="width:${barPct}%"></div></div>
+            <span class="att-wb-dur-label">${durTxt}</span>
+          </div>` : `<div style="font-size:12px;color:var(--text-3)">${durTxt}</div>`}
+        </div>`;
+    }).join('');
+
+    bodyEl.innerHTML = `
+      <div class="att-drawer-body-title">Webinars Attended (${profile.webinars_attended})</div>
+      ${cards || '<div style="color:var(--text-3);font-size:13px">No attended webinars found.</div>'}`;
+  } catch(e) {
+    bodyEl.innerHTML = '<div style="color:#dc2626;font-size:13px;padding:12px 0">Could not load attendee data.</div>';
+  }
+}
+
+function closeAttendeeModal() {
+  document.getElementById('att-overlay').classList.remove('open');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ANIMATIONS
+══════════════════════════════════════════════════════════════════════════ */
+
+/** Count-up animation for a numeric element */
+function countUp(el, target, duration = 900) {
+  const start    = performance.now();
+  const from     = 0;
+  const isFloat  = String(target).includes('.');
+  function step(now) {
+    const progress = Math.min((now - start) / duration, 1);
+    // Ease-out cubic
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const value = from + (target - from) * eased;
+    el.textContent = isFloat ? value.toFixed(1) : Math.round(value).toLocaleString('en-IN');
+    if (progress < 1) requestAnimationFrame(step);
+    else el.textContent = isFloat ? target.toFixed(1) : Number(target).toLocaleString('en-IN');
+  }
+  requestAnimationFrame(step);
+}
+
+/** Run count-up on every element with data-countup attribute */
+function runCountUps() {
+  document.querySelectorAll('[data-countup]').forEach(el => {
+    const val = parseFloat(el.dataset.countup);
+    if (!isNaN(val)) countUp(el, val);
+  });
+}
+
+/** Fade-in + translateY entrance for a list of cards with stagger */
+function animateCards(selector = '.wb-card, .spk-card') {
+  const cards = document.querySelectorAll(selector);
+  cards.forEach((card, i) => {
+    card.style.opacity    = '0';
+    card.style.transform  = 'translateY(20px)';
+    card.style.transition = 'none';
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        card.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
+        card.style.opacity    = '';
+        card.style.transform  = '';
+      }, i * 45);
+    });
+  });
+}
+
+/** Add rank-N class to lb-table rows so CSS can style top-3 rows */
+function decorateLeaderboardRows() {
+  const rows = document.querySelectorAll('.lb-table tbody tr');
+  rows.forEach((row, i) => {
+    row.classList.remove('rank-1','rank-2','rank-3');
+    if (i === 0) row.classList.add('rank-1');
+    else if (i === 1) row.classList.add('rank-2');
+    else if (i === 2) row.classList.add('rank-3');
+  });
+}
+
+/** Animate progress bars from 0 to their target width */
+function animateBars() {
+  document.querySelectorAll('.dur-fill, .an-bar-fill, .src-fill, .att-wb-dur-fill').forEach(bar => {
+    const target = bar.style.width;
+    bar.style.width = '0%';
+    requestAnimationFrame(() => {
+      setTimeout(() => { bar.style.width = target; }, 80);
+    });
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BREADCRUMB
+══════════════════════════════════════════════════════════════════════════ */
+function setBreadcrumb(page, sub) {
+  const bc = document.getElementById('tb-breadcrumb');
+  if (!bc) return;
+  const pageTitles = { home:'Dashboard', analytics:'Analytics', speakers:'Speakers', leaderboard:'Leaderboard', webinar:'Webinar', speaker:'Speaker' };
+  const pageTitle = pageTitles[page] || '';
+  if (!pageTitle || page === 'home') {
+    bc.innerHTML = `<span class="tb-bc-home" onclick="nav('home')">WebinarIQ</span>`;
+    return;
+  }
+  // For detail pages show title from cache
+  let subLabel = '';
+  if (page === 'webinar' && sub) {
+    const w = S.webinars.find(x => x.id == sub) || detailCache[sub];
+    subLabel = w ? w.title : 'Detail';
+  } else if (page === 'speaker' && sub) {
+    const cached = detailCache['spk_'+sub];
+    subLabel = cached ? cached.name : 'Speaker';
+  }
+  bc.innerHTML = `
+    <span class="tb-bc-home" onclick="nav('home')">WebinarIQ</span>
+    <span class="tb-bc-sep">/</span>
+    ${subLabel
+      ? `<span class="tb-bc-page" onclick="nav('${page === 'webinar' ? 'webinar' : 'speakers'}')">${pageTitle}s</span>
+         <span class="tb-bc-sep">/</span>
+         <span class="tb-bc-page">${esc(subLabel)}</span>`
+      : `<span class="tb-bc-page">${pageTitle}</span>`
+    }`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SIDEBAR RECENT WEBINARS
+══════════════════════════════════════════════════════════════════════════ */
+function updateSidebarRecent() {
+  const listEl = document.getElementById('sb-recent-list');
+  if (!listEl) return;
+  const recent = [...S.webinars].slice(0, 8);
+  if (!recent.length) {
+    listEl.innerHTML = '<div class="sb-recent-placeholder">No webinars yet</div>';
+    return;
+  }
+  listEl.innerHTML = recent.map(w => {
+    const color = avColor(w.speaker_name);
+    const safeName = esc(w.title).replace(/'/g, "\\'");
+    return `
+      <div class="sb-recent-item" onclick="nav('webinar',${w.id})" title="${esc(w.title)}">
+        <div class="sb-recent-dot" style="background:${color}"></div>
+        <span class="sb-recent-name">${esc(w.title)}</span>
+      </div>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MOBILE SIDEBAR
+══════════════════════════════════════════════════════════════════════════ */
+function toggleMobileSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('mob-overlay');
+  if (!sidebar) return;
+  const isOpen = sidebar.classList.toggle('mobile-open');
+  if (overlay) overlay.classList.toggle('open', isOpen);
+  document.body.style.overflow = isOpen ? 'hidden' : '';
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   COMMAND PALETTE
+══════════════════════════════════════════════════════════════════════════ */
+let _cmdFocusIdx = -1;
+
+function openCmdPalette() {
+  const overlay = document.getElementById('cmd-overlay');
+  const input   = document.getElementById('cmd-input');
+  if (!overlay) return;
+  overlay.classList.add('open');
+  _cmdFocusIdx = -1;
+  if (input) {
+    input.value = '';
+    setTimeout(() => input.focus(), 60);
+  }
+  renderCmdResults('');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeCmdPalette() {
+  const overlay = document.getElementById('cmd-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  document.body.style.overflow = '';
+  _cmdFocusIdx = -1;
+}
+
+function onCmdSearch(q) {
+  _cmdFocusIdx = -1;
+  renderCmdResults(q.trim().toLowerCase());
+}
+
+function renderCmdResults(q) {
+  const el = document.getElementById('cmd-results');
+  if (!el) return;
+
+  // Quick actions (always shown when q is empty)
+  const actions = [
+    { icon: '➕', title: 'New Webinar',        sub: 'Create a webinar session',           fn: () => { closeCmdPalette(); openWebinarModal(); } },
+    { icon: '🏠', title: 'Dashboard',           sub: 'Go to webinar overview',             fn: () => nav('home') },
+    { icon: '📊', title: 'Analytics',           sub: 'Platform-wide statistics',           fn: () => nav('analytics') },
+    { icon: '🎤', title: 'Speakers',            sub: 'Browse all speakers',                fn: () => nav('speakers') },
+    { icon: '🏆', title: 'Leaderboard',         sub: 'Top attendees by score',             fn: () => nav('leaderboard') },
+  ];
+
+  // Webinar results
+  const wbMatches = q
+    ? S.webinars.filter(w => w.title.toLowerCase().includes(q) || w.speaker_name.toLowerCase().includes(q))
+    : S.webinars.slice(0, 5);
+
+  // Speaker results
+  const spkMatches = q
+    ? S.speakers.filter(sp => sp.name.toLowerCase().includes(q))
+    : S.speakers.slice(0, 3);
+
+  const filteredActions = q
+    ? actions.filter(a => a.title.toLowerCase().includes(q) || a.sub.toLowerCase().includes(q))
+    : actions;
+
+  if (!filteredActions.length && !wbMatches.length && !spkMatches.length) {
+    el.innerHTML = `<div class="cmd-empty">No results for "<strong>${esc(q)}</strong>"</div>`;
+    return;
+  }
+
+  let html = '';
+
+  if (filteredActions.length) {
+    html += `<div class="cmd-category">Actions</div>`;
+    html += filteredActions.map((a, i) => `
+      <div class="cmd-item" data-cmd-fn="${i}" onclick="_cmdActions[${i}]()">
+        <div class="cmd-item-icon">${a.icon}</div>
+        <div class="cmd-item-text">
+          <div class="cmd-item-title">${esc(a.title)}</div>
+          <div class="cmd-item-sub">${esc(a.sub)}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  if (wbMatches.length) {
+    html += `<div class="cmd-category">Webinars</div>`;
+    html += wbMatches.slice(0, 6).map(w => `
+      <div class="cmd-item" onclick="closeCmdPalette();nav('webinar',${w.id})">
+        <div class="cmd-item-icon" style="background:${avColor(w.speaker_name)}20;font-size:13px;color:${avColor(w.speaker_name)}">
+          ${initials(w.speaker_name)}
+        </div>
+        <div class="cmd-item-text">
+          <div class="cmd-item-title">${esc(w.title)}</div>
+          <div class="cmd-item-sub">${esc(w.speaker_name)} · ${fmtDate(w.date)}</div>
+        </div>
+        <span class="cmd-item-badge ${w.status}">${w.status}</span>
+      </div>`).join('');
+  }
+
+  if (spkMatches.length) {
+    html += `<div class="cmd-category">Speakers</div>`;
+    html += spkMatches.slice(0, 4).map(sp => `
+      <div class="cmd-item" onclick="closeCmdPalette();nav('speaker',${sp.id})">
+        <div class="cmd-item-icon" style="background:${avColor(sp.name)};color:white;font-weight:700;font-size:12px">
+          ${initials(sp.name)}
+        </div>
+        <div class="cmd-item-text">
+          <div class="cmd-item-title">${esc(sp.name)}</div>
+          <div class="cmd-item-sub">${sp.total_webinars} webinar${sp.total_webinars !== 1 ? 's' : ''}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  el.innerHTML = html;
+
+  // Store action fns for onclick
+  window._cmdActions = filteredActions.map(a => a.fn);
+}
+
+function _cmdMoveFocus(dir) {
+  const items = document.querySelectorAll('#cmd-results .cmd-item');
+  if (!items.length) return;
+  items.forEach(i => i.classList.remove('focused'));
+  _cmdFocusIdx = (_cmdFocusIdx + dir + items.length) % items.length;
+  const focused = items[_cmdFocusIdx];
+  focused.classList.add('focused');
+  focused.scrollIntoView({ block: 'nearest' });
+}
+
+function _cmdActivateFocused() {
+  const focused = document.querySelector('#cmd-results .cmd-item.focused');
+  if (focused) focused.click();
+}
+
 /* ── Dark mode ──────────────────────────────────────────────────────────── */
 function toggleDark() {
   S.dark = !S.dark;
@@ -922,29 +1296,51 @@ function toggleDark() {
   }
 }
 
-/* ── Toast ──────────────────────────────────────────────────────────────── */
-function showToast(msg, type='success') {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = `toast show${type==='error'?' error':''}`;
-  clearTimeout(t._timer);
-  t._timer = setTimeout(() => { t.className = 'toast'; }, 3000);
-}
-
 /* ── Init ───────────────────────────────────────────────────────────────── */
 async function init() {
+  // Dark mode
   if (localStorage.getItem('wiq-dark') === 'true') {
     S.dark = true;
     document.documentElement.classList.add('dark');
+    const icon = document.getElementById('dark-icon');
+    if (icon) icon.innerHTML = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
   }
-  const greet = document.getElementById('tb-greeting');
-  if (greet) greet.textContent = `${greeting()}, ShreeKrishna!`;
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    // ⌘K or Ctrl+K → open palette
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      const overlay = document.getElementById('cmd-overlay');
+      if (overlay && overlay.classList.contains('open')) {
+        closeCmdPalette();
+      } else {
+        openCmdPalette();
+      }
+      return;
+    }
+    // ESC → close palette or attendee drawer
+    if (e.key === 'Escape') {
+      closeCmdPalette();
+      closeAttendeeModal();
+      return;
+    }
+    // Arrow keys for palette navigation
+    const overlay = document.getElementById('cmd-overlay');
+    if (overlay && overlay.classList.contains('open')) {
+      if (e.key === 'ArrowDown')  { e.preventDefault(); _cmdMoveFocus(1); }
+      if (e.key === 'ArrowUp')    { e.preventDefault(); _cmdMoveFocus(-1); }
+      if (e.key === 'Enter')      { e.preventDefault(); _cmdActivateFocused(); }
+    }
+  });
 
   try {
     await loadAll();
   } catch(e) {
     console.error('API load failed:', e);
   }
+
+  updateSidebarRecent();
   nav('home');
 }
 

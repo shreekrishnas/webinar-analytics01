@@ -142,6 +142,16 @@ def get_speaker(speaker_id: int, db: Session = Depends(get_db)):
     return detail
 
 
+# ── Attendee profile ──────────────────────────────────────────────────────────
+
+@app.get("/api/attendee", response_model=schemas.AttendeeProfile)
+def get_attendee(email: str = Query(...), db: Session = Depends(get_db)):
+    profile = crud.get_attendee_profile(db, email)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Attendee not found")
+    return profile
+
+
 # ── Leaderboard ───────────────────────────────────────────────────────────────
 
 @app.get("/api/leaderboard", response_model=List[schemas.LeaderboardEntry])
