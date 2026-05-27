@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Migration script: copies all data from local SQLite to Supabase PostgreSQL.
+Migration script: copies all data from local SQLite to new Supabase PostgreSQL.
 Run once from the project root:
     python migrate_to_supabase.py
 """
@@ -14,25 +14,29 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 SQLITE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "webinar_analytics.db")
 SQLITE_URL = "sqlite:///" + SQLITE_PATH
 
-# @ in password encoded as %40
-PG_URL = "postgresql://postgres:shreekrishna%401234@db.elhuhzqjawvhxkhnwdjf.supabase.co:5432/postgres"
+# New Supabase project — @ in password encoded as %40
+PG_URL = "postgresql+pg8000://postgres.agwzlnljqfqjkybbqteb:shreekrishna%401234@aws-1-ap-south-1.pooler.supabase.com:5432/postgres"
 
 # ── Engines ──────────────────────────────────────────────────────────────────
+import ssl
 from sqlalchemy import create_engine, text, MetaData
 
 print("Connecting to SQLite ...")
 sqlite_engine = create_engine(SQLITE_URL, connect_args={"check_same_thread": False})
 
-print("Connecting to Supabase PostgreSQL ...")
+print("Connecting to new Supabase project ...")
+ssl_ctx = ssl.create_default_context()
+ssl_ctx.check_hostname = False
+ssl_ctx.verify_mode = ssl.CERT_NONE
+
 pg_engine = create_engine(
     PG_URL,
     pool_pre_ping=True,
     pool_size=1,
     max_overflow=0,
-    connect_args={"sslmode": "require"},
+    connect_args={"ssl_context": ssl_ctx},
 )
 
-# ── Test connection ───────────────────────────────────────────────────────────
 with pg_engine.connect() as conn:
     conn.execute(text("SELECT 1"))
 print("[OK] Supabase connection OK")
@@ -47,7 +51,6 @@ print("[OK] Tables ready")
 
 # ── Raw table copy ────────────────────────────────────────────────────────────
 def copy_table(table_name, chunk_size=500):
-    """Copy all rows from SQLite table to Postgres table using raw SQL."""
     meta = MetaData()
     meta.reflect(bind=sqlite_engine, only=[table_name])
     tbl = meta.tables[table_name]
@@ -61,7 +64,6 @@ def copy_table(table_name, chunk_size=500):
             return
 
         with pg_engine.connect() as dst_conn:
-            # Truncate destination first
             dst_conn.execute(text("TRUNCATE TABLE " + table_name + " RESTART IDENTITY CASCADE"))
             dst_conn.commit()
 
@@ -73,25 +75,21 @@ def copy_table(table_name, chunk_size=500):
                 ).fetchall()
                 if not rows:
                     break
-
                 data = [dict(row._mapping) for row in rows]
                 dst_conn.execute(tbl.insert(), data)
                 dst_conn.commit()
-
                 copied += len(rows)
                 print("\r  " + table_name + ": " + str(copied) + "/" + str(total), end="", flush=True)
                 offset += chunk_size
 
             print("\r  [DONE] " + table_name + ": " + str(copied) + " rows copied.   ")
 
-            # Reset sequence so future INSERTs don't collide
             dst_conn.execute(text(
                 "SELECT setval(pg_get_serial_sequence('" + table_name + "', 'id'), "
                 "(SELECT MAX(id) FROM " + table_name + "), true)"
             ))
             dst_conn.commit()
 
-# Copy in FK-safe order (parents before children)
 print("\nMigrating data ...")
 copy_table("speakers")
 copy_table("webinars")
@@ -99,6 +97,4 @@ copy_table("registrations")
 copy_table("attendances")
 copy_table("upload_logs")
 
-print("\nMigration complete! All data is now in Supabase.")
-print("Source: " + SQLITE_PATH)
-print("Target: db.elhuhzqjawvhxkhnwdjf.supabase.co")
+print("\nMigration complete! All data is now in the new Supabase project.")

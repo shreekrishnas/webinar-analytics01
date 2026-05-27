@@ -7,8 +7,14 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 
 if DATABASE_URL:
     # PostgreSQL (Supabase) via pg8000 (pure-Python, no C deps — safe on Vercel)
-    # Ensure we use the pg8000 dialect
-    pg_url = DATABASE_URL.replace("postgresql://", "postgresql+pg8000://", 1)
+    # Normalise to pg8000 dialect regardless of what prefix the env var has
+    if "postgresql+pg8000://" in DATABASE_URL:
+        pg_url = DATABASE_URL
+    elif DATABASE_URL.startswith("postgresql://") or DATABASE_URL.startswith("postgres://"):
+        pg_url = DATABASE_URL.replace("postgres://", "postgresql+pg8000://", 1)
+        pg_url = pg_url.replace("postgresql://", "postgresql+pg8000://", 1)
+    else:
+        pg_url = DATABASE_URL
 
     # SSL context for Supabase
     ssl_ctx = ssl.create_default_context()
