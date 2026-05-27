@@ -33,7 +33,7 @@ function fmtDateTime(d) {
   return new Date(d).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-const AV_COLORS = ['#8b5cf6','#3b82f6','#06b6d4','#10b981','#f59e0b','#f43f5e','#a78bfa','#34d399','#60a5fa','#fb923c'];
+const AV_COLORS = ['#e11d48','#f59e0b','#3b82f6','#10b981','#06b6d4','#f97316','#a855f7','#22d3ee','#84cc16','#ec4899'];
 function avColor(name) {
   let h = 0;
   for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff;
