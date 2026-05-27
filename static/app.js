@@ -33,7 +33,7 @@ function fmtDateTime(d) {
   return new Date(d).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-const AV_COLORS = ['#4f46e5','#0891b2','#059669','#7c3aed','#db2777','#ea580c','#0284c7','#65a30d','#dc2626','#d97706'];
+const AV_COLORS = ['#8b5cf6','#3b82f6','#06b6d4','#10b981','#f59e0b','#f43f5e','#a78bfa','#34d399','#60a5fa','#fb923c'];
 function avColor(name) {
   let h = 0;
   for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff;
@@ -48,6 +48,189 @@ const DUR_COLORS = {
   '45–60 min':'#a78bfa','60+ min':'#f472b6',
 };
 const SRC_COLORS = { email:'#6366f1', social:'#f59e0b', direct:'#10b981', referral:'#ef4444', upload:'#0891b2' };
+
+/* ── Health Score Helpers ───────────────────────────────────────────────── */
+function gradeInfo(rate) {
+  if (!rate || rate === 0)  return { grade: '—', cls: 'none',    color: '#5c5580',  track: 'rgba(92,85,128,0.2)' };
+  if (rate >= 70)           return { grade: 'A',  cls: 'grade-A', color: '#10b981',  track: 'rgba(16,185,129,0.18)' };
+  if (rate >= 50)           return { grade: 'B',  cls: 'grade-B', color: '#3b82f6',  track: 'rgba(59,130,246,0.18)' };
+  if (rate >= 30)           return { grade: 'C',  cls: 'grade-C', color: '#f59e0b',  track: 'rgba(245,158,11,0.18)' };
+  return                           { grade: 'D',  cls: 'grade-D', color: '#f43f5e',  track: 'rgba(244,63,94,0.18)' };
+}
+
+function donutRing(rate, size = 48) {
+  const r    = (size - 8) / 2;
+  const circ = 2 * Math.PI * r;
+  const fill = rate > 0 ? (rate / 100) * circ : 0;
+  const info = gradeInfo(rate);
+  return `<svg class="wb-health-ring" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle cx="${size/2}" cy="${size/2}" r="${r}"
+      fill="none" stroke="${info.track}" stroke-width="4.5"/>
+    <circle cx="${size/2}" cy="${size/2}" r="${r}"
+      fill="none" stroke="${info.color}" stroke-width="4.5"
+      stroke-linecap="round"
+      stroke-dasharray="${circ}"
+      stroke-dashoffset="${circ - fill}"
+      transform="rotate(-90 ${size/2} ${size/2})"
+      style="transition:stroke-dashoffset 0.8s cubic-bezier(.4,0,.2,1)"/>
+  </svg>`;
+}
+
+function sparkBars(values, maxH = 28) {
+  if (!values || !values.length) return '';
+  const max = Math.max(...values, 1);
+  const bars = values.map((v, i) => {
+    const h = Math.max(3, Math.round((v / max) * maxH));
+    const isCurrent = i === values.length - 1;
+    return `<div class="spark-bar${isCurrent ? ' current' : ''}"
+      style="height:${h}px;background:currentColor;animation-delay:${200 + i*40}ms"></div>`;
+  }).join('');
+  return `<div class="spark-bars">${bars}</div>`;
+}
+
+/* ── Notifications ──────────────────────────────────────────────────────── */
+const _notifStore = { items: [], read: new Set() };
+
+function getNotifications() {
+  // Build activity from loaded data
+  const notes = [];
+  const completed = S.webinars.filter(w => w.status === 'completed');
+  const upcoming  = S.webinars.filter(w => w.status === 'upcoming');
+  const noData    = S.webinars.filter(w => !w.has_registration_data && !w.has_attendee_data && w.status === 'completed');
+
+  // Top performer
+  const topWebinar = [...completed].sort((a,b) => b.attendance_rate - a.attendance_rate)[0];
+  if (topWebinar && topWebinar.attendance_rate > 0) {
+    notes.push({
+      id: `top-${topWebinar.id}`,
+      icon: '🏆',
+      title: `Top performer: ${topWebinar.title}`,
+      desc: `${topWebinar.attendance_rate.toFixed(1)}% attendance rate — Grade ${gradeInfo(topWebinar.attendance_rate).grade}`,
+      time: 'Best',
+      link: () => nav('webinar', topWebinar.id),
+    });
+  }
+  // Next upcoming
+  const nextUp = upcoming.sort((a,b) => new Date(a.date)-new Date(b.date))[0];
+  if (nextUp) {
+    notes.push({
+      id: `up-${nextUp.id}`,
+      icon: '📅',
+      title: `Upcoming: ${nextUp.title}`,
+      desc: `Scheduled for ${fmtDate(nextUp.date)}${nextUp.speaker_name ? ' · ' + nextUp.speaker_name : ''}`,
+      time: 'Soon',
+      link: () => nav('webinar', nextUp.id),
+    });
+  }
+  // Webinars missing data
+  if (noData.length) {
+    notes.push({
+      id: 'missing-data',
+      icon: '⚠️',
+      title: `${noData.length} webinar${noData.length>1?'s':''} missing data`,
+      desc: `Upload attendance & registration CSVs for accurate analytics`,
+      time: 'Action',
+      link: () => nav('home'),
+    });
+  }
+  // Platform summary
+  const totalReg = S.webinars.reduce((a,w) => a+w.total_registrations, 0);
+  if (totalReg > 0) {
+    const totalAtt = S.webinars.reduce((a,w) => a+w.total_attendees, 0);
+    const rate = totalReg ? ((totalAtt/totalReg)*100).toFixed(1) : 0;
+    notes.push({
+      id: 'platform-rate',
+      icon: '📊',
+      title: 'Platform attendance rate',
+      desc: `${rate}% across ${completed.length} completed webinars (${fmt(totalReg)} registrations)`,
+      time: 'Stats',
+      link: () => nav('analytics'),
+    });
+  }
+  // Leaderboard
+  notes.push({
+    id: 'leaderboard',
+    icon: '🎯',
+    title: 'Check the leaderboard',
+    desc: `See your most engaged attendees ranked by score`,
+    time: 'View',
+    link: () => nav('leaderboard'),
+  });
+
+  _notifStore.items = notes;
+  return notes;
+}
+
+function toggleNotifPanel() {
+  const panel    = document.getElementById('notif-panel');
+  const backdrop = document.getElementById('notif-backdrop');
+  const btn      = document.getElementById('tb-notif-btn');
+  if (!panel) return;
+  const isOpen = panel.classList.toggle('open');
+  if (backdrop) backdrop.classList.toggle('open', isOpen);
+  if (btn)      btn.classList.toggle('active', isOpen);
+  if (isOpen) renderNotifPanel();
+}
+
+function closeNotifPanel() {
+  const panel    = document.getElementById('notif-panel');
+  const backdrop = document.getElementById('notif-backdrop');
+  const btn      = document.getElementById('tb-notif-btn');
+  if (panel)    panel.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('open');
+  if (btn)      btn.classList.remove('active');
+}
+
+function renderNotifPanel() {
+  const list  = document.getElementById('notif-list');
+  const badge = document.getElementById('notif-badge');
+  if (!list) return;
+  const notes = getNotifications();
+  if (!notes.length) {
+    list.innerHTML = '<div class="notif-empty">No recent activity</div>';
+    return;
+  }
+  const unreadCount = notes.filter(n => !_notifStore.read.has(n.id)).length;
+  if (badge) {
+    if (unreadCount > 0) {
+      badge.textContent = unreadCount;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+  list.innerHTML = notes.map(n => {
+    const unread = !_notifStore.read.has(n.id);
+    return `<div class="notif-item${unread?' unread':''}" onclick="closeNotifPanel();(${n.link.toString()})()">
+      <div class="notif-icon">${n.icon}</div>
+      <div class="notif-content">
+        <div class="notif-title">${esc(n.title)}</div>
+        <div class="notif-desc">${esc(n.desc)}</div>
+      </div>
+      <div class="notif-time">${esc(n.time)}</div>
+    </div>`;
+  }).join('');
+}
+
+function markAllRead() {
+  getNotifications().forEach(n => _notifStore.read.add(n.id));
+  renderNotifPanel();
+  const badge = document.getElementById('notif-badge');
+  if (badge) badge.style.display = 'none';
+}
+
+function updateNotifBadge() {
+  const notes  = getNotifications();
+  const badge  = document.getElementById('notif-badge');
+  const unread = notes.filter(n => !_notifStore.read.has(n.id)).length;
+  if (!badge) return;
+  if (unread > 0) {
+    badge.textContent = unread > 9 ? '9+' : unread;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
 
 /* ── API ────────────────────────────────────────────────────────────────── */
 async function api(url, method='GET', body=null) {
@@ -75,6 +258,30 @@ async function loadAll() {
   }
 }
 
+/* ── Topbar chips ───────────────────────────────────────────────────────── */
+function updateTopbarChips(page) {
+  const chips = document.getElementById('tb-chips');
+  if (!chips) return;
+  if (page === 'home') {
+    chips.style.display = 'flex';
+    // Sync active chip to current filter
+    chips.querySelectorAll('.tb-chip').forEach(c => {
+      c.classList.toggle('active', c.dataset.filter === S.filterStatus);
+    });
+  } else {
+    chips.style.display = 'none';
+  }
+}
+
+function setChipFilter(value) {
+  S.filterStatus = value;
+  // Sync chip active state
+  document.querySelectorAll('.tb-chip').forEach(c =>
+    c.classList.toggle('active', c.dataset.filter === value)
+  );
+  if (S.page === 'home') renderHome();
+}
+
 /* ── Navigation ─────────────────────────────────────────────────────────── */
 function nav(page, sub) {
   S.page = page;
@@ -84,11 +291,13 @@ function nav(page, sub) {
   );
   setBreadcrumb(page, sub);
   closeCmdPalette();
+  closeNotifPanel();
   // Close mobile sidebar when navigating
   const sidebar = document.getElementById('sidebar');
   if (sidebar && sidebar.classList.contains('mobile-open')) {
     toggleMobileSidebar();
   }
+  updateTopbarChips(page);
   switch (page) {
     case 'home':        renderHome();              break;
     case 'analytics':   renderAnalytics();         break;
@@ -112,6 +321,69 @@ function setContent(html) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
+   KPI BANNER
+══════════════════════════════════════════════════════════════════════════ */
+function renderKpiBanner() {
+  const total    = S.webinars.length;
+  const totalReg = S.webinars.reduce((a,w) => a+w.total_registrations, 0);
+  const totalAtt = S.webinars.reduce((a,w) => a+w.total_attendees, 0);
+  const avgRate  = total ? (S.webinars.reduce((a,w) => a+w.attendance_rate, 0) / total) : 0;
+  const completed= S.webinars.filter(w => w.status === 'completed').length;
+
+  // Build sparkline data from last 8 webinars (sorted by date)
+  const sorted = [...S.webinars].filter(w => w.total_attendees > 0)
+    .sort((a,b) => new Date(a.date) - new Date(b.date)).slice(-8);
+  const attSpark  = sorted.map(w => w.total_attendees);
+  const rateSpark = sorted.map(w => w.attendance_rate || 0);
+  const regSpark  = sorted.map(w => w.total_registrations);
+
+  const rateColor = avgRate >= 60 ? '#10b981' : avgRate >= 40 ? '#f59e0b' : avgRate > 0 ? '#f43f5e' : '#5c5580';
+
+  return `<div class="kpi-banner">
+    <div class="kpi-item kpi-violet">
+      <div class="kpi-label">Total Webinars</div>
+      <div class="kpi-val-row">
+        <div class="kpi-val" data-countup="${total}">0</div>
+        <div style="color:var(--accent)">${sparkBars(sorted.map((_,i)=>i+1))}</div>
+      </div>
+      <div class="kpi-sub">
+        <span class="kpi-trend up">▲ ${completed} completed</span>
+      </div>
+    </div>
+    <div class="kpi-item kpi-cobalt">
+      <div class="kpi-label">Total Registrations</div>
+      <div class="kpi-val-row">
+        <div class="kpi-val" data-countup="${totalReg}">0</div>
+        <div style="color:var(--accent-2)">${sparkBars(regSpark)}</div>
+      </div>
+      <div class="kpi-sub">
+        <span style="color:var(--text-3)">${S.speakers.length} speakers</span>
+      </div>
+    </div>
+    <div class="kpi-item kpi-emerald">
+      <div class="kpi-label">Total Attendees</div>
+      <div class="kpi-val-row">
+        <div class="kpi-val" data-countup="${totalAtt}">0</div>
+        <div style="color:var(--emerald)">${sparkBars(attSpark)}</div>
+      </div>
+      <div class="kpi-sub">
+        <span style="color:var(--text-3)">${fmt(totalReg - totalAtt)} no-shows</span>
+      </div>
+    </div>
+    <div class="kpi-item kpi-gold">
+      <div class="kpi-label">Avg. Attendance Rate</div>
+      <div class="kpi-val-row">
+        <div class="kpi-val" style="color:${rateColor}" data-countup="${avgRate.toFixed(1)}">0</div>
+        <div style="color:${rateColor}">${sparkBars(rateSpark)}</div>
+      </div>
+      <div class="kpi-sub">
+        <span class="kpi-trend ${avgRate>=50?'up':'down'}">${avgRate>=50?'▲':'▼'} Grade ${gradeInfo(avgRate).grade}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    HOME — Webinar Dashboard
 ══════════════════════════════════════════════════════════════════════════ */
 function renderHome() {
@@ -119,15 +391,19 @@ function renderHome() {
   let list = S.webinars.filter(w =>
     !q || w.title.toLowerCase().includes(q) || w.speaker_name.toLowerCase().includes(q)
   );
-  if (S.filterStatus !== 'all')  list = list.filter(w => w.status === S.filterStatus);
+  // Apply chip filter (includes month shortcut)
+  if (S.filterStatus === 'month') {
+    const now = new Date();
+    list = list.filter(w => {
+      const d = new Date(w.date + 'T00:00:00');
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    });
+  } else if (S.filterStatus !== 'all') {
+    list = list.filter(w => w.status === S.filterStatus);
+  }
   if (S.filterSpeaker !== 'all') list = list.filter(w => w.speaker_id == S.filterSpeaker);
 
-  const total    = S.webinars.length;
-  const totalReg = S.webinars.reduce((a,w) => a+w.total_registrations, 0);
-  const totalAtt = S.webinars.reduce((a,w) => a+w.total_attendees, 0);
-  const avgRate  = total ? (S.webinars.reduce((a,w) => a+w.attendance_rate, 0) / total).toFixed(1) : '0.0';
-  const upcoming = S.webinars.filter(w => w.status === 'upcoming').length;
-  const completed= S.webinars.filter(w => w.status === 'completed').length;
+  const total = S.webinars.length;
 
   const speakerOptions = S.speakers.map(sp =>
     `<option value="${sp.id}" ${S.filterSpeaker==sp.id?'selected':''}>${esc(sp.name)}</option>`
@@ -143,51 +419,19 @@ function renderHome() {
 
   setContent(`
     <div>
-      <!-- Header -->
+      <!-- Header (no duplicate New Webinar btn — it's in topbar) -->
       <div class="page-hd">
         <div>
           <h1 class="page-title">Webinar Dashboard</h1>
-          <p class="page-sub">${total} webinars · ${S.speakers.length} speakers</p>
-        </div>
-        <button class="btn btn-primary" onclick="openWebinarModal()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Add New Webinar
-        </button>
-      </div>
-
-      <!-- Stats strip -->
-      <div class="stats-strip">
-        <div class="ss-item">
-          <span class="ss-val" data-countup="${total}">0</span>
-          <span class="ss-lbl">Total Webinars</span>
-        </div>
-        <div class="ss-item">
-          <span class="ss-val" style="color:#2563eb" data-countup="${totalReg}">0</span>
-          <span class="ss-lbl">Registrations</span>
-        </div>
-        <div class="ss-item">
-          <span class="ss-val" style="color:#059669" data-countup="${totalAtt}">0</span>
-          <span class="ss-lbl">Attendees</span>
-        </div>
-        <div class="ss-item">
-          <span class="ss-val" style="color:#7c3aed" data-countup="${avgRate}">0</span>
-          <span class="ss-lbl">Avg. Rate %</span>
-        </div>
-        <div class="ss-item">
-          <span class="ss-val" style="color:#d97706" data-countup="${upcoming}">0</span>
-          <span class="ss-lbl">Upcoming</span>
-        </div>
-        <div class="ss-item">
-          <span class="ss-val" style="color:#059669" data-countup="${completed}">0</span>
-          <span class="ss-lbl">Completed</span>
+          <p class="page-sub">${greeting()}, ShreeKrishna · ${total} webinars · ${S.speakers.length} speakers</p>
         </div>
       </div>
 
-      <!-- Filters -->
+      <!-- KPI Banner -->
+      ${renderKpiBanner()}
+
+      <!-- Speaker filter (chips handle status filter) -->
       <div class="filter-bar">
-        <span class="filter-pill ${S.filterStatus==='all'?'active':''}" onclick="setFilter('status','all')">All</span>
-        <span class="filter-pill ${S.filterStatus==='completed'?'active':''}" onclick="setFilter('status','completed')">Completed</span>
-        <span class="filter-pill ${S.filterStatus==='upcoming'?'active':''}" onclick="setFilter('status','upcoming')">Upcoming</span>
         <select class="filter-select" onchange="setFilter('speaker',this.value)">
           <option value="all">All Speakers</option>
           ${speakerOptions}
@@ -198,10 +442,13 @@ function renderHome() {
       ${gridHTML}
     </div>
   `);
+
+  // Sync chip state with current filter
+  updateTopbarChips('home');
 }
 
 function setFilter(type, value) {
-  if (type === 'status')  S.filterStatus  = value;
+  if (type === 'status')  { S.filterStatus  = value; updateTopbarChips('home'); }
   if (type === 'speaker') S.filterSpeaker = value;
   renderHome();
 }
@@ -211,13 +458,13 @@ function webinarCardHTML(w) {
   const color    = avColor(w.speaker_name);
   const ini      = initials(w.speaker_name);
   const rate     = w.attendance_rate || 0;
-  const rateClr  = rate >= 60 ? '#059669' : rate >= 40 ? '#d97706' : rate > 0 ? '#dc2626' : 'var(--text-3)';
+  const info     = gradeInfo(rate);
   const badgeCls = w.status === 'completed' ? 'completed' : w.status === 'upcoming' ? 'upcoming' : 'incomplete';
   const bothDone = w.has_registration_data && w.has_attendee_data;
 
   return `
     <div class="wb-card" onclick="nav('webinar',${w.id})">
-      <div class="wb-card-top" style="background:${color}"></div>
+      <div class="wb-card-top" style="background:linear-gradient(90deg,${color},${color}88)"></div>
       <div class="wb-card-body">
         <div class="wb-card-hd">
           <div class="wb-card-title">${esc(w.title)}</div>
@@ -242,18 +489,23 @@ function webinarCardHTML(w) {
         </div>
         <div class="wb-card-stats">
           <div class="wb-card-stat">
-            <div class="wb-card-stat-val" style="color:#2563eb">${fmt(w.total_registrations)}</div>
+            <div class="wb-card-stat-val" style="color:var(--c-reg)">${fmt(w.total_registrations)}</div>
             <div class="wb-card-stat-lbl">Registered</div>
           </div>
           <div class="wb-card-stat">
-            <div class="wb-card-stat-val" style="color:#059669">${fmt(w.total_attendees)}</div>
+            <div class="wb-card-stat-val" style="color:var(--c-att)">${fmt(w.total_attendees)}</div>
             <div class="wb-card-stat-lbl">Attended</div>
           </div>
-          <div class="wb-card-stat">
-            <div class="wb-card-stat-val" style="color:${rateClr}">${fmtPct(rate)}</div>
-            <div class="wb-card-stat-lbl">Rate</div>
-          </div>
         </div>
+      </div>
+      <!-- Health score row -->
+      <div class="wb-card-health">
+        ${donutRing(rate, 44)}
+        <div class="wb-health-info">
+          <div class="wb-health-label">Health Score</div>
+          <div class="wb-health-rate">${rate > 0 ? fmtPct(rate) : 'No data'}</div>
+        </div>
+        <div class="grade-badge grade-${info.grade === '—' ? 'none' : info.grade}">${info.grade}</div>
       </div>
       <div class="wb-card-upload-bar">
         ${bothDone
@@ -349,30 +601,30 @@ function _drawWebinarDetail(w) {
   const analysisHTML = `
     <div class="analysis-grid">
       <div class="an-stat-card">
-        <div class="an-stat-icon" style="background:#dbeafe">📝</div>
-        <div><div class="an-stat-val" style="color:#2563eb">${fmt(w.total_registrations)}</div><div class="an-stat-lbl">Registered</div></div>
+        <div class="an-stat-icon" style="background:rgba(59,130,246,0.15)">📝</div>
+        <div><div class="an-stat-val" style="color:var(--c-reg)">${fmt(w.total_registrations)}</div><div class="an-stat-lbl">Registered</div></div>
       </div>
       <div class="an-stat-card">
-        <div class="an-stat-icon" style="background:#dcfce7">✅</div>
-        <div><div class="an-stat-val" style="color:#059669">${fmt(w.total_attendees)}</div><div class="an-stat-lbl">Attended</div></div>
+        <div class="an-stat-icon" style="background:rgba(16,185,129,0.15)">✅</div>
+        <div><div class="an-stat-val" style="color:var(--c-att)">${fmt(w.total_attendees)}</div><div class="an-stat-lbl">Attended</div></div>
       </div>
       <div class="an-stat-card">
-        <div class="an-stat-icon" style="background:#fee2e2">❌</div>
-        <div><div class="an-stat-val" style="color:#dc2626">${fmt(noShow)}</div><div class="an-stat-lbl">No-shows</div></div>
+        <div class="an-stat-icon" style="background:rgba(244,63,94,0.15)">❌</div>
+        <div><div class="an-stat-val" style="color:var(--c-nosh)">${fmt(noShow)}</div><div class="an-stat-lbl">No-shows</div></div>
       </div>
       <div class="an-stat-card">
-        <div class="an-stat-icon" style="background:#ede9fe">📊</div>
+        <div class="an-stat-icon" style="background:rgba(139,92,246,0.15)">📊</div>
         <div><div class="an-stat-val" style="color:${rateClr}">${rate}%</div><div class="an-stat-lbl">Attendance Rate</div></div>
       </div>
       ${w.duplicates_removed > 0 ? `
       <div class="an-stat-card">
-        <div class="an-stat-icon" style="background:#fef3c7">🔄</div>
-        <div><div class="an-stat-val" style="color:#d97706">${fmt(w.duplicates_removed)}</div><div class="an-stat-lbl">Duplicates Removed</div></div>
+        <div class="an-stat-icon" style="background:rgba(245,158,11,0.15)">🔄</div>
+        <div><div class="an-stat-val" style="color:var(--gold)">${fmt(w.duplicates_removed)}</div><div class="an-stat-lbl">Duplicates Removed</div></div>
       </div>` : ''}
       ${w.unmatched_attendees > 0 ? `
       <div class="an-stat-card">
-        <div class="an-stat-icon" style="background:#fef9ec">⚠️</div>
-        <div><div class="an-stat-val" style="color:#b45309">${fmt(w.unmatched_attendees)}</div><div class="an-stat-lbl">Walk-ins (not registered)</div></div>
+        <div class="an-stat-icon" style="background:rgba(245,158,11,0.10)">⚠️</div>
+        <div><div class="an-stat-val" style="color:var(--amber)">${fmt(w.unmatched_attendees)}</div><div class="an-stat-lbl">Walk-ins (not registered)</div></div>
       </div>` : ''}
     </div>`;
 
@@ -571,11 +823,11 @@ function renderAnalytics() {
         </div>
         <div class="stat-card">
           <div class="stat-label">Upcoming Webinars</div>
-          <div class="stat-value" style="color:#d97706" data-countup="${st.upcoming_webinars}">0</div>
+          <div class="stat-value" style="color:var(--gold)" data-countup="${st.upcoming_webinars}">0</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Avg. Attendance Rate</div>
-          <div class="stat-value" style="color:#7c3aed" data-countup="${st.overall_attendance_rate}">0</div>
+          <div class="stat-value" style="color:var(--accent)" data-countup="${st.overall_attendance_rate}">0</div>
         </div>
       </div>
 
@@ -1283,13 +1535,15 @@ function _cmdActivateFocused() {
   if (focused) focused.click();
 }
 
-/* ── Dark mode ──────────────────────────────────────────────────────────── */
+/* ── Dark/Light toggle (dark is default; html.light = light mode) ── */
 function toggleDark() {
+  // S.dark = true means "using dark" (default). Toggle to light adds html.light class.
   S.dark = !S.dark;
-  document.documentElement.classList.toggle('dark', S.dark);
+  document.documentElement.classList.toggle('light', !S.dark);
   localStorage.setItem('wiq-dark', S.dark);
   const icon = document.getElementById('dark-icon');
   if (icon) {
+    // Sun icon when in dark mode (click → goes light), Moon icon in light mode (click → goes dark)
     icon.innerHTML = S.dark
       ? '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'
       : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
@@ -1298,10 +1552,17 @@ function toggleDark() {
 
 /* ── Init ───────────────────────────────────────────────────────────────── */
 async function init() {
-  // Dark mode
-  if (localStorage.getItem('wiq-dark') === 'true') {
+  // Dark-first: default is dark. Only apply light class if user explicitly chose light.
+  const saved = localStorage.getItem('wiq-dark');
+  if (saved === 'false') {
+    // User had toggled to light mode previously
+    S.dark = false;
+    document.documentElement.classList.add('light');
+    const icon = document.getElementById('dark-icon');
+    if (icon) icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+  } else {
+    // Default dark mode — show sun icon (click goes light)
     S.dark = true;
-    document.documentElement.classList.add('dark');
     const icon = document.getElementById('dark-icon');
     if (icon) icon.innerHTML = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
   }
@@ -1341,6 +1602,7 @@ async function init() {
   }
 
   updateSidebarRecent();
+  updateNotifBadge();
   nav('home');
 }
 
