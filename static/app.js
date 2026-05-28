@@ -33,7 +33,7 @@ function fmtDateTime(d) {
   return new Date(d).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-const AV_COLORS = ['#e11d48','#f59e0b','#3b82f6','#10b981','#06b6d4','#f97316','#a855f7','#22d3ee','#84cc16','#ec4899'];
+const AV_COLORS = ['#6366f1','#f59e0b','#38bdf8','#10b981','#f97316','#a855f7','#22d3ee','#84cc16','#ec4899','#64748b'];
 function avColor(name) {
   let h = 0;
   for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff;
@@ -411,7 +411,7 @@ function renderAttendanceChart() {
   const gridLines = [0, 25, 50, 75, 100].map(v => {
     const y = yPos(v);
     return `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}"
-      stroke="rgba(225,29,72,0.08)" stroke-width="1" stroke-dasharray="${v === 0 ? '0' : '4,4'}"/>
+      stroke="rgba(226,232,240,0.08)" stroke-width="1" stroke-dasharray="${v === 0 ? '0' : '4,4'}"/>
     <text x="${(padL - 8).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end"
       fill="var(--text-3)" font-size="9" font-family="var(--font)">${v}%</text>`;
   }).join('');
