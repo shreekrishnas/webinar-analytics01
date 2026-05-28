@@ -384,6 +384,120 @@ function renderKpiBanner() {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
+   ATTENDANCE TREND CHART
+══════════════════════════════════════════════════════════════════════════ */
+function renderAttendanceChart() {
+  const data = S.webinars
+    .filter(w => w.total_registrations > 0)
+    .sort((a, b) => new Date(a.date + 'T00:00:00') - new Date(b.date + 'T00:00:00'))
+    .slice(-12);
+  if (data.length < 2) return '';
+
+  const W = 700, H = 160;
+  const padL = 44, padR = 16, padT = 16, padB = 40;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const xPos  = i => padL + (i / (data.length - 1)) * plotW;
+  const yPos  = r => padT + plotH - (r / 100) * plotH;
+
+  const points   = data.map((d, i) => `${xPos(i).toFixed(1)},${yPos(d.attendance_rate || 0).toFixed(1)}`).join(' ');
+  const areaPath = [
+    `M ${padL} ${padT + plotH}`,
+    ...data.map((d, i) => `L ${xPos(i).toFixed(1)} ${yPos(d.attendance_rate || 0).toFixed(1)}`),
+    `L ${xPos(data.length - 1).toFixed(1)} ${padT + plotH}`,
+    'Z'
+  ].join(' ');
+
+  const gridLines = [0, 25, 50, 75, 100].map(v => {
+    const y = yPos(v);
+    return `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}"
+      stroke="rgba(225,29,72,0.08)" stroke-width="1" stroke-dasharray="${v === 0 ? '0' : '4,4'}"/>
+    <text x="${(padL - 8).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end"
+      fill="var(--text-3)" font-size="9" font-family="var(--font)">${v}%</text>`;
+  }).join('');
+
+  const xLabels = data.map((d, i) => {
+    if (data.length > 8 && i % 2 !== 0) return '';
+    const label = new Date(d.date + 'T00:00:00').toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+    return `<text x="${xPos(i).toFixed(1)}" y="${(H - 8).toFixed(1)}" text-anchor="middle"
+      fill="var(--text-3)" font-size="9" font-family="var(--font)">${label}</text>`;
+  }).join('');
+
+  const dots = data.map((d, i) => {
+    const x    = xPos(i), y = yPos(d.attendance_rate || 0);
+    const info = gradeInfo(d.attendance_rate || 0);
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5"
+      fill="${info.color}" stroke="var(--card)" stroke-width="2">
+      <title>${esc(d.title)}: ${(d.attendance_rate || 0).toFixed(1)}%</title>
+    </circle>`;
+  }).join('');
+
+  return `<div class="dash-chart-wrap">
+    <div class="dash-chart-head">
+      <div class="dash-chart-title">Attendance Rate Trend</div>
+      <div class="dash-chart-sub">Last ${data.length} webinar${data.length !== 1 ? 's' : ''} with data · by date</div>
+    </div>
+    <svg class="dash-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <linearGradient id="atCh" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"   stop-color="var(--accent)" stop-opacity="0.22"/>
+          <stop offset="100%" stop-color="var(--accent)" stop-opacity="0.02"/>
+        </linearGradient>
+      </defs>
+      ${gridLines}
+      <path d="${areaPath}" fill="url(#atCh)"/>
+      <polyline points="${points}" fill="none" stroke="var(--accent)" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round"/>
+      ${xLabels}
+      ${dots}
+    </svg>
+  </div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SKELETON LOADER — shown instantly before API data arrives
+══════════════════════════════════════════════════════════════════════════ */
+function showSkeletonHome() {
+  const skelCard = () => `
+    <div class="wb-card" style="pointer-events:none">
+      <div class="skel" style="height:8px;width:100%;border-radius:0"></div>
+      <div style="padding:18px 20px 16px;display:flex;flex-direction:column;gap:10px">
+        <div class="skel" style="height:14px;width:68%"></div>
+        <div class="skel" style="height:11px;width:45%"></div>
+        <div class="skel" style="height:11px;width:55%"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+          <div class="skel" style="height:32px"></div>
+          <div class="skel" style="height:32px"></div>
+        </div>
+        <div class="skel" style="height:8px;width:100%;margin-top:4px;border-radius:3px"></div>
+      </div>
+    </div>`;
+
+  const skelKpi = () => `
+    <div class="kpi-item" style="pointer-events:none;gap:8px">
+      <div class="skel" style="height:11px;width:80px"></div>
+      <div class="skel" style="height:30px;width:60px;margin-top:4px"></div>
+      <div class="skel" style="height:11px;width:100px;margin-top:2px"></div>
+    </div>`;
+
+  document.getElementById('content').innerHTML = `
+    <div>
+      <div class="page-hd">
+        <div>
+          <div class="skel" style="height:22px;width:220px;margin-bottom:8px"></div>
+          <div class="skel" style="height:13px;width:160px"></div>
+        </div>
+      </div>
+      <div class="kpi-banner">
+        ${Array(4).fill(0).map(skelKpi).join('')}
+      </div>
+      <div class="wb-grid">
+        ${Array(6).fill(0).map(skelCard).join('')}
+      </div>
+    </div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    HOME — Webinar Dashboard
 ══════════════════════════════════════════════════════════════════════════ */
 function renderHome() {
@@ -409,26 +523,48 @@ function renderHome() {
     `<option value="${sp.id}" ${S.filterSpeaker==sp.id?'selected':''}>${esc(sp.name)}</option>`
   ).join('');
 
-  const gridHTML = list.length
-    ? `<div class="wb-grid">${list.map(webinarCardHTML).join('')}</div>`
-    : `<div class="empty-state">
-        <div class="empty-icon">📋</div>
-        <div class="empty-title">No webinars found</div>
-        <div class="empty-sub">Try adjusting your filters or add a new webinar.</div>
-      </div>`;
+  let gridHTML;
+  if (S.webinars.length === 0) {
+    // Truly empty — no webinars at all
+    gridHTML = `<div class="empty-state">
+      <div class="empty-icon">🎙️</div>
+      <div class="empty-title">No webinars yet</div>
+      <div class="empty-sub">Get started by creating your first webinar session. It only takes a few seconds.</div>
+      <button class="btn btn-primary" onclick="openWebinarModal()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Create Your First Webinar
+      </button>
+    </div>`;
+  } else if (list.length === 0) {
+    // Webinars exist but filter returned nothing
+    const isMonthFilter = S.filterStatus === 'month';
+    gridHTML = `<div class="empty-state">
+      <div class="empty-icon">🔍</div>
+      <div class="empty-title">No webinars match this filter</div>
+      <div class="empty-sub">${isMonthFilter ? 'No webinars are scheduled for this month.' : 'Try a different filter or search term.'}</div>
+      <button class="btn btn-ghost" onclick="setChipFilter('all');setFilter('speaker','all')">
+        Clear Filters
+      </button>
+    </div>`;
+  } else {
+    gridHTML = `<div class="wb-grid">${list.map(webinarCardHTML).join('')}</div>`;
+  }
 
   setContent(`
     <div>
-      <!-- Header (no duplicate New Webinar btn — it's in topbar) -->
+      <!-- Header -->
       <div class="page-hd">
         <div>
           <h1 class="page-title">Webinar Dashboard</h1>
-          <p class="page-sub">${greeting()}, ShreeKrishna · ${total} webinars · ${S.speakers.length} speakers</p>
+          <p class="page-sub">${greeting()}, ShreeKrishna · ${total} webinar${total !== 1 ? 's' : ''} · ${S.speakers.length} speaker${S.speakers.length !== 1 ? 's' : ''}</p>
         </div>
       </div>
 
       <!-- KPI Banner -->
       ${renderKpiBanner()}
+
+      <!-- Attendance Trend Chart -->
+      ${renderAttendanceChart()}
 
       <!-- Speaker filter (chips handle status filter) -->
       <div class="filter-bar">
@@ -438,7 +574,7 @@ function renderHome() {
         </select>
       </div>
 
-      <!-- Webinar cards -->
+      <!-- Webinar cards / empty state -->
       ${gridHTML}
     </div>
   `);
@@ -459,7 +595,7 @@ function webinarCardHTML(w) {
   const ini      = initials(w.speaker_name);
   const rate     = w.attendance_rate || 0;
   const info     = gradeInfo(rate);
-  const badgeCls = w.status === 'completed' ? 'completed' : w.status === 'upcoming' ? 'upcoming' : 'incomplete';
+  const badgeCls = w.status === 'completed' ? 'completed' : w.status === 'upcoming' ? 'upcoming' : w.status === 'cancelled' ? 'cancelled' : 'incomplete';
   const bothDone = w.has_registration_data && w.has_attendee_data;
 
   return `
@@ -543,7 +679,7 @@ function _drawWebinarDetail(w) {
   const noShow   = w.no_shows ?? (w.total_registrations - w.total_attendees);
   const rate     = w.attendance_rate || 0;
   const rateClr  = rate >= 60 ? '#059669' : rate >= 40 ? '#d97706' : rate > 0 ? '#dc2626' : 'var(--text-3)';
-  const badgeCls = w.status === 'completed' ? 'completed' : w.status === 'upcoming' ? 'upcoming' : 'incomplete';
+  const badgeCls = w.status === 'completed' ? 'completed' : w.status === 'upcoming' ? 'upcoming' : w.status === 'cancelled' ? 'cancelled' : 'incomplete';
 
   // Smart upload section:
   // Show upload card only if that data type is missing — regardless of status
@@ -1594,6 +1730,9 @@ async function init() {
       if (e.key === 'Enter')      { e.preventDefault(); _cmdActivateFocused(); }
     }
   });
+
+  // Show skeleton immediately — replaced by real content once loadAll() finishes
+  showSkeletonHome();
 
   try {
     await loadAll();
