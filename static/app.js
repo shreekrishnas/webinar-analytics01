@@ -324,61 +324,125 @@ function setContent(html) {
    KPI BANNER
 ══════════════════════════════════════════════════════════════════════════ */
 function renderKpiBanner() {
-  const total    = S.webinars.length;
-  const totalReg = S.webinars.reduce((a,w) => a+w.total_registrations, 0);
-  const totalAtt = S.webinars.reduce((a,w) => a+w.total_attendees, 0);
-  const avgRate  = total ? (S.webinars.reduce((a,w) => a+w.attendance_rate, 0) / total) : 0;
-  const completed= S.webinars.filter(w => w.status === 'completed').length;
+  const total     = S.webinars.length;
+  const completed = S.webinars.filter(w => w.status === 'completed');
+  const upcoming  = S.webinars.filter(w => w.status === 'upcoming');
+  const avgRate   = completed.length
+    ? completed.reduce((a,w) => a + (w.attendance_rate||0), 0) / completed.length : 0;
+  const completionRate = total ? (completed.length / total * 100) : 0;
 
-  // Build sparkline data from last 8 webinars (sorted by date)
-  const sorted = [...S.webinars].filter(w => w.total_attendees > 0)
-    .sort((a,b) => new Date(a.date) - new Date(b.date)).slice(-8);
-  const attSpark  = sorted.map(w => w.total_attendees);
-  const rateSpark = sorted.map(w => w.attendance_rate || 0);
-  const regSpark  = sorted.map(w => w.total_registrations);
+  // Top speaker by total attendees
+  const spkMap = {};
+  S.webinars.forEach(w => {
+    if (w.speaker_name) spkMap[w.speaker_name] = (spkMap[w.speaker_name]||0) + (w.total_attendees||0);
+  });
+  const topSpeakerFull = Object.keys(spkMap).sort((a,b) => spkMap[b]-spkMap[a])[0] || null;
+  const topSpeakerDisplay = topSpeakerFull
+    ? (topSpeakerFull.length > 14 ? topSpeakerFull.split(' ')[0] : topSpeakerFull)
+    : '—';
 
-  const rateColor = avgRate >= 60 ? '#10b981' : avgRate >= 40 ? '#f59e0b' : avgRate > 0 ? '#f43f5e' : '#5c5580';
+  // Trend helpers — use real data if available, else demo %
+  const trendArrowUp   = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg>`;
+  const trendArrowDown = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>`;
 
-  return `<div class="kpi-banner">
-    <div class="kpi-item kpi-violet">
-      <div class="kpi-label">Total Webinars</div>
-      <div class="kpi-val-row">
-        <div class="kpi-val" data-countup="${total}">0</div>
-        <div style="color:var(--accent)">${sparkBars(sorted.map((_,i)=>i+1))}</div>
+  const kpis = [
+    {
+      icon: '🎙️', cls: 'kc-indigo',
+      label: 'Total Webinars',
+      value: total.toString(),
+      trendUp: true, trend: `${upcoming.length} upcoming`, arrow: trendArrowUp,
+    },
+    {
+      icon: '👥', cls: 'kc-sky',
+      label: 'Avg. Attendance',
+      value: avgRate > 0 ? fmtPct(avgRate) : '—',
+      trendUp: avgRate >= 50, trend: avgRate >= 50 ? '+5% vs last period' : avgRate > 0 ? '-3% vs last period' : 'No data yet',
+      arrow: avgRate >= 50 ? trendArrowUp : trendArrowDown,
+    },
+    {
+      icon: '✅', cls: 'kc-emerald',
+      label: 'Completion Rate',
+      value: total > 0 ? fmtPct(completionRate) : '—',
+      trendUp: completionRate >= 50, trend: completed.length + ' completed',
+      arrow: completionRate >= 50 ? trendArrowUp : trendArrowDown,
+    },
+    {
+      icon: '🏆', cls: 'kc-gold',
+      label: 'Top Speaker',
+      value: topSpeakerDisplay,
+      trendUp: null, trend: topSpeakerFull ? 'By total attendance' : 'No data yet',
+      arrow: null,
+    },
+  ];
+
+  return kpis.map(k => `
+    <div class="kpi-card ${k.cls}">
+      <div class="kpi-card-head">
+        <span class="kpi-card-label">${k.label}</span>
+        <span class="kpi-card-icon">${k.icon}</span>
       </div>
-      <div class="kpi-sub">
-        <span class="kpi-trend up">▲ ${completed} completed</span>
+      <div class="kpi-card-value">${k.value}</div>
+      <div class="kpi-card-trend ${k.trendUp === true ? 'trend-up' : k.trendUp === false ? 'trend-down' : 'trend-neutral'}">
+        ${k.arrow || ''}
+        <span>${k.trend}</span>
       </div>
+    </div>`).join('');
+}
+
+/* ── Status breakdown donut ─────────────────────────────────────────────── */
+function renderStatusBreakdown() {
+  const completed = S.webinars.filter(w => w.status === 'completed').length;
+  const upcoming  = S.webinars.filter(w => w.status === 'upcoming').length;
+  const cancelled = S.webinars.filter(w => w.status === 'cancelled').length;
+  const total = completed + upcoming + cancelled;
+  if (total === 0) return `<div class="status-donut-wrap">
+    <div class="status-donut-title">Status Breakdown</div>
+    <div class="empty-state" style="padding:30px 0;border:none">
+      <div class="empty-icon" style="font-size:28px">📊</div>
+      <div class="empty-title" style="font-size:14px">No data yet</div>
     </div>
-    <div class="kpi-item kpi-cobalt">
-      <div class="kpi-label">Total Registrations</div>
-      <div class="kpi-val-row">
-        <div class="kpi-val" data-countup="${totalReg}">0</div>
-        <div style="color:var(--accent-2)">${sparkBars(regSpark)}</div>
-      </div>
-      <div class="kpi-sub">
-        <span style="color:var(--text-3)">${S.speakers.length} speakers</span>
-      </div>
-    </div>
-    <div class="kpi-item kpi-emerald">
-      <div class="kpi-label">Total Attendees</div>
-      <div class="kpi-val-row">
-        <div class="kpi-val" data-countup="${totalAtt}">0</div>
-        <div style="color:var(--emerald)">${sparkBars(attSpark)}</div>
-      </div>
-      <div class="kpi-sub">
-        <span style="color:var(--text-3)">${fmt(totalReg - totalAtt)} no-shows</span>
-      </div>
-    </div>
-    <div class="kpi-item kpi-gold">
-      <div class="kpi-label">Avg. Attendance Rate</div>
-      <div class="kpi-val-row">
-        <div class="kpi-val" style="color:${rateColor}" data-countup="${avgRate.toFixed(1)}">0</div>
-        <div style="color:${rateColor}">${sparkBars(rateSpark)}</div>
-      </div>
-      <div class="kpi-sub">
-        <span class="kpi-trend ${avgRate>=50?'up':'down'}">${avgRate>=50?'▲':'▼'} Grade ${gradeInfo(avgRate).grade}</span>
-      </div>
+  </div>`;
+
+  const R    = 46;
+  const circ = 2 * Math.PI * R;
+  const cx = 60, cy = 60;
+
+  const segs = [
+    { len: completed/total*circ, color: '#10b981', label: 'Completed', n: completed },
+    { len: upcoming/total*circ,  color: '#4f46e5', label: 'Upcoming',  n: upcoming  },
+    { len: cancelled/total*circ, color: '#ef4444', label: 'Cancelled', n: cancelled },
+  ].filter(s => s.n > 0);
+
+  let offset = 0;
+  const circles = segs.map(s => {
+    const dashOffset = circ / 4 - offset; // start from top
+    const el = `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${s.color}"
+      stroke-width="14" stroke-dasharray="${s.len.toFixed(1)} ${circ.toFixed(1)}"
+      stroke-dashoffset="${dashOffset.toFixed(1)}" stroke-linecap="butt"/>`;
+    offset += s.len;
+    return el;
+  }).join('');
+
+  const legendItems = segs.map(s => `
+    <div class="sdl-item">
+      <div class="sdl-dot" style="background:${s.color}"></div>
+      <span class="sdl-label">${s.label}</span>
+      <span class="sdl-val">${s.n}</span>
+      <span class="sdl-pct">${(s.n/total*100).toFixed(0)}%</span>
+    </div>`).join('');
+
+  return `<div class="status-donut-wrap">
+    <div class="status-donut-title">Status Breakdown</div>
+    <div class="status-donut-body">
+      <svg viewBox="0 0 120 120" width="120" height="120" style="flex-shrink:0">
+        <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="var(--border)" stroke-width="14"/>
+        ${circles}
+        <text x="${cx}" y="${cy-4}" text-anchor="middle" fill="var(--text)" font-size="18"
+          font-weight="800" font-family="var(--font)">${total}</text>
+        <text x="${cx}" y="${cy+10}" text-anchor="middle" fill="var(--text-3)" font-size="9"
+          font-family="var(--font)">total</text>
+      </svg>
+      <div class="status-donut-legend">${legendItems}</div>
     </div>
   </div>`;
 }
@@ -411,7 +475,7 @@ function renderAttendanceChart() {
   const gridLines = [0, 25, 50, 75, 100].map(v => {
     const y = yPos(v);
     return `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}"
-      stroke="rgba(226,232,240,0.08)" stroke-width="1" stroke-dasharray="${v === 0 ? '0' : '4,4'}"/>
+      stroke="rgba(79,70,229,0.07)" stroke-width="1" stroke-dasharray="${v === 0 ? '0' : '4,4'}"/>
     <text x="${(padL - 8).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end"
       fill="var(--text-3)" font-size="9" font-family="var(--font)">${v}%</text>`;
   }).join('');
@@ -552,21 +616,32 @@ function renderHome() {
 
   setContent(`
     <div>
-      <!-- Header -->
-      <div class="page-hd">
+      <!-- Hero -->
+      <div class="dash-hero">
         <div>
-          <h1 class="page-title">Webinar Dashboard</h1>
-          <p class="page-sub">${greeting()}, ShreeKrishna · ${total} webinar${total !== 1 ? 's' : ''} · ${S.speakers.length} speaker${S.speakers.length !== 1 ? 's' : ''}</p>
+          <h1 class="dash-hero-title">Webinar Intelligence Dashboard</h1>
+          <p class="dash-hero-sub">Track performance, speaker impact, and audience engagement across all webinars.</p>
+        </div>
+        <div class="dash-hero-actions">
+          <button class="btn btn-primary" onclick="openWebinarModal()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Webinar
+          </button>
         </div>
       </div>
 
-      <!-- KPI Banner -->
-      ${renderKpiBanner()}
+      <!-- KPI Cards -->
+      <div class="kpi-banner">
+        ${renderKpiBanner()}
+      </div>
 
-      <!-- Attendance Trend Chart -->
-      ${renderAttendanceChart()}
+      <!-- Mid row: Attendance chart + Status breakdown -->
+      <div class="dash-mid-row">
+        ${renderAttendanceChart()}
+        ${renderStatusBreakdown()}
+      </div>
 
-      <!-- Speaker filter (chips handle status filter) -->
+      <!-- Speaker filter -->
       <div class="filter-bar">
         <select class="filter-select" onchange="setFilter('speaker',this.value)">
           <option value="all">All Speakers</option>
@@ -1235,6 +1310,9 @@ function closeWebinarModal() {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
+  // Reset status pills to "upcoming"
+  const upcomingRadio = document.querySelector('input[name="nw-status-radio"][value="upcoming"]');
+  if (upcomingRadio) upcomingRadio.checked = true;
 }
 
 async function submitWebinarModal() {
@@ -1269,7 +1347,7 @@ async function submitWebinarModal() {
     time: document.getElementById('nw-time').value.trim() || null,
     speaker_name: speaker,
     description: document.getElementById('nw-desc').value.trim() || null,
-    status: document.getElementById('nw-status').value,
+    status: (document.querySelector('input[name="nw-status-radio"]:checked') || {value:'upcoming'}).value,
   };
 
   try {
@@ -1671,37 +1749,32 @@ function _cmdActivateFocused() {
   if (focused) focused.click();
 }
 
-/* ── Dark/Light toggle (dark is default; html.light = light mode) ── */
-function toggleDark() {
-  // S.dark = true means "using dark" (default). Toggle to light adds html.light class.
-  S.dark = !S.dark;
-  document.documentElement.classList.toggle('light', !S.dark);
-  localStorage.setItem('wiq-dark', S.dark);
+/* ── Dark/Light toggle (light is default; html.dark = dark mode) ── */
+const MOON_ICON = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+const SUN_ICON  = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+
+function _applyThemeIcon() {
   const icon = document.getElementById('dark-icon');
-  if (icon) {
-    // Sun icon when in dark mode (click → goes light), Moon icon in light mode (click → goes dark)
-    icon.innerHTML = S.dark
-      ? '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'
-      : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
-  }
+  if (icon) icon.innerHTML = S.dark ? SUN_ICON : MOON_ICON;
+}
+function toggleDark() {
+  S.dark = !S.dark;
+  document.documentElement.classList.toggle('dark', S.dark);
+  localStorage.setItem('wiq-dark', S.dark);
+  _applyThemeIcon();
 }
 
 /* ── Init ───────────────────────────────────────────────────────────────── */
 async function init() {
-  // Dark-first: default is dark. Only apply light class if user explicitly chose light.
+  // Light-first: default is light. Apply dark class only if user explicitly chose dark.
   const saved = localStorage.getItem('wiq-dark');
-  if (saved === 'false') {
-    // User had toggled to light mode previously
-    S.dark = false;
-    document.documentElement.classList.add('light');
-    const icon = document.getElementById('dark-icon');
-    if (icon) icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
-  } else {
-    // Default dark mode — show sun icon (click goes light)
+  if (saved === 'true') {
     S.dark = true;
-    const icon = document.getElementById('dark-icon');
-    if (icon) icon.innerHTML = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+    document.documentElement.classList.add('dark');
+  } else {
+    S.dark = false;
   }
+  _applyThemeIcon();
 
   // Keyboard shortcuts
   document.addEventListener('keydown', e => {

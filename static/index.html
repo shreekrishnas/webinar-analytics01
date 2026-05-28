@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>WebinarIQ — Webinar Intelligence</title>
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <link rel="stylesheet" href="/static/styles.css?v=17" />
+  <link rel="stylesheet" href="/static/styles.css?v=18" />
 </head>
 <body>
 
@@ -201,11 +201,29 @@
       </div>
       <div class="form-field">
         <label class="form-label">Status</label>
-        <select class="form-select" id="nw-status">
-          <option value="upcoming">📅 Upcoming</option>
-          <option value="completed">✅ Completed</option>
-          <option value="cancelled">❌ Cancelled</option>
-        </select>
+        <div class="status-pills" id="nw-status-pills">
+          <label class="status-pill">
+            <input type="radio" name="nw-status-radio" value="upcoming" checked />
+            <div class="sp-content">
+              <span class="sp-label">📅 Upcoming</span>
+              <span class="sp-desc">Scheduled webinar</span>
+            </div>
+          </label>
+          <label class="status-pill">
+            <input type="radio" name="nw-status-radio" value="completed" />
+            <div class="sp-content">
+              <span class="sp-label">✅ Completed</span>
+              <span class="sp-desc">Session finished</span>
+            </div>
+          </label>
+          <label class="status-pill">
+            <input type="radio" name="nw-status-radio" value="cancelled" />
+            <div class="sp-content">
+              <span class="sp-label">❌ Cancelled</span>
+              <span class="sp-desc">No longer happening</span>
+            </div>
+          </label>
+        </div>
       </div>
       <div class="form-field">
         <label class="form-label">Description <span class="opt">(optional)</span></label>
@@ -247,6 +265,6 @@
 <!-- ── TOAST ──────────────────────────────────────────────────── -->
 <div class="toast" id="toast"></div>
 
-<script src="/static/app.js?v=17"></script>
+<script src="/static/app.js?v=18"></script>
 </body>
 </html>
