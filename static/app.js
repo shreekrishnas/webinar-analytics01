@@ -232,6 +232,59 @@ function updateNotifBadge() {
   }
 }
 
+/* ── Activity feed builder (for dashboard panel) ────────────────────────── */
+function buildActivityFeed() {
+  const items     = [];
+  const completed = S.webinars.filter(w => w.status === 'completed');
+  const upcoming  = S.webinars.filter(w => w.status === 'upcoming');
+  const noData    = S.webinars.filter(w => !w.has_registration_data && !w.has_attendee_data && w.status === 'completed');
+
+  const topWebinar = [...completed].sort((a,b) => b.attendance_rate - a.attendance_rate)[0];
+  if (topWebinar && topWebinar.attendance_rate > 0) {
+    items.push({
+      icon: '🏆', time: 'Best',
+      title: topWebinar.title,
+      desc:  `${topWebinar.attendance_rate.toFixed(1)}% attendance — Grade ${gradeInfo(topWebinar.attendance_rate).grade}`,
+      onclick: `nav('webinar',${topWebinar.id})`,
+    });
+  }
+  const nextUp = [...upcoming].sort((a,b) => new Date(a.date)-new Date(b.date))[0];
+  if (nextUp) {
+    items.push({
+      icon: '📅', time: 'Soon',
+      title: nextUp.title,
+      desc:  `${fmtDate(nextUp.date)}${nextUp.speaker_name ? ' · ' + nextUp.speaker_name : ''}`,
+      onclick: `nav('webinar',${nextUp.id})`,
+    });
+  }
+  if (noData.length) {
+    items.push({
+      icon: '⚠️', time: 'Action',
+      title: `${noData.length} webinar${noData.length>1?'s':''} missing data`,
+      desc:  'Upload CSV files to enable full analytics',
+      onclick: `nav('home')`,
+    });
+  }
+  const totalReg = S.webinars.reduce((a,w) => a+w.total_registrations, 0);
+  if (totalReg > 0) {
+    const totalAtt = S.webinars.reduce((a,w) => a+w.total_attendees, 0);
+    const rate = (totalAtt/totalReg*100).toFixed(1);
+    items.push({
+      icon: '📊', time: 'Stats',
+      title: 'Platform attendance rate',
+      desc:  `${rate}% across ${completed.length} completed webinars`,
+      onclick: `nav('analytics')`,
+    });
+  }
+  items.push({
+    icon: '🎯', time: 'View',
+    title: 'Attendee Leaderboard',
+    desc:  'Top attendees ranked by engagement score',
+    onclick: `nav('leaderboard')`,
+  });
+  return items;
+}
+
 /* ── API ────────────────────────────────────────────────────────────────── */
 async function api(url, method='GET', body=null) {
   const opts = { method, headers: {'Content-Type':'application/json'} };
@@ -569,7 +622,6 @@ function renderHome() {
   let list = S.webinars.filter(w =>
     !q || w.title.toLowerCase().includes(q) || w.speaker_name.toLowerCase().includes(q)
   );
-  // Apply chip filter (includes month shortcut)
   if (S.filterStatus === 'month') {
     const now = new Date();
     list = list.filter(w => {
@@ -581,16 +633,15 @@ function renderHome() {
   }
   if (S.filterSpeaker !== 'all') list = list.filter(w => w.speaker_id == S.filterSpeaker);
 
-  const total = S.webinars.length;
-
   const speakerOptions = S.speakers.map(sp =>
     `<option value="${sp.id}" ${S.filterSpeaker==sp.id?'selected':''}>${esc(sp.name)}</option>`
   ).join('');
 
-  let gridHTML;
+  let mainContent;
+
   if (S.webinars.length === 0) {
-    // Truly empty — no webinars at all
-    gridHTML = `<div class="empty-state">
+    // Truly empty — first-time user
+    mainContent = `<div class="empty-state">
       <div class="empty-icon">🎙️</div>
       <div class="empty-title">No webinars yet</div>
       <div class="empty-sub">Get started by creating your first webinar session. It only takes a few seconds.</div>
@@ -599,24 +650,106 @@ function renderHome() {
         Create Your First Webinar
       </button>
     </div>`;
-  } else if (list.length === 0) {
-    // Webinars exist but filter returned nothing
-    const isMonthFilter = S.filterStatus === 'month';
-    gridHTML = `<div class="empty-state">
-      <div class="empty-icon">🔍</div>
-      <div class="empty-title">No webinars match this filter</div>
-      <div class="empty-sub">${isMonthFilter ? 'No webinars are scheduled for this month.' : 'Try a different filter or search term.'}</div>
-      <button class="btn btn-ghost" onclick="setChipFilter('all');setFilter('speaker','all')">
-        Clear Filters
-      </button>
-    </div>`;
   } else {
-    gridHTML = `<div class="wb-grid">${list.map(webinarCardHTML).join('')}</div>`;
+    // Activity feed
+    const feedHTML = buildActivityFeed().map(item => `
+      <div class="act-feed-item" onclick="${item.onclick}">
+        <div class="act-feed-icon">${item.icon}</div>
+        <div class="act-feed-info">
+          <div class="act-feed-item-title">${esc(item.title)}</div>
+          <div class="act-feed-desc">${esc(item.desc)}</div>
+        </div>
+        <div class="act-feed-tag">${esc(item.time)}</div>
+      </div>`).join('');
+
+    // Table rows for filtered list
+    const tableRows = list.map(w => {
+      const color    = avColor(w.speaker_name);
+      const rate     = w.attendance_rate || 0;
+      const info     = gradeInfo(rate);
+      const badgeCls = w.status === 'completed' ? 'completed' : w.status === 'upcoming' ? 'upcoming' : 'cancelled';
+      const safeT    = esc(w.title).replace(/'/g,"\\'");
+      return `<tr onclick="nav('webinar',${w.id})">
+        <td><div class="wb-list-name" title="${esc(w.title)}">${esc(w.title)}</div></td>
+        <td>
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="width:22px;height:22px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0">${initials(w.speaker_name)}</div>
+            <span style="font-size:12px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${esc(w.speaker_name)}</span>
+          </div>
+        </td>
+        <td style="font-size:12px;color:var(--text-2);white-space:nowrap">${fmtDate(w.date)}</td>
+        <td><span class="wb-badge ${badgeCls}" style="font-size:10.5px;padding:3px 10px">${w.status}</span></td>
+        <td style="font-size:12px;text-align:right;color:var(--c-reg);font-weight:600">${fmt(w.total_registrations)}</td>
+        <td style="min-width:110px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="flex:1;height:4px;border-radius:2px;background:var(--border);overflow:hidden">
+              <div class="an-bar-fill" style="width:${Math.min(rate,100)}%;background:${info.color}"></div>
+            </div>
+            <span style="font-size:11px;color:${info.color};font-weight:600;min-width:38px">${rate > 0 ? fmtPct(rate) : '—'}</span>
+          </div>
+        </td>
+        <td>
+          <button class="wb-card-del" style="width:26px;height:26px" title="Delete"
+            onclick="event.stopPropagation();confirmDeleteWebinar(${w.id},'${safeT}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            </svg>
+          </button>
+        </td>
+      </tr>`;
+    }).join('');
+
+    const countLabel = list.length !== S.webinars.length
+      ? `${list.length} of ${S.webinars.length}`
+      : `${list.length}`;
+
+    mainContent = `
+      <div class="dash-bottom-row">
+        <!-- Left: Webinar table -->
+        <div class="wb-list-card">
+          <div class="wb-list-card-head">
+            <div class="wb-list-card-title">All Webinars <span style="font-size:12px;color:var(--text-3);font-weight:400">${countLabel}</span></div>
+            <input class="wb-list-search" placeholder="Search webinars…" oninput="onSearch(this.value)" value="${esc(S.search)}" />
+            <select class="filter-select" style="font-size:12px;padding:5px 8px;min-width:0" onchange="setFilter('speaker',this.value)">
+              <option value="all">All Speakers</option>
+              ${speakerOptions}
+            </select>
+          </div>
+          ${list.length ? `
+          <table class="wb-list-table">
+            <thead>
+              <tr>
+                <th>Webinar</th>
+                <th>Speaker</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th style="text-align:right">Reg.</th>
+                <th>Attendance</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>${tableRows}</tbody>
+          </table>` : `
+          <div style="padding:32px;text-align:center;color:var(--text-3);font-size:13px">
+            No webinars match your current filters.
+            <div style="margin-top:10px">
+              <button class="btn btn-ghost btn-sm" onclick="S.search='';onSearch('');setChipFilter('all');setFilter('speaker','all')">Clear filters</button>
+            </div>
+          </div>`}
+        </div>
+        <!-- Right: Activity feed -->
+        <div class="act-feed-card">
+          <div class="act-feed-head">
+            <span class="act-feed-title">Activity</span>
+          </div>
+          <div class="act-feed-body">${feedHTML}</div>
+        </div>
+      </div>`;
   }
 
   setContent(`
     <div>
-      <!-- Hero -->
       <div class="dash-hero">
         <div>
           <h1 class="dash-hero-title">Webinar Intelligence Dashboard</h1>
@@ -629,32 +762,15 @@ function renderHome() {
           </button>
         </div>
       </div>
-
-      <!-- KPI Cards -->
-      <div class="kpi-banner">
-        ${renderKpiBanner()}
-      </div>
-
-      <!-- Mid row: Attendance chart + Status breakdown -->
+      <div class="kpi-banner">${renderKpiBanner()}</div>
       <div class="dash-mid-row">
         ${renderAttendanceChart()}
         ${renderStatusBreakdown()}
       </div>
-
-      <!-- Speaker filter -->
-      <div class="filter-bar">
-        <select class="filter-select" onchange="setFilter('speaker',this.value)">
-          <option value="all">All Speakers</option>
-          ${speakerOptions}
-        </select>
-      </div>
-
-      <!-- Webinar cards / empty state -->
-      ${gridHTML}
+      ${mainContent}
     </div>
   `);
 
-  // Sync chip state with current filter
   updateTopbarChips('home');
 }
 
@@ -983,6 +1099,124 @@ async function uploadFile(webinarId, type, file) {
   }
 }
 
+/* ── Twin line chart: registrations vs attendees ────────────────────────── */
+function renderTwinLineChart(data) {
+  if (!data || data.length < 2) return '';
+  const W = 560, H = 180;
+  const padL = 50, padR = 16, padT = 18, padB = 44;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const maxVal = Math.max(...data.map(d => Math.max(d.total_registrations||0, d.total_attendees||0)), 1);
+  const xPos = i => padL + (i / (data.length - 1)) * plotW;
+  const yPos = v => padT + plotH - (v / maxVal) * plotH;
+
+  const regPts = data.map((d,i) => `${xPos(i).toFixed(1)},${yPos(d.total_registrations||0).toFixed(1)}`).join(' ');
+  const attPts = data.map((d,i) => `${xPos(i).toFixed(1)},${yPos(d.total_attendees||0).toFixed(1)}`).join(' ');
+  const regArea = [`M ${padL} ${padT+plotH}`, ...data.map((d,i) => `L ${xPos(i).toFixed(1)} ${yPos(d.total_registrations||0).toFixed(1)}`), `L ${xPos(data.length-1).toFixed(1)} ${padT+plotH} Z`].join(' ');
+  const attArea = [`M ${padL} ${padT+plotH}`, ...data.map((d,i) => `L ${xPos(i).toFixed(1)} ${yPos(d.total_attendees||0).toFixed(1)}`), `L ${xPos(data.length-1).toFixed(1)} ${padT+plotH} Z`].join(' ');
+
+  const gridLines = [0, 0.25, 0.5, 0.75, 1].map(f => {
+    const v = maxVal * f, y = yPos(v);
+    const label = v >= 1000 ? `${(v/1000).toFixed(0)}k` : Math.round(v).toString();
+    return `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}" stroke="rgba(79,70,229,0.07)" stroke-width="1" stroke-dasharray="4,4"/>
+      <text x="${(padL-6).toFixed(1)}" y="${(y+4).toFixed(1)}" text-anchor="end" fill="var(--text-3)" font-size="9" font-family="var(--font)">${label}</text>`;
+  }).join('');
+  const xLabels = data.map((d,i) => {
+    if (data.length > 7 && i % 2 !== 0) return '';
+    const lbl = new Date(d.date+'T00:00:00').toLocaleDateString('en-IN', { month:'short', day:'numeric' });
+    return `<text x="${xPos(i).toFixed(1)}" y="${(H-6).toFixed(1)}" text-anchor="middle" fill="var(--text-3)" font-size="9" font-family="var(--font)">${lbl}</text>`;
+  }).join('');
+
+  return `<div class="an-trend-card">
+    <div class="an-card-head">Registrations vs Attendees
+      <span class="an-chart-legend">
+        <span><span class="an-leg-dot" style="background:#4f46e5"></span>Reg</span>
+        <span><span class="an-leg-dot" style="background:#10b981"></span>Att</span>
+      </span>
+    </div>
+    <svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <linearGradient id="twinRG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#4f46e5" stop-opacity="0.18"/>
+          <stop offset="100%" stop-color="#4f46e5" stop-opacity="0.02"/>
+        </linearGradient>
+        <linearGradient id="twinAG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#10b981" stop-opacity="0.18"/>
+          <stop offset="100%" stop-color="#10b981" stop-opacity="0.02"/>
+        </linearGradient>
+      </defs>
+      ${gridLines}
+      <path d="${regArea}" fill="url(#twinRG)"/>
+      <path d="${attArea}" fill="url(#twinAG)"/>
+      <polyline points="${regPts}" fill="none" stroke="#4f46e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <polyline points="${attPts}" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      ${xLabels}
+    </svg>
+  </div>`;
+}
+
+/* ── Monthly volume bar chart ───────────────────────────────────────────── */
+function renderMonthlyBars(months) {
+  if (!months.length) return '';
+  const maxVal = Math.max(...months.map(m => Math.max(m.reg, m.att)), 1);
+  const BAR_H  = 110;
+  const bars = months.map(m => {
+    const rH = Math.max(2, Math.round(m.reg / maxVal * BAR_H));
+    const aH = Math.max(2, Math.round(m.att / maxVal * BAR_H));
+    return `<div class="an-month-col">
+      <div class="an-month-bars">
+        <div class="an-month-bar" style="height:${rH}px;background:#4f46e5" title="Reg: ${fmt(m.reg)}"></div>
+        <div class="an-month-bar" style="height:${aH}px;background:#10b981" title="Att: ${fmt(m.att)}"></div>
+      </div>
+      <div class="an-month-label">${m.label}</div>
+    </div>`;
+  }).join('');
+  return `<div class="an-monthly-card">
+    <div class="an-card-head">Monthly Volume
+      <span class="an-chart-legend">
+        <span><span class="an-leg-dot" style="background:#4f46e5"></span>Reg</span>
+        <span><span class="an-leg-dot" style="background:#10b981"></span>Att</span>
+      </span>
+    </div>
+    <div class="an-month-chart">${bars}</div>
+  </div>`;
+}
+
+/* ── Engagement funnel ──────────────────────────────────────────────────── */
+function renderEngagementFunnel(totalReg, totalAtt, noShow) {
+  if (!totalReg) return `<div class="empty-state" style="padding:24px 0;border:none">
+    <div class="empty-icon" style="font-size:24px">📊</div>
+    <div class="empty-title" style="font-size:13px">No data yet</div>
+  </div>`;
+  const attPct    = (totalAtt / totalReg * 100).toFixed(1);
+  const noShowPct = (Math.max(0, noShow) / totalReg * 100).toFixed(1);
+  return `
+    <div class="funnel-step" style="--fw:100%;--fc:#4f46e5">
+      <div class="funnel-bar"></div>
+      <div class="funnel-info">
+        <span class="funnel-label">📝 Registered</span>
+        <span class="funnel-val">${fmt(totalReg)}</span>
+        <span class="funnel-pct">100%</span>
+      </div>
+    </div>
+    <div class="funnel-step" style="--fw:${attPct}%;--fc:#10b981">
+      <div class="funnel-bar"></div>
+      <div class="funnel-info">
+        <span class="funnel-label">✅ Attended</span>
+        <span class="funnel-val">${fmt(totalAtt)}</span>
+        <span class="funnel-pct">${attPct}%</span>
+      </div>
+    </div>
+    <div class="funnel-step" style="--fw:${noShowPct}%;--fc:#ef4444">
+      <div class="funnel-bar"></div>
+      <div class="funnel-info">
+        <span class="funnel-label">❌ No-show</span>
+        <span class="funnel-val">${fmt(Math.max(0, noShow))}</span>
+        <span class="funnel-pct">${noShowPct}%</span>
+      </div>
+    </div>`;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    ANALYTICS
 ══════════════════════════════════════════════════════════════════════════ */
@@ -992,56 +1226,125 @@ function renderAnalytics() {
     return;
   }
   const st = S.stats;
-  const top10reg  = [...S.webinars].sort((a,b) => b.total_registrations - a.total_registrations).slice(0,10);
-  const top10att  = [...S.webinars].filter(w => w.status==='completed').sort((a,b) => b.attendance_rate - a.attendance_rate).slice(0,10);
-  const maxReg    = top10reg[0]?.total_registrations || 1;
 
+  // Trend data — last 12 webinars with any registration/attendance data
+  const trendData = [...S.webinars]
+    .filter(w => w.total_registrations > 0 || w.total_attendees > 0)
+    .sort((a,b) => new Date(a.date+'T00:00:00') - new Date(b.date+'T00:00:00'))
+    .slice(-12);
+
+  // Monthly aggregates
+  const monthMap = {};
+  S.webinars.forEach(w => {
+    if (!w.date) return;
+    const d = new Date(w.date+'T00:00:00');
+    const key   = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const label = d.toLocaleDateString('en-IN', { month:'short', year:'2-digit' });
+    if (!monthMap[key]) monthMap[key] = { key, label, reg:0, att:0, count:0 };
+    monthMap[key].reg   += w.total_registrations || 0;
+    monthMap[key].att   += w.total_attendees || 0;
+    monthMap[key].count += 1;
+  });
+  const months = Object.values(monthMap).sort((a,b) => a.key.localeCompare(b.key)).slice(-8);
+
+  // Speaker performance
   const spkStats = S.speakers.map(sp => {
-    const wbs     = S.webinars.filter(w => w.speaker_id === sp.id);
-    const totalReg = wbs.reduce((s,w) => s+w.total_registrations, 0);
-    const totalAtt = wbs.reduce((s,w) => s+w.total_attendees, 0);
-    const done     = wbs.filter(w => w.status==='completed');
-    const avgRate  = done.length ? (done.reduce((s,w)=>s+w.attendance_rate,0)/done.length).toFixed(1) : '0.0';
-    return { name:sp.name, totalReg, totalAtt, count:wbs.length, avgRate, color:avColor(sp.name) };
-  }).sort((a,b) => b.totalReg - a.totalReg);
-  const maxSpkReg = spkStats[0]?.totalReg || 1;
+    const wbs  = S.webinars.filter(w => w.speaker_id === sp.id);
+    const done = wbs.filter(w => w.status==='completed' && w.attendance_rate > 0);
+    const avgR = done.length ? done.reduce((s,w) => s+w.attendance_rate, 0)/done.length : 0;
+    return { ...sp, avgR, done:done.length, info:gradeInfo(avgR), color:avColor(sp.name) };
+  }).sort((a,b) => b.avgR - a.avgR);
+  const maxSpkR = Math.max(...spkStats.map(s => s.avgR), 1);
+
+  // Top lists
+  const top10reg = [...S.webinars].sort((a,b) => b.total_registrations - a.total_registrations).slice(0,10);
+  const top10att = [...S.webinars].filter(w => w.status==='completed' && w.attendance_rate > 0)
+    .sort((a,b) => b.attendance_rate - a.attendance_rate).slice(0,10);
+  const maxReg = top10reg[0]?.total_registrations || 1;
+
+  // Funnel
+  const totalReg = st.total_registrations;
+  const totalAtt = st.total_attendees;
+  const noShow   = Math.max(0, totalReg - totalAtt);
 
   setContent(`
     <div>
       <div class="page-hd">
         <div>
           <h1 class="page-title">Analytics</h1>
-          <p class="page-sub">All-time platform performance</p>
+          <p class="page-sub">Platform-wide performance · ${S.webinars.length} webinars</p>
         </div>
       </div>
 
-      <div class="stats-row">
-        <div class="stat-card">
-          <div class="stat-label">Total Webinars</div>
-          <div class="stat-value" data-countup="${st.total_webinars}">0</div>
+      <!-- KPI strip — 6 metrics -->
+      <div class="an-kpi-strip">
+        <div class="an-kpi-card">
+          <div class="an-kpi-icon">🎙️</div>
+          <div class="an-kpi-val" data-countup="${st.total_webinars}">${st.total_webinars}</div>
+          <div class="an-kpi-label">Total Webinars</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">Total Speakers</div>
-          <div class="stat-value" data-countup="${st.total_speakers}">0</div>
+        <div class="an-kpi-card">
+          <div class="an-kpi-icon">🎤</div>
+          <div class="an-kpi-val" data-countup="${st.total_speakers}">${st.total_speakers}</div>
+          <div class="an-kpi-label">Speakers</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">Total Registrations</div>
-          <div class="stat-value" data-countup="${st.total_registrations}">0</div>
+        <div class="an-kpi-card">
+          <div class="an-kpi-icon">📝</div>
+          <div class="an-kpi-val" data-countup="${st.total_registrations}">${fmt(st.total_registrations)}</div>
+          <div class="an-kpi-label">Total Registrations</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">Total Attendees</div>
-          <div class="stat-value" data-countup="${st.total_attendees}">0</div>
+        <div class="an-kpi-card">
+          <div class="an-kpi-icon">✅</div>
+          <div class="an-kpi-val" data-countup="${st.total_attendees}">${fmt(st.total_attendees)}</div>
+          <div class="an-kpi-label">Total Attendees</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">Upcoming Webinars</div>
-          <div class="stat-value" style="color:var(--gold)" data-countup="${st.upcoming_webinars}">0</div>
+        <div class="an-kpi-card">
+          <div class="an-kpi-icon">📅</div>
+          <div class="an-kpi-val" data-countup="${st.upcoming_webinars}" style="color:var(--gold)">${st.upcoming_webinars}</div>
+          <div class="an-kpi-label">Upcoming</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">Avg. Attendance Rate</div>
-          <div class="stat-value" style="color:var(--accent)" data-countup="${st.overall_attendance_rate}">0</div>
+        <div class="an-kpi-card">
+          <div class="an-kpi-icon">📊</div>
+          <div class="an-kpi-val" data-countup="${st.overall_attendance_rate}" style="color:var(--accent)">${st.overall_attendance_rate}</div>
+          <div class="an-kpi-label">Avg. Attendance %</div>
         </div>
       </div>
 
+      <!-- Charts: twin line + monthly bars -->
+      ${trendData.length >= 2 || months.length >= 2 ? `
+      <div class="an-charts-row">
+        ${renderTwinLineChart(trendData)}
+        ${renderMonthlyBars(months)}
+      </div>` : ''}
+
+      <!-- Funnel + Speaker performance -->
+      <div class="an-mid-row">
+        <div class="an-funnel-card">
+          <div class="an-card-head">Engagement Funnel</div>
+          ${renderEngagementFunnel(totalReg, totalAtt, noShow)}
+        </div>
+        <div class="an-spk-card">
+          <div class="an-card-head">Speaker Performance</div>
+          ${spkStats.length ? spkStats.map(sp => `
+            <div class="an-spk-row">
+              <div class="an-spk-av" style="background:${sp.color}">${initials(sp.name)}</div>
+              <div class="an-spk-info">
+                <div class="an-spk-name">${esc(sp.name)} <span style="font-size:10.5px;color:var(--text-3);font-weight:400">${sp.total_webinars} webinar${sp.total_webinars!==1?'s':''}</span></div>
+                <div class="an-spk-bar-wrap">
+                  <div class="an-spk-bar-fill" style="width:${sp.avgR > 0 ? (sp.avgR/maxSpkR*100).toFixed(1) : 0}%;background:${sp.color}"></div>
+                </div>
+              </div>
+              <div class="an-spk-grade grade-${sp.info.grade === '—' ? 'none' : sp.info.grade}">${sp.info.grade}</div>
+              <div class="an-spk-rate">${sp.avgR > 0 ? fmtPct(sp.avgR) : '—'}</div>
+            </div>`).join('') : `
+          <div class="empty-state" style="padding:24px 0;border:none">
+            <div class="empty-icon" style="font-size:24px">🎤</div>
+            <div class="empty-title" style="font-size:13px">No speaker data yet</div>
+          </div>`}
+        </div>
+      </div>
+
+      <!-- Top 10 lists -->
       <div class="an-grid">
         <div class="an-card">
           <div class="an-title">Top 10 by Registrations</div>
@@ -1052,30 +1355,14 @@ function renderAnalytics() {
               <span class="an-row-val">${fmt(w.total_registrations)}</span>
             </div>`).join('')}
         </div>
-
         <div class="an-card">
           <div class="an-title">Top 10 by Attendance Rate</div>
-          ${top10att.map(w => `
+          ${top10att.length ? top10att.map(w => `
             <div class="an-row">
               <span class="an-row-lbl" title="${esc(w.title)}">${esc(w.title)}</span>
               <div class="an-bar-wrap"><div class="an-bar-fill" style="width:${Math.min(w.attendance_rate,100)}%;background:#22c55e"></div></div>
               <span class="an-row-val">${fmtPct(w.attendance_rate)}</span>
-            </div>`).join('')}
-        </div>
-
-        <div class="an-card full">
-          <div class="an-title">Speaker Performance</div>
-          ${spkStats.map(sp => `
-            <div class="an-row">
-              <span class="an-row-lbl">
-                <span style="display:inline-flex;align-items:center;gap:6px">
-                  <span style="width:8px;height:8px;border-radius:50%;background:${sp.color};display:inline-block"></span>
-                  ${esc(sp.name)} <span style="color:var(--text-3);font-size:11px">(${sp.count} webinars)</span>
-                </span>
-              </span>
-              <div class="an-bar-wrap"><div class="an-bar-fill" style="width:${Math.round(sp.totalReg/maxSpkReg*100)}%;background:${sp.color}"></div></div>
-              <span class="an-row-val">${fmt(sp.totalReg)}</span>
-            </div>`).join('')}
+            </div>`).join('') : '<div style="color:var(--text-3);font-size:12px;padding:8px 0">No completed webinars with attendance data yet.</div>'}
         </div>
       </div>
     </div>`);
