@@ -28,8 +28,8 @@ class Webinar(Base):
     icp           = Column(String, default="Others")
     co_speaker_id = Column(Integer, ForeignKey("speakers.id"), nullable=True)
 
-    speaker    = relationship("Speaker", back_populates="webinars", foreign_keys=[speaker_id])
-    co_speaker = relationship("Speaker", foreign_keys=[co_speaker_id])
+    speaker    = relationship("Speaker", foreign_keys="[Webinar.speaker_id]", back_populates="webinars")
+    co_speaker = relationship("Speaker", foreign_keys="[Webinar.co_speaker_id]")
     registrations = relationship("Registration", back_populates="webinar", cascade="all, delete-orphan")
     attendances = relationship("Attendance", back_populates="webinar", cascade="all, delete-orphan")
     upload_logs = relationship("UploadLog", back_populates="webinar", cascade="all, delete-orphan")
