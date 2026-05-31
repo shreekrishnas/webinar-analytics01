@@ -1912,251 +1912,302 @@ async function runAIAnalysis(webinarId) {
   }
 }
 
+// SVG icon library for AI panel
+const AI_ICONS = {
+  spark:   `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`,
+  users:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+  clock:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  signal:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="6" x2="1" y2="18"/><line x1="6" y1="3" x2="6" y2="18"/><line x1="11" y1="8" x2="11" y2="18"/><line x1="16" y1="5" x2="16" y2="18"/><line x1="21" y1="2" x2="21" y2="18"/></svg>`,
+  target:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>`,
+  mic:     `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`,
+  calendar:`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
+  idea:    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="3"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="2" y1="12" x2="3" y2="12"/><line x1="19.78" y1="4.22" x2="18.36" y2="5.64"/><line x1="22" y1="12" x2="21" y2="12"/><path d="M12 6a6 6 0 0 1 6 6 6 6 0 0 1-3 5.2V19a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 6 12a6 6 0 0 1 6-6z"/></svg>`,
+  verdict: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`,
+  bench:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,
+  funnel:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>`,
+  check:   `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+};
+
+const INSIGHT_ICONS = {
+  'audience reach': AI_ICONS.users,
+  'engagement quality': AI_ICONS.clock,
+  'registration channels': AI_ICONS.signal,
+  'speaker performance': AI_ICONS.mic,
+  'timing': AI_ICONS.calendar,
+  'momentum': AI_ICONS.calendar,
+  'default': AI_ICONS.target,
+};
+
+function getInsightIcon(title) {
+  const t = (title || '').toLowerCase();
+  for (const [key, icon] of Object.entries(INSIGHT_ICONS)) {
+    if (t.includes(key)) return icon;
+  }
+  return INSIGHT_ICONS.default;
+}
+
 function renderAIPanel(panel, data) {
   const a  = data.analysis;
   const m  = data.metrics;
-  const gc = { A:'#10b981', B:'#3b82f6', C:'#f59e0b', D:'#ef4444' };
+  const gc = { A:'#10b981', B:'#6366f1', C:'#f59e0b', D:'#f43f5e' };
+  const gradeGlow = { A:'rgba(16,185,129,0.35)', B:'rgba(99,102,241,0.35)', C:'rgba(245,158,11,0.35)', D:'rgba(244,63,94,0.35)' };
   const gradeColor = gc[a.grade] || '#94a3b8';
+  const glow = gradeGlow[a.grade] || 'transparent';
 
   // ── helpers ──────────────────────────────────────────────────────────────
   const pct  = (n, d) => d ? Math.round(n / d * 100) : 0;
   const fmtN = n => n >= 1000 ? (n/1000).toFixed(1)+'k' : String(n || 0);
 
-  // ── Funnel data ───────────────────────────────────────────────────────────
+  // ── Core numbers ──────────────────────────────────────────────────────────
   const regs    = m.registrations || 0;
   const attds   = m.attendees     || 0;
   const engaged = (m.engaged_45plus_min || {}).count || 0;
   const attRate = regs ? pct(attds, regs) : 0;
   const engRate = attds ? pct(engaged, attds) : 0;
+  const noShows = regs - attds;
 
-  // ── Duration bars ─────────────────────────────────────────────────────────
-  const durTotal = attds || 1;
+  // ── Duration data ─────────────────────────────────────────────────────────
+  const durTotal    = attds || 1;
   const durEngaged  = (m.engaged_45plus_min   || {}).count || 0;
   const durModerate = (m.moderate_15_44_min   || {}).count || 0;
   const durDropped  = (m.dropped_under_15_min || {}).count || 0;
-  const durBars = [
-    { label:'45+ min (Engaged)',   count: durEngaged,  color:'#10b981' },
-    { label:'15–44 min (Moderate)',count: durModerate, color:'#3b82f6' },
-    { label:'<15 min (Dropped)',   count: durDropped,  color:'#ef4444' },
-  ].map(b => {
-    const w = Math.round(b.count / durTotal * 100);
-    return `<div class="ai-dur-row">
-      <span class="ai-dur-lbl">${b.label}</span>
-      <div class="ai-dur-track">
-        <div class="ai-dur-fill" style="width:${w}%;background:${b.color}" data-w="${w}"></div>
-      </div>
-      <span class="ai-dur-stat" style="color:${b.color}">${w}%</span>
-      <span class="ai-dur-cnt">${fmtN(b.count)}</span>
-    </div>`;
-  }).join('');
 
-  // ── Source donut ──────────────────────────────────────────────────────────
-  const srcColors = { direct:'#6366f1', email:'#3b82f6', social:'#10b981', referral:'#f59e0b' };
-  const srcData   = m.registration_sources || {};
-  const srcTotal  = Object.values(srcData).reduce((s, v) => s + v, 0) || 1;
-  const srcItems  = Object.entries(srcData).sort((a,b) => b[1]-a[1]);
-  let  donutOffset = 25; // start at top
-  const CIRC = 2 * Math.PI * 36; // r=36
-  const donutSegs = srcItems.map(([src, cnt]) => {
-    const frac = cnt / srcTotal;
-    const dash = frac * CIRC;
-    const gap  = CIRC - dash;
-    const seg  = `<circle cx="44" cy="44" r="36" fill="none"
-      stroke="${srcColors[src] || '#94a3b8'}" stroke-width="13"
-      stroke-dasharray="${dash.toFixed(1)} ${gap.toFixed(1)}"
-      stroke-dashoffset="${-donutOffset}" transform="rotate(-90 44 44)"/>`;
-    donutOffset += dash;
-    return seg;
-  }).join('');
-  const donutLegend = srcItems.map(([src, cnt]) => `
-    <div class="ai-src-leg">
-      <span class="ai-src-dot" style="background:${srcColors[src]||'#94a3b8'}"></span>
-      <span class="ai-src-name">${src}</span>
-      <span class="ai-src-pct">${pct(cnt, srcTotal)}%</span>
-    </div>`).join('');
+  const durSegments = [
+    { label:'45+ min', sub:'Highly engaged', count:durEngaged,  pct:Math.round(durEngaged/durTotal*100),  grad:'linear-gradient(90deg,#059669,#10b981)' },
+    { label:'15–44 min', sub:'Moderate',       count:durModerate, pct:Math.round(durModerate/durTotal*100), grad:'linear-gradient(90deg,#2563eb,#6366f1)' },
+    { label:'< 15 min', sub:'Early drop-off',  count:durDropped,  pct:Math.round(durDropped/durTotal*100),  grad:'linear-gradient(90deg,#dc2626,#f43f5e)' },
+  ];
 
-  // ── Benchmark bars ────────────────────────────────────────────────────────
-  const platRate  = m.platform_avg_attendance_rate_pct || 0;
-  const platRegs  = m.platform_avg_registrations       || 1;
-  const spkRate   = m.speaker_avg_attendance_rate_pct;
-  const spkRegs   = m.speaker_avg_registrations;
-  const maxRate   = Math.max(attRate, platRate, spkRate || 0, 1);
-  const maxRegs   = Math.max(regs, platRegs, spkRegs || 0, 1);
+  // ── Benchmark (attendance rate only, no registrations) ───────────────────
+  const platRate = m.platform_avg_attendance_rate_pct || 0;
+  const spkRate  = m.speaker_avg_attendance_rate_pct;
+  const spkName  = (m.speaker || 'Speaker').split(' ').slice(-1)[0]; // last name
+  const maxRate  = Math.max(attRate, platRate, spkRate || 0, 1);
 
-  function benchBar(label, val, max, color, suffix='') {
+  function benchRow(label, val, max, isThis) {
     const w = Math.round(val / max * 100);
-    return `<div class="ai-bench-row">
-      <span class="ai-bench-lbl">${label}</span>
-      <div class="ai-bench-track">
-        <div class="ai-bench-fill" style="width:${w}%;background:${color}" data-w="${w}"></div>
+    const grad = isThis
+      ? `linear-gradient(90deg,${gradeColor}cc,${gradeColor})`
+      : 'linear-gradient(90deg,rgba(255,255,255,0.12),rgba(255,255,255,0.18))';
+    return `<div class="aip-bench-row${isThis?' aip-bench-this':''}">
+      <span class="aip-bench-lbl">${label}</span>
+      <div class="aip-bench-track">
+        <div class="aip-bench-fill" style="background:${grad}" data-w="${w}"></div>
       </div>
-      <span class="ai-bench-val" style="color:${color}">${typeof val==='number'?val.toFixed(1):val}${suffix}</span>
+      <span class="aip-bench-val" style="color:${isThis?gradeColor:'rgba(255,255,255,0.5)'}">${val.toFixed(1)}%</span>
     </div>`;
   }
 
-  const rateBarThis = benchBar('This webinar', attRate, maxRate, gradeColor, '%');
-  const rateBarPlat = benchBar('Platform avg', platRate, maxRate, '#64748b', '%');
-  const rateBarSpk  = spkRate != null
-    ? benchBar(`${esc(m.speaker||'')} avg`, spkRate, maxRate, '#8b5cf6', '%')
-    : '';
-  const regBarThis  = benchBar('This webinar', regs, maxRegs, gradeColor);
-  const regBarPlat  = benchBar('Platform avg', platRegs, maxRegs, '#64748b');
-  const regBarSpk   = spkRegs != null
-    ? benchBar(`${esc(m.speaker||'')} avg`, spkRegs, maxRegs, '#8b5cf6')
-    : '';
-
-  // ── Gauge SVG ─────────────────────────────────────────────────────────────
-  const gaugeR = 38, gaugeCx = 50, gaugeCy = 54;
-  const gaugeLen = Math.PI * gaugeR; // semicircle
-  const gaugeFill = (attRate / 100) * gaugeLen;
-  const gaugeGap  = gaugeLen - gaugeFill;
-
   // ── Recommendations ───────────────────────────────────────────────────────
   const recsHTML = (a.recommendations || []).map((r, i) => `
-    <div class="ai-rec">
-      <span class="ai-rec-num">${i+1}</span>
+    <div class="aip-rec">
+      <span class="aip-rec-icon">${AI_ICONS.check}</span>
       <span>${esc(r)}</span>
     </div>`).join('');
 
+  // ── Ring arc ──────────────────────────────────────────────────────────────
+  const RING_CIRC = 251.2;
+  const ringFill  = ((attRate / 100) * RING_CIRC).toFixed(1);
+
   panel.innerHTML = `
-  <div class="ai-panel ai-panel-v2">
+  <div class="aip">
 
-    <!-- Header -->
-    <div class="ai-panel-header">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
-      <span>AI Analysis</span>
-      <span class="ai-powered-by">Powered by Groq · LLaMA 3.3 70B</span>
+    <!-- ── Header ── -->
+    <div class="aip-header">
+      <div class="aip-header-icon">${AI_ICONS.spark}</div>
+      <span class="aip-header-title">AI Analysis</span>
+      <span class="aip-header-badge">LLaMA 3.3 · 70B</span>
     </div>
 
-    <!-- Grade + Gauge row -->
-    <div class="ai-top-row">
-
-      <!-- Grade card -->
-      <div class="ai-grade-card">
-        <div class="ai-grade-ring" style="--gc:${gradeColor}">
-          <svg viewBox="0 0 100 100" class="ai-ring-svg">
-            <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="8"/>
-            <circle cx="50" cy="50" r="40" fill="none" stroke="${gradeColor}" stroke-width="8"
-              stroke-linecap="round"
-              stroke-dasharray="${(attRate/100*251.2).toFixed(1)} 251.2"
-              transform="rotate(-90 50 50)"
-              style="transition:stroke-dasharray 1s ease"/>
-            <text x="50" y="46" text-anchor="middle" fill="${gradeColor}" font-size="28" font-weight="800">${esc(a.grade)}</text>
-            <text x="50" y="62" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="9">${esc(a.grade_label).toUpperCase()}</text>
-          </svg>
-        </div>
-        <div class="ai-grade-summary">${esc(a.score_summary)}</div>
+    <!-- ── Hero row: grade ring + KPI strip ── -->
+    <div class="aip-hero">
+      <div class="aip-grade-wrap">
+        <svg viewBox="0 0 120 120" class="aip-ring-svg">
+          <defs>
+            <filter id="glow-${a.grade}">
+              <feGaussianBlur stdDeviation="3" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+          <circle cx="60" cy="60" r="40" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="10"/>
+          <circle cx="60" cy="60" r="40" fill="none" stroke="${gradeColor}" stroke-width="10"
+            stroke-linecap="round" stroke-dasharray="${ringFill} ${RING_CIRC}"
+            transform="rotate(-90 60 60)" filter="url(#glow-${a.grade})"
+            style="transition:stroke-dasharray 1.2s cubic-bezier(.4,0,.2,1)"/>
+          <text x="60" y="54" text-anchor="middle" fill="${gradeColor}" font-size="32" font-weight="800" font-family="system-ui">${esc(a.grade)}</text>
+          <text x="60" y="72" text-anchor="middle" fill="rgba(255,255,255,0.35)" font-size="9.5" font-family="system-ui" letter-spacing="1.5">${esc(a.grade_label).toUpperCase()}</text>
+        </svg>
+        <div class="aip-grade-glow" style="background:${glow}"></div>
       </div>
 
-      <!-- Attendance funnel -->
-      <div class="ai-funnel-card">
-        <div class="ai-card-title">Audience Funnel</div>
-        <div class="ai-funnel">
-          <div class="ai-funnel-row">
-            <span class="ai-funnel-label">Registered</span>
-            <div class="ai-funnel-bar-wrap">
-              <div class="ai-funnel-bar" style="width:100%;background:linear-gradient(90deg,#6366f1,#818cf8)">
-                <span>${fmtN(regs)}</span>
-              </div>
+      <div class="aip-kpi-strip">
+        <div class="aip-kpi">
+          <div class="aip-kpi-val" style="color:#6366f1">${fmtN(regs)}</div>
+          <div class="aip-kpi-lbl">Registered</div>
+        </div>
+        <div class="aip-kpi-div"></div>
+        <div class="aip-kpi">
+          <div class="aip-kpi-val" style="color:#10b981">${fmtN(attds)}</div>
+          <div class="aip-kpi-lbl">Attended</div>
+        </div>
+        <div class="aip-kpi-div"></div>
+        <div class="aip-kpi">
+          <div class="aip-kpi-val" style="color:${gradeColor}">${attRate}%</div>
+          <div class="aip-kpi-lbl">Att. Rate</div>
+        </div>
+        <div class="aip-kpi-div"></div>
+        <div class="aip-kpi">
+          <div class="aip-kpi-val" style="color:#f59e0b">${fmtN(engaged)}</div>
+          <div class="aip-kpi-lbl">Engaged 45m+</div>
+        </div>
+        <div class="aip-kpi-div"></div>
+        <div class="aip-kpi">
+          <div class="aip-kpi-val" style="color:rgba(255,255,255,0.4)">${m.avg_session_duration_min||0}m</div>
+          <div class="aip-kpi-lbl">Avg Session</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Two-col: funnel + session ── -->
+    <div class="aip-mid-row">
+
+      <!-- Audience funnel -->
+      <div class="aip-card">
+        <div class="aip-card-hd">
+          <span class="aip-card-icon" style="color:#6366f1">${AI_ICONS.funnel}</span>
+          <span>Audience Funnel</span>
+        </div>
+        <div class="aip-funnel">
+          <div class="aip-fn-row">
+            <div class="aip-fn-meta">
+              <span class="aip-fn-label">Registered</span>
+              <span class="aip-fn-num">${fmtN(regs)}</span>
             </div>
+            <div class="aip-fn-track"><div class="aip-fn-bar" style="width:100%;background:linear-gradient(90deg,#4f46e5,#6366f1)" data-w="100"></div></div>
+            <span class="aip-fn-pct" style="color:#6366f1">100%</span>
           </div>
-          <div class="ai-funnel-row">
-            <span class="ai-funnel-label">Attended</span>
-            <div class="ai-funnel-bar-wrap">
-              <div class="ai-funnel-bar ai-funnel-att" style="width:${attRate}%;background:linear-gradient(90deg,#10b981,#34d399)" data-w="${attRate}">
-                <span>${fmtN(attds)} <em>${attRate}%</em></span>
-              </div>
+          <div class="aip-fn-row">
+            <div class="aip-fn-meta">
+              <span class="aip-fn-label">Attended</span>
+              <span class="aip-fn-num">${fmtN(attds)}</span>
             </div>
+            <div class="aip-fn-track"><div class="aip-fn-bar" style="width:${attRate}%;background:linear-gradient(90deg,#059669,#10b981)" data-w="${attRate}"></div></div>
+            <span class="aip-fn-pct" style="color:#10b981">${attRate}%</span>
           </div>
-          <div class="ai-funnel-row">
-            <span class="ai-funnel-label">Engaged 45m+</span>
-            <div class="ai-funnel-bar-wrap">
-              <div class="ai-funnel-bar ai-funnel-eng" style="width:${Math.round(attRate*engRate/100)}%;background:linear-gradient(90deg,#f59e0b,#fbbf24)" data-w="${Math.round(attRate*engRate/100)}">
-                <span>${fmtN(engaged)} <em>${engRate}%</em></span>
-              </div>
+          <div class="aip-fn-row">
+            <div class="aip-fn-meta">
+              <span class="aip-fn-label">Engaged 45m+</span>
+              <span class="aip-fn-num">${fmtN(engaged)}</span>
             </div>
+            <div class="aip-fn-track"><div class="aip-fn-bar" style="width:${Math.round(attRate*engRate/100)}%;background:linear-gradient(90deg,#b45309,#f59e0b)" data-w="${Math.round(attRate*engRate/100)}"></div></div>
+            <span class="aip-fn-pct" style="color:#f59e0b">${engRate}%</span>
+          </div>
+          <div class="aip-fn-row aip-fn-noshow">
+            <div class="aip-fn-meta">
+              <span class="aip-fn-label">No-shows</span>
+              <span class="aip-fn-num" style="color:rgba(255,255,255,0.3)">${fmtN(noShows)}</span>
+            </div>
+            <div class="aip-fn-track"><div class="aip-fn-bar" style="width:${pct(noShows,regs)}%;background:rgba(244,63,94,0.35)" data-w="${pct(noShows,regs)}"></div></div>
+            <span class="aip-fn-pct" style="color:rgba(244,63,94,0.6)">${pct(noShows,regs)}%</span>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Charts row -->
-    <div class="ai-charts-row">
-
-      <!-- Duration breakdown -->
-      <div class="ai-chart-card">
-        <div class="ai-card-title">⏱ Time in Session</div>
-        <div class="ai-dur-chart">${durBars}</div>
-        <div class="ai-avg-dur">Avg session: <strong>${m.avg_session_duration_min || 0} min</strong></div>
-      </div>
-
-      <!-- Source donut -->
-      <div class="ai-chart-card">
-        <div class="ai-card-title">📣 Registration Sources</div>
-        <div class="ai-donut-wrap">
-          <svg viewBox="0 0 88 88" class="ai-donut-svg">
-            <circle cx="44" cy="44" r="36" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="13"/>
-            ${donutSegs}
-            <text x="44" y="41" text-anchor="middle" fill="white" font-size="13" font-weight="700">${fmtN(regs)}</text>
-            <text x="44" y="53" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="7">TOTAL</text>
-          </svg>
-          <div class="ai-src-legend">${donutLegend}</div>
+      <!-- Session duration -->
+      <div class="aip-card">
+        <div class="aip-card-hd">
+          <span class="aip-card-icon" style="color:#8b5cf6">${AI_ICONS.clock}</span>
+          <span>Time in Session</span>
+        </div>
+        <div class="aip-dur-list">
+          ${durSegments.map(d => `
+          <div class="aip-dur-item">
+            <div class="aip-dur-top">
+              <span class="aip-dur-label">${d.label}</span>
+              <span class="aip-dur-sub">${d.sub}</span>
+              <span class="aip-dur-count">${d.count} people</span>
+            </div>
+            <div class="aip-dur-row">
+              <div class="aip-dur-track">
+                <div class="aip-dur-fill" style="background:${d.grad}" data-w="${d.pct}"></div>
+              </div>
+              <span class="aip-dur-pct">${d.pct}%</span>
+            </div>
+          </div>`).join('')}
+        </div>
+        <div class="aip-avg-pill">
+          ${AI_ICONS.clock}
+          <span>Average session <strong>${m.avg_session_duration_min||0} minutes</strong></span>
         </div>
       </div>
     </div>
 
-    <!-- Benchmark -->
-    <div class="ai-bench-card">
-      <div class="ai-card-title">📊 Benchmark Comparison</div>
-      <div class="ai-bench-grid">
-        <div>
-          <div class="ai-bench-group-title">Attendance Rate</div>
-          ${rateBarThis}${rateBarSpk}${rateBarPlat}
-        </div>
-        <div>
-          <div class="ai-bench-group-title">Registrations</div>
-          ${regBarThis}${regBarSpk}${regBarPlat}
-        </div>
+    <!-- ── Benchmark: attendance rate only ── -->
+    <div class="aip-card aip-bench-card">
+      <div class="aip-card-hd">
+        <span class="aip-card-icon" style="color:#f59e0b">${AI_ICONS.bench}</span>
+        <span>Attendance Rate Benchmark</span>
+      </div>
+      <div class="aip-bench-rows">
+        ${benchRow('This Webinar', attRate, maxRate, true)}
+        ${spkRate != null ? benchRow(spkName + ' avg', spkRate, maxRate, false) : ''}
+        ${benchRow('Platform avg', platRate, maxRate, false)}
+      </div>
+      <div class="aip-bench-note">
+        ${attRate > platRate
+          ? `<span class="aip-bench-up">${AI_ICONS.check} ${(attRate - platRate).toFixed(1)}% above platform average</span>`
+          : `<span class="aip-bench-dn">${(platRate - attRate).toFixed(1)}% below platform average</span>`}
       </div>
     </div>
 
-    <!-- AI Insights from LLM -->
-    <div class="ai-insights-card">
-      <div class="ai-card-title">🧠 AI Insights</div>
-      <div class="ai-insights-grid">
+    <!-- ── AI Insights ── -->
+    <div class="aip-card">
+      <div class="aip-card-hd">
+        <span class="aip-card-icon" style="color:#a78bfa">${AI_ICONS.spark}</span>
+        <span>AI Insights</span>
+      </div>
+      <div class="aip-insights">
         ${(a.sections||[]).map(s => `
-        <div class="ai-insight-chip">
-          <div class="ai-insight-icon">${esc(s.icon)}</div>
-          <div>
-            <div class="ai-insight-title">${esc(s.title)}</div>
-            <div class="ai-insight-txt">${esc(s.insight)}</div>
-            <span class="ai-insight-hl">${esc(s.highlight)}</span>
+        <div class="aip-insight">
+          <div class="aip-insight-icon-wrap">${getInsightIcon(s.title)}</div>
+          <div class="aip-insight-body">
+            <div class="aip-insight-title">${esc(s.title)}</div>
+            <div class="aip-insight-text">${esc(s.insight)}</div>
+            <div class="aip-insight-tag">${esc(s.highlight)}</div>
           </div>
         </div>`).join('')}
       </div>
     </div>
 
-    <!-- Recommendations + Verdict -->
-    <div class="ai-bottom-row">
-      <div class="ai-recs-card">
-        <div class="ai-card-title">💡 Recommendations</div>
+    <!-- ── Recs + Verdict ── -->
+    <div class="aip-bottom">
+      <div class="aip-card">
+        <div class="aip-card-hd">
+          <span class="aip-card-icon" style="color:#10b981">${AI_ICONS.idea}</span>
+          <span>Recommendations</span>
+        </div>
         ${recsHTML}
       </div>
-      <div class="ai-verdict-card">
-        <div class="ai-card-title">🎯 AI Verdict</div>
-        <div class="ai-verdict-text">${esc(a.verdict)}</div>
+      <div class="aip-card aip-verdict-card">
+        <div class="aip-card-hd">
+          <span class="aip-card-icon" style="color:#6366f1">${AI_ICONS.verdict}</span>
+          <span>AI Verdict</span>
+        </div>
+        <p class="aip-verdict-text">${esc(a.verdict)}</p>
+        <div class="aip-verdict-footer">Generated by LLaMA 3.3 70B via Groq</div>
       </div>
     </div>
 
   </div>`;
 
-  // Animate bars after render
+  // Animate all bars in
   requestAnimationFrame(() => {
     panel.querySelectorAll('[data-w]').forEach(el => {
+      const w = el.dataset.w;
       el.style.width = '0%';
       requestAnimationFrame(() => {
-        el.style.transition = 'width 0.9s cubic-bezier(.4,0,.2,1)';
-        el.style.width = el.dataset.w + '%';
+        el.style.transition = 'width 1s cubic-bezier(.16,1,.3,1)';
+        el.style.width = w + '%';
       });
     });
   });
