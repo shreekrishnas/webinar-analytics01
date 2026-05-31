@@ -262,8 +262,8 @@ async def _do_analyze(webinar_id: int, db):
           FROM webinars w2 WHERE w2.status='completed'
         ) x WHERE reg_c > 0
     """)).fetchone()
-    platform_avg_rate = round((bench[0] or 0) * 100, 1)
-    platform_avg_regs = round(bench[1] or 0)
+    platform_avg_rate = round(float(bench[0] or 0) * 100, 1)
+    platform_avg_regs = round(float(bench[1] or 0))
 
     # Speaker benchmarks (this speaker's other webinars)
     spk_bench = db.execute(text("""
@@ -279,8 +279,8 @@ async def _do_analyze(webinar_id: int, db):
           WHERE w2.speaker_id=:spk_id AND w2.id != :wid AND w2.status='completed'
         ) x WHERE reg_c > 0
     """), {"spk_id": w.speaker_id, "wid": webinar_id}).fetchone()
-    spk_avg_rate = round((spk_bench[0] or 0) * 100, 1) if spk_bench[0] else None
-    spk_avg_regs = round(spk_bench[1] or 0) if spk_bench[1] else None
+    spk_avg_rate = round(float(spk_bench[0]) * 100, 1) if spk_bench[0] else None
+    spk_avg_regs = round(float(spk_bench[1])) if spk_bench[1] else None
     spk_webinar_count = spk_bench[2] or 0
 
     # Performance grade
@@ -344,7 +344,7 @@ The sections must cover exactly these 5 topics in order:
 Be specific — use the actual numbers. Be direct, not generic. Tone: professional but actionable.
 
 Webinar data:
-{json.dumps(metrics, indent=2)}
+{json.dumps(metrics, indent=2, default=lambda o: float(o) if hasattr(o,'__float__') else str(o))}
 
 Return ONLY valid JSON, no markdown, no explanation."""
 
