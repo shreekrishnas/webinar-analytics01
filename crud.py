@@ -242,8 +242,8 @@ def get_all_webinars(db: Session) -> List[schemas.WebinarSummary]:
             COALESCE(cs.name, '')               AS co_speaker_name,
             COALESCE(r_stats.total_reg,  0)      AS total_registrations,
             COALESCE(a_stats.total_att,  0)      AS total_attendees,
-            CASE WHEN real_r.real_reg  > 0 THEN 1 ELSE 0 END AS has_reg,
-            CASE WHEN real_a.real_att  > 0 THEN 1 ELSE 0 END AS has_att
+            CASE WHEN r_stats.total_reg  > 0 THEN 1 ELSE 0 END AS has_reg,
+            CASE WHEN a_stats.total_att  > 0 THEN 1 ELSE 0 END AS has_att
         FROM webinars w
         LEFT JOIN speakers s ON s.id = w.speaker_id
         LEFT JOIN speakers cs ON cs.id = w.co_speaker_id
@@ -258,19 +258,7 @@ def get_all_webinars(db: Session) -> List[schemas.WebinarSummary]:
             WHERE attended = TRUE
             GROUP BY webinar_id
         ) a_stats ON a_stats.webinar_id = w.id
-        LEFT JOIN (
-            SELECT webinar_id, COUNT(*) AS real_reg
-            FROM registrations
-            WHERE email NOT LIKE '%@rhorizon.in'
-            GROUP BY webinar_id
-        ) real_r ON real_r.webinar_id = w.id
-        LEFT JOIN (
-            SELECT a.webinar_id, COUNT(*) AS real_att
-            FROM attendances a
-            JOIN registrations r ON r.id = a.registration_id
-            WHERE a.attended = TRUE AND r.email NOT LIKE '%@rhorizon.in'
-            GROUP BY a.webinar_id
-        ) real_a ON real_a.webinar_id = w.id
+
         ORDER BY w.date DESC
     """)
     rows = db.execute(sql).fetchall()

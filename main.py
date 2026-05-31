@@ -586,17 +586,13 @@ def download_registrations(webinar_id: int, db: Session = Depends(get_db)):
 
     regs = (
         db.query(models.Registration)
-        .filter(
-            models.Registration.webinar_id == webinar_id,
-            # Exclude synthetic placeholder records
-            ~models.Registration.email.like('%@rhorizon.in')
-        )
+        .filter(models.Registration.webinar_id == webinar_id)
         .order_by(models.Registration.registered_at)
         .all()
     )
 
     if not regs:
-        raise HTTPException(status_code=404, detail="No real registration data available for this webinar. Please upload the registration file first.")
+        raise HTTPException(status_code=404, detail="No registration data available for this webinar.")
 
     buf = io.StringIO()
     writer = csv.writer(buf)
@@ -697,15 +693,13 @@ def download_attendees(webinar_id: int, db: Session = Depends(get_db)):
         .filter(
             models.Attendance.webinar_id == webinar_id,
             models.Attendance.attended == True,
-            # Exclude synthetic placeholder records
-            ~models.Registration.email.like('%@rhorizon.in')
         )
         .order_by(models.Attendance.joined_at)
         .all()
     )
 
     if not rows:
-        raise HTTPException(status_code=404, detail="No real attendance data available for this webinar. Please upload the attendance file first.")
+        raise HTTPException(status_code=404, detail="No attendance data available for this webinar.")
 
     buf = io.StringIO()
     writer = csv.writer(buf)

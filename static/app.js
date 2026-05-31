@@ -691,29 +691,16 @@ function renderHome() {
           </div>
         </td>
         <td style="font-size:12px;color:var(--text-2);white-space:nowrap">${fmtDate(w.date)}</td>
-        <td>
-          <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">
-            ${w.icp && w.icp !== 'Others' ? `<span class="icp-badge icp-${(w.icp||'').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}">${esc(w.icp)}</span>` : ''}
-            <span class="wb-badge ${badgeCls}" style="font-size:9.5px;padding:2px 7px;opacity:0.7">${w.status}</span>
-          </div>
-        </td>
+        <td>${w.icp && w.icp !== 'Others' ? `<span class="icp-badge icp-${(w.icp||'').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}">${esc(w.icp)}</span>` : `<span style="font-size:11px;color:var(--text-3)">Others</span>`}</td>
+        <td><span class="wb-badge ${badgeCls}" style="font-size:10px;padding:3px 8px">${w.status}</span></td>
         <td style="font-size:12px;text-align:right;color:var(--c-reg);font-weight:600">${fmt(w.total_registrations)}</td>
-        <td style="min-width:110px">
+        <td style="min-width:100px">
           <div style="display:flex;align-items:center;gap:6px">
             <div style="flex:1;height:4px;border-radius:2px;background:var(--border);overflow:hidden">
               <div class="an-bar-fill" style="width:${Math.min(rate,100)}%;background:${info.color}"></div>
             </div>
-            <span style="font-size:11px;color:${info.color};font-weight:600;min-width:38px">${rate > 0 ? fmtPct(rate) : 'N/A'}</span>
+            <span style="font-size:11px;color:${info.color};font-weight:600;min-width:34px">${rate > 0 ? fmtPct(rate) : 'N/A'}</span>
           </div>
-        </td>
-        <td>
-          <button class="wb-card-del" style="width:26px;height:26px" title="Delete"
-            onclick="event.stopPropagation();confirmDeleteWebinar(${w.id},'${safeT}')">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-            </svg>
-          </button>
         </td>
       </tr>`;
     }).join('');
@@ -745,10 +732,10 @@ function renderHome() {
                 <th>Webinar</th>
                 <th>Speaker</th>
                 <th>Date</th>
-                <th>Status / ICP</th>
+                <th>ICP</th>
+                <th>Status</th>
                 <th style="text-align:right">Reg.</th>
                 <th>Attendance</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>${tableRows}</tbody>
@@ -2708,12 +2695,14 @@ async function openAttendeeModal(email, name) {
       const spkName = esc(w.speaker_name);
       return `
         <div class="att-wb-card" onclick="closeAttendeeModal();nav('webinar',${w.webinar_id})" title="Open webinar">
-          <div class="att-wb-card-title">${wbTitle}</div>
+          <div class="att-wb-card-hd">
+            <div class="att-wb-card-title">${wbTitle}</div>
+            ${w.icp && w.icp !== 'Others' ? `<span class="icp-badge icp-${(w.icp||'').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}" style="font-size:9px;padding:2px 7px;flex-shrink:0">${esc(w.icp)}</span>` : ''}
+          </div>
           <div class="att-wb-card-meta">
             <span>${wbDate}</span>
             <span class="att-wb-card-meta-dot"></span>
             <span>${spkName}</span>
-            ${w.icp && w.icp !== 'Others' ? `<span class="att-wb-card-meta-dot"></span><span class="icp-badge icp-${(w.icp||'').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}" style="font-size:9px;padding:1px 6px">${esc(w.icp)}</span>` : ''}
           </div>
           ${dur ? `
           <div class="att-wb-dur">
