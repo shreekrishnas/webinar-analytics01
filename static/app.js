@@ -360,6 +360,7 @@ function nav(page, sub) {
     case 'analytics':   renderAnalytics();         break;
     case 'speakers':    renderSpeakers();           break;
     case 'leaderboard': renderLeaderboard();        break;
+    case 'topics':      renderTopics();             break;
     case 'webinar':     renderWebinarDetail(sub);   break;
     case 'speaker':     renderSpeakerDetail(sub);   break;
   }
@@ -2211,6 +2212,138 @@ function renderAIPanel(panel, data) {
       });
     });
   });
+}
+
+/* ── Topics Page ─────────────────────────────────────────────────────────── */
+let _topicsCache = null;
+
+async function renderTopics() {
+  setContent(`
+    <div class="topics-page">
+      <div class="topics-hero">
+        <div class="topics-hero-left">
+          <div class="topics-eyebrow">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+            AI-Generated · Updated Weekly
+          </div>
+          <h1 class="topics-title">Upcoming Topic Suggestions</h1>
+          <p class="topics-sub">Fresh topics crafted for each speaker — timed to market news, framed in their voice.</p>
+        </div>
+        <button class="btn-topics-refresh" id="topics-refresh-btn" onclick="refreshTopics()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          Refresh Topics
+        </button>
+      </div>
+      <div class="topics-grid" id="topics-grid">
+        <div class="topics-loading">
+          <div class="tl-ring"></div>
+          <span>Generating topics with LLaMA 3.3 70B…</span>
+        </div>
+      </div>
+    </div>`);
+
+  if (_topicsCache) {
+    renderTopicCards(_topicsCache);
+    return;
+  }
+  await loadTopics();
+}
+
+async function refreshTopics() {
+  _topicsCache = null;
+  const btn = document.getElementById('topics-refresh-btn');
+  const grid = document.getElementById('topics-grid');
+  if (btn) { btn.disabled = true; btn.querySelector('svg').classList.add('spin'); }
+  if (grid) grid.innerHTML = '<div class="topics-loading"><div class="tl-ring"></div><span>Generating fresh topics…</span></div>';
+  await loadTopics();
+  if (btn) { btn.disabled = false; btn.querySelector('svg').classList.remove('spin'); }
+}
+
+async function loadTopics() {
+  try {
+    const data = await api('/api/topics');
+    _topicsCache = data;
+    renderTopicCards(data);
+  } catch(e) {
+    const grid = document.getElementById('topics-grid');
+    if (grid) grid.innerHTML = `<div class="topics-error"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span>${esc(e.message || 'Failed to generate topics')}</span></div>`;
+  }
+}
+
+const EXPECTED_COLORS = { High:'#10b981', Medium:'#f59e0b', Low:'#6366f1' };
+const SPEAKER_GRADIENTS = {
+  'Rachna Rego':   'linear-gradient(135deg,#7c3aed,#a78bfa)',
+  'Anil Rego':     'linear-gradient(135deg,#0369a1,#38bdf8)',
+  'Sunil Kawariya':'linear-gradient(135deg,#065f46,#34d399)',
+  'Preethi Shukla':'linear-gradient(135deg,#9d174d,#f472b6)',
+  'Prabhat Ranjan':'linear-gradient(135deg,#92400e,#fbbf24)',
+};
+
+function renderTopicCards(data) {
+  const grid = document.getElementById('topics-grid');
+  if (!grid) return;
+
+  const dateStr = data.generated_on || '';
+  const speakers = data.topics || [];
+
+  grid.innerHTML = speakers.map(sp => {
+    const grad = SPEAKER_GRADIENTS[sp.speaker] || 'linear-gradient(135deg,#4f46e5,#818cf8)';
+    const initials = sp.speaker.split(' ').map(w=>w[0]).join('').slice(0,2);
+
+    const topicCards = (sp.topics || []).map((t, i) => {
+      const expColor = EXPECTED_COLORS[t.expected?.split(' ')[0]] || '#6366f1';
+      return `
+      <div class="topic-card">
+        <div class="topic-card-num">${i+1}</div>
+        <div class="topic-card-body">
+          <div class="topic-title">${esc(t.title)}</div>
+          <div class="topic-hook">${esc(t.hook)}</div>
+          <div class="topic-angle">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            ${esc(t.angle)}
+          </div>
+          <div class="topic-footer">
+            <span class="topic-exp" style="color:${expColor};background:${expColor}18;border-color:${expColor}30">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+              ${esc(t.expected || 'Medium')}
+            </span>
+            <button class="topic-use-btn" onclick="prefillTopicWebinar('${esc(sp.speaker).replace(/'/g,"\\'")}','${esc(t.title).replace(/'/g,"\\'")}')">
+              Use Topic
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+    return `
+    <div class="speaker-topics-card">
+      <div class="stc-header">
+        <div class="stc-avatar" style="background:${grad}">${initials}</div>
+        <div>
+          <div class="stc-name">${esc(sp.speaker)}</div>
+          <div class="stc-count">${(sp.topics||[]).length} suggested topics</div>
+        </div>
+      </div>
+      <div class="stc-topics">${topicCards}</div>
+    </div>`;
+  }).join('');
+
+  // Add date footer
+  if (dateStr) {
+    grid.insertAdjacentHTML('beforeend', `<div class="topics-date-footer">Generated on ${esc(dateStr)} · Powered by LLaMA 3.3 70B via Groq</div>`);
+  }
+}
+
+function prefillTopicWebinar(speaker, title) {
+  // Open new webinar modal with topic pre-filled
+  openWebinarModal();
+  setTimeout(() => {
+    const titleInput = document.getElementById('wb-title');
+    const speakerInput = document.getElementById('wb-speaker');
+    if (titleInput) titleInput.value = title;
+    if (speakerInput) speakerInput.value = speaker;
+  }, 150);
 }
 
 function downloadRegistrations(webinarId) {

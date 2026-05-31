@@ -175,6 +175,91 @@ async def upload_attendees(
         raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
+# ── Weekly Topic Suggestions ─────────────────────────────────────────────────
+
+@app.get("/api/topics")
+async def get_topic_suggestions():
+    """Generate fresh weekly topic suggestions per speaker using AI."""
+    import os, json, httpx
+    from datetime import date
+
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="GROQ_API_KEY not configured")
+
+    today = date.today().strftime("%B %d, %Y")
+
+    prompt = f"""Today is {today}. You are a webinar content strategist for Right Horizons, a premium Indian financial advisory firm.
+
+Generate 3 highly specific, timely, non-generic webinar topic suggestions for each of these 5 speakers.
+
+Use their exact framing style and topic DNA:
+
+SPEAKER PROFILES:
+- Rachna Rego: Retirement income (SWP, ₹1L monthly), PMS for wealth milestones, women & finance, child education savings, behavioral finance. Frames topics as personal journeys ("How I would...", "What changes now?", "The Real Math"). Never generic.
+- Anil Rego: Macro events (budget, RBI, tariffs, geopolitics), ESOPs, portfolio repositioning, market timing. Reacts to breaking news. Frames as urgent decisions ("After X, what now?", "The tax trap", "Smart money is doing this").
+- Sunil Kawariya: NRI investing (GIFT City, global asset allocation), large corpus (₹10Cr+), structured products, SIF, tax-efficient wealth. Frames as exclusive insider knowledge ("The strategy most NRIs miss", "₹X Crore — what changes").
+- Preethi Shukla: Special needs children financial planning (3×), SIP mechanics, tax-efficient investing, corpus building. Frames as step-by-step systems and parent-focused empathy ("The gap nobody talks about", "Step-by-step for parents").
+- Prabhat Ranjan: Equity markets, small/midcap, sectoral themes, PMS strategy, FY outlook. Co-presents with Vijay Chauhan. Frames as research-driven conviction ("Hidden in the data", "3 sectors the market hasn't priced in").
+
+CONTEXT for {today}:
+- India-Pakistan tensions post-Operation Sindoor, ceasefire holding but uncertainty remains
+- RBI rate cut cycle beginning, repo rate moving lower
+- US-India trade deal negotiations ongoing, tariff clarity improving
+- GIFT City rapidly expanding — new fund categories approved
+- Nifty near all-time highs, mid/smallcaps corrected 15-20% from peaks
+- SIF (Specialised Investment Funds) — new SEBI category launched
+- Budget FY27 — higher capital gains tax on equity, new NPS rules
+- Rupee stabilizing at 84-85/USD
+- Gold at record highs — ₹9,000+ per gram
+- NPS Vatsalya (children's NPS) gaining traction
+
+Return a JSON array with this exact structure:
+[
+  {{
+    "speaker": "Rachna Rego",
+    "color": "#8b5cf6",
+    "topics": [
+      {{
+        "title": "exact webinar title",
+        "hook": "one sharp sentence — why this topic right now, what's the tension",
+        "angle": "the unique Right Horizons angle that makes this different from generic content",
+        "expected": "High/Medium registration expected based on past patterns"
+      }}
+    ]
+  }}
+]
+
+Rules:
+- Titles must feel like Rachna/Anil/Sunil/Preethi/Prabhat would say them — use ₹ figures, timeframes, specific scenarios
+- No generic titles like "How to Invest Wisely" or "Understanding Mutual Funds"
+- Hook must reference something happening TODAY in markets/news
+- Return ONLY valid JSON, no markdown"""
+
+    try:
+        resp = httpx.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "max_tokens": 2000,
+                "messages": [{"role": "user", "content": prompt}]
+            },
+            timeout=30.0
+        )
+        resp.raise_for_status()
+        raw = resp.json()["choices"][0]["message"]["content"].strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"): raw = raw[4:]
+        topics = json.loads(raw)
+        return {"topics": topics, "generated_on": today}
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail=f"AI returned invalid JSON: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Topic generation failed: {e}")
+
+
 # ── AI Webinar Analysis ───────────────────────────────────────────────────────
 
 @app.post("/api/webinars/{webinar_id}/analyze")

@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>WebinarIQ — Webinar Intelligence</title>
   <!-- Preload critical assets so they start downloading immediately -->
-  <link rel="preload" href="/static/styles.css?v=35" as="style" />
-  <link rel="preload" href="/static/app.js?v=35" as="script" />
-  <link rel="stylesheet" href="/static/styles.css?v=35" />
+  <link rel="preload" href="/static/styles.css?v=36" as="style" />
+  <link rel="preload" href="/static/app.js?v=36" as="script" />
+  <link rel="stylesheet" href="/static/styles.css?v=36" />
   <!-- Inline loader: visible instantly, removed by JS once data loads -->
   <style>
     #page-loader{position:fixed;inset:0;background:#0c0c0a;display:flex;align-items:center;justify-content:center;z-index:99999;transition:opacity .35s ease}
@@ -72,6 +72,10 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
         Leaderboard
       </button>
+      <button class="nav-link" data-page="topics" onclick="nav('topics')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+        Topics
+      </button>
     </nav>
 
     <!-- Right-side controls -->
@@ -135,6 +139,10 @@
     <button class="nav-link" data-page="leaderboard" onclick="nav('leaderboard');toggleMobileNav()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
       Leaderboard
+    </button>
+    <button class="nav-link" data-page="topics" onclick="nav('topics');toggleMobileNav()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+      Topics
     </button>
     <div style="padding-top:8px;border-top:1px solid rgba(102,126,234,0.12);margin-top:4px">
       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="openWebinarModal();toggleMobileNav()">
@@ -419,6 +427,6 @@
 <!-- ── TOAST ──────────────────────────────────────────────── -->
 <div class="toast" id="toast"></div>
 
-<script src="/static/app.js?v=35"></script>
+<script src="/static/app.js?v=36"></script>
 </body>
 </html>
