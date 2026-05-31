@@ -821,8 +821,9 @@ function webinarCardHTML(w) {
       <div class="wb-card-body">
         <div class="wb-card-hd">
           <div class="wb-card-title">${esc(w.title)}</div>
-          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
             <span class="wb-badge ${badgeCls}">${w.status}</span>
+            ${w.icp && w.icp !== 'Others' ? `<span class="icp-badge icp-${(w.icp||'').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}">${esc(w.icp)}</span>` : ''}
             <button class="wb-card-del" title="Delete webinar"
               onclick="event.stopPropagation();confirmDeleteWebinar(${w.id},'${esc(w.title).replace(/'/g,"\\'")}')">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -1044,6 +1045,7 @@ function _drawWebinarDetail(w) {
             </div>
             <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
               <span class="wb-badge ${badgeCls}" style="font-size:12px;padding:5px 14px">${w.status}</span>
+              ${w.icp && w.icp !== 'Others' ? `<span class="icp-badge icp-${(w.icp||'').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}" style="font-size:11px;padding:4px 12px">${esc(w.icp)}</span>` : ''}
               ${w.total_registrations > 0 ? `
               <button class="btn-ai-analyze" id="ai-analyze-btn" onclick="runAIAnalysis(${w.id})">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
@@ -1871,14 +1873,29 @@ async function submitAdModal() {
 }
 
 /* ── Download registrations / attendees as CSV ──────────────────────────── */
-function _triggerDownload(url) {
+async function _triggerDownload(url) {
   showToast('Preparing download…');
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = '';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Download failed' }));
+      showToast(err.detail || 'No real data available to download.', 'error');
+      return;
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="([^"]+)"/);
+    const filename = match ? match[1] : 'download.csv';
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objUrl; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(objUrl);
+    showToast('Downloaded successfully', 'success');
+  } catch(e) {
+    showToast('Download failed. Please try again.', 'error');
+  }
 }
 
 /* ── AI Analysis ─────────────────────────────────────────────────────────── */
