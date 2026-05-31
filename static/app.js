@@ -55,7 +55,7 @@ const SRC_COLORS = { email:'#6366f1', social:'#f59e0b', direct:'#10b981', referr
 
 /* ── Health Score Helpers ───────────────────────────────────────────────── */
 function gradeInfo(rate) {
-  if (!rate || rate === 0)  return { grade: '—', cls: 'none',    color: '#5c5580',  track: 'rgba(92,85,128,0.2)' };
+  if (!rate || rate === 0)  return { grade: 'N/A', cls: 'none',    color: '#5c5580',  track: 'rgba(92,85,128,0.2)' };
   if (rate >= 70)           return { grade: 'A',  cls: 'grade-A', color: '#10b981',  track: 'rgba(16,185,129,0.18)' };
   if (rate >= 50)           return { grade: 'B',  cls: 'grade-B', color: '#3b82f6',  track: 'rgba(59,130,246,0.18)' };
   if (rate >= 30)           return { grade: 'C',  cls: 'grade-C', color: '#f59e0b',  track: 'rgba(245,158,11,0.18)' };
@@ -109,7 +109,7 @@ function getNotifications() {
       id: `top-${topWebinar.id}`,
       icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>',
       title: `Top performer: ${topWebinar.title}`,
-      desc: `${topWebinar.attendance_rate.toFixed(1)}% attendance rate — Grade ${gradeInfo(topWebinar.attendance_rate).grade}`,
+      desc: `${topWebinar.attendance_rate.toFixed(1)}% attendance rate · Grade ${gradeInfo(topWebinar.attendance_rate).grade}`,
       time: 'Best',
       link: () => nav('webinar', topWebinar.id),
     });
@@ -248,7 +248,7 @@ function buildActivityFeed() {
     items.push({
       icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>', time: 'Best',
       title: topWebinar.title,
-      desc:  `${topWebinar.attendance_rate.toFixed(1)}% attendance — Grade ${gradeInfo(topWebinar.attendance_rate).grade}`,
+      desc:  `${topWebinar.attendance_rate.toFixed(1)}% attendance · Grade ${gradeInfo(topWebinar.attendance_rate).grade}`,
       onclick: `nav('webinar',${topWebinar.id})`,
     });
   }
@@ -399,9 +399,9 @@ function renderKpiBanner() {
   const topSpeakerFull = Object.keys(spkMap).sort((a,b) => spkMap[b]-spkMap[a])[0] || null;
   const topSpeakerDisplay = topSpeakerFull
     ? (topSpeakerFull.length > 14 ? topSpeakerFull.split(' ')[0] : topSpeakerFull)
-    : '—';
+    : 'N/A';
 
-  // Trend helpers — use real data if available, else demo %
+  // Trend helpers - use real data if available, else demo %
   const trendArrowUp   = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg>`;
   const trendArrowDown = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>`;
 
@@ -415,14 +415,14 @@ function renderKpiBanner() {
     {
       icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>', cls: 'kc-sky',
       label: 'Avg. Attendance',
-      value: avgRate > 0 ? fmtPct(avgRate) : '—',
+      value: avgRate > 0 ? fmtPct(avgRate) : 'N/A',
       trendUp: avgRate >= 50, trend: avgRate >= 50 ? '+5% vs last period' : avgRate > 0 ? '-3% vs last period' : 'No data yet',
       arrow: avgRate >= 50 ? trendArrowUp : trendArrowDown,
     },
     {
       icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>', cls: 'kc-emerald',
       label: 'Completion Rate',
-      value: total > 0 ? fmtPct(completionRate) : '—',
+      value: total > 0 ? fmtPct(completionRate) : 'N/A',
       trendUp: completionRate >= 50, trend: completed.length + ' completed',
       arrow: completionRate >= 50 ? trendArrowUp : trendArrowDown,
     },
@@ -579,7 +579,7 @@ function renderAttendanceChart() {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   SKELETON LOADER — shown instantly before API data arrives
+   SKELETON LOADER - shown instantly before API data arrives
 ══════════════════════════════════════════════════════════════════════════ */
 function showSkeletonHome() {
   const skelCard = () => `
@@ -622,7 +622,7 @@ function showSkeletonHome() {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   HOME — Webinar Dashboard
+   HOME - Webinar Dashboard
 ══════════════════════════════════════════════════════════════════════════ */
 function renderHome() {
   const q  = S.search.toLowerCase();
@@ -647,7 +647,7 @@ function renderHome() {
   let mainContent;
 
   if (S.webinars.length === 0) {
-    // Truly empty — first-time user
+    // Truly empty - first-time user
     mainContent = `<div class="empty-state">
       <div class="empty-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
       <div class="empty-title">No webinars yet</div>
@@ -692,7 +692,7 @@ function renderHome() {
             <div style="flex:1;height:4px;border-radius:2px;background:var(--border);overflow:hidden">
               <div class="an-bar-fill" style="width:${Math.min(rate,100)}%;background:${info.color}"></div>
             </div>
-            <span style="font-size:11px;color:${info.color};font-weight:600;min-width:38px">${rate > 0 ? fmtPct(rate) : '—'}</span>
+            <span style="font-size:11px;color:${info.color};font-weight:600;min-width:38px">${rate > 0 ? fmtPct(rate) : 'N/A'}</span>
           </div>
         </td>
         <td>
@@ -763,7 +763,7 @@ function renderHome() {
       <div class="dash-hero reveal">
         <div>
           <h1 class="dash-hero-title">${timeMsg}<br>Webinar Intelligence</h1>
-          <p class="dash-hero-sub">Track performance, speaker impact, and audience engagement across every webinar — all in one place.</p>
+          <p class="dash-hero-sub">Track performance, speaker impact, and audience engagement across every webinar, all in one place.</p>
         </div>
         <div class="dash-hero-actions">
           <button class="btn btn-primary" onclick="openWebinarModal()">
@@ -842,7 +842,7 @@ function webinarCardHTML(w) {
           <div class="wb-health-label">Health Score</div>
           <div class="wb-health-rate">${rate > 0 ? fmtPct(rate) : 'No data'}</div>
         </div>
-        <div class="grade-badge grade-${info.grade === '—' ? 'none' : info.grade}">${info.grade}</div>
+        <div class="grade-badge grade-${info.grade === 'N/A' ? 'none' : info.grade}">${info.grade}</div>
       </div>
       <div class="wb-card-upload-bar">
         ${bothDone
@@ -883,7 +883,7 @@ function _drawWebinarDetail(w) {
   const badgeCls = w.status === 'completed' ? 'completed' : w.status === 'upcoming' ? 'upcoming' : w.status === 'cancelled' ? 'cancelled' : 'incomplete';
 
   // Smart upload section:
-  // Show upload card only if that data type is missing — regardless of status
+  // Show upload card only if that data type is missing - regardless of status
   const showRegUpload = !w.has_registration_data;
   const showAttUpload = !w.has_attendee_data;
   const showUploadSection = showRegUpload || showAttUpload;
@@ -1000,7 +1000,7 @@ function _drawWebinarDetail(w) {
       ${(w.upload_logs||[]).map(l => `
         <div class="log-row">
           <span class="log-tag ${l.file_type==='registrations'?'reg':'att'}">${l.file_type}</span>
-          <span class="log-file">${esc(l.filename||'—')}</span>
+          <span class="log-file">${esc(l.filename||'N/A')}</span>
           <span class="log-stat">${l.original_count} → ${l.final_count} rows</span>
           ${l.duplicates_removed ? `<span class="log-stat" style="color:#d97706">${l.duplicates_removed} dupes removed</span>` : ''}
           <span class="log-stat">${fmtDateTime(l.uploaded_at)}</span>
@@ -1274,7 +1274,7 @@ function renderAnalytics() {
   }
   const st = S.stats;
 
-  // Trend data — last 12 webinars with any registration/attendance data
+  // Trend data - last 12 webinars with any registration/attendance data
   const trendData = [...S.webinars]
     .filter(w => w.total_registrations > 0 || w.total_attendees > 0)
     .sort((a,b) => new Date(a.date+'T00:00:00') - new Date(b.date+'T00:00:00'))
@@ -1328,7 +1328,7 @@ function renderAnalytics() {
         </button>` : ''}
       </div>
 
-      <!-- KPI strip — 6 metrics -->
+      <!-- KPI strip - 6 metrics -->
       <div class="an-kpi-strip">
         <div class="an-kpi-card">
           <div class="an-kpi-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
@@ -1386,8 +1386,8 @@ function renderAnalytics() {
                   <div class="an-spk-bar-fill" style="width:${sp.avgR > 0 ? (sp.avgR/maxSpkR*100).toFixed(1) : 0}%;background:${sp.color}"></div>
                 </div>
               </div>
-              <div class="an-spk-grade grade-${sp.info.grade === '—' ? 'none' : sp.info.grade}">${sp.info.grade}</div>
-              <div class="an-spk-rate">${sp.avgR > 0 ? fmtPct(sp.avgR) : '—'}</div>
+              <div class="an-spk-grade grade-${sp.info.grade === 'N/A' ? 'none' : sp.info.grade}">${sp.info.grade}</div>
+              <div class="an-spk-rate">${sp.avgR > 0 ? fmtPct(sp.avgR) : 'N/A'}</div>
             </div>`).join('') : `
           <div class="empty-state" style="padding:24px 0;border:none">
             <div class="empty-icon" style="font-size:24px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
@@ -1440,7 +1440,7 @@ function renderSpeakers() {
             <div class="spk-card" onclick="nav('speaker',${sp.id})">
               <div class="spk-av" style="background:${color}">${ini}</div>
               <div class="spk-name">${esc(sp.name)}</div>
-              <div class="spk-bio">${esc(sp.bio || '—')}</div>
+              <div class="spk-bio">${esc(sp.bio || 'No bio available')}</div>
               <div class="spk-stats">
                 <div>
                   <div class="spk-stat-val" style="color:${color}">${sp.total_webinars}</div>
@@ -1507,7 +1507,7 @@ async function renderSpeakerDetail(id) {
           <div class="spk-hero-av" style="background:${color}">${ini}</div>
           <div style="flex:1">
             <div class="spk-hero-name">${esc(sp.name)}</div>
-            <div class="spk-hero-bio">${esc(sp.bio || '—')}</div>
+            <div class="spk-hero-bio">${esc(sp.bio || 'No bio available')}</div>
             <div class="spk-hero-stats">
               <div><div class="spk-hero-stat-val">${sp.total_webinars}</div><div class="spk-hero-stat-lbl">Webinars</div></div>
               <div><div class="spk-hero-stat-val">${fmt(totalReg)}</div><div class="spk-hero-stat-lbl">Registrations</div></div>
@@ -1584,13 +1584,13 @@ async function renderLeaderboard(speakerId, webinarId) {
               const safeName  = (e.name ||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
               const nameCell = e.email
                 ? `<span class="lb-name-link" onclick="openAttendeeModal('${safeEmail}','${safeName}')" title="Click to view attended webinars">${esc(e.name)}</span>`
-                : `<span class="lb-name-link no-email" title="No email — cannot look up profile">${esc(e.name)}</span>`;
+                : `<span class="lb-name-link no-email" title="No email on file">${esc(e.name)}</span>`;
               return `
               <tr>
                 <td>${rankHTML(e.rank)}</td>
                 <td>${nameCell}</td>
-                <td><div class="lb-email">${esc(e.email||'—')}</div></td>
-                <td><div class="lb-email">${esc(e.phone||'—')}</div></td>
+                <td><div class="lb-email">${esc(e.email||'N/A')}</div></td>
+                <td><div class="lb-email">${esc(e.phone||'N/A')}</div></td>
                 <td style="text-align:center;font-weight:600;color:#059669">${e.webinars_attended}</td>
                 <td style="text-align:center;color:var(--text-2)">${e.total_duration_minutes}</td>
                 <td><span class="lb-score">⭐ ${e.score}</span></td>
@@ -1709,7 +1709,7 @@ async function submitWebinarModal() {
     // Go straight to the new webinar's upload/detail page
     nav('webinar', created.id);
   } catch(e) {
-    showToast('Could not save webinar — please try again.', 'error');
+    showToast('Could not save webinar. Please try again.', 'error');
     if (btn) {
       btn.disabled = false;
       btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Create Webinar';
@@ -1846,7 +1846,7 @@ async function submitAdModal() {
     detailCache[wid] = fresh;
     _drawWebinarDetail(fresh);
   } catch(e) {
-    showToast('Failed to save ad — please try again.', 'error');
+    showToast('Failed to save ad. Please try again.', 'error');
     if (btn) {
       btn.disabled = false;
       btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Save Ad';
@@ -2227,7 +2227,7 @@ async function renderTopics() {
             AI-Generated · Updated Weekly
           </div>
           <h1 class="topics-title">Upcoming Topic Suggestions</h1>
-          <p class="topics-sub">Fresh topics crafted for each speaker — timed to market news, framed in their voice.</p>
+          <p class="topics-sub">Fresh topics crafted for each speaker, timed to market news, framed in their voice.</p>
         </div>
         <button class="btn-topics-refresh" id="topics-refresh-btn" onclick="refreshTopics()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
@@ -2375,7 +2375,7 @@ function renderAdCards(webinarId, ads) {
   if (!ads || !ads.length) {
     return `<div class="ads-empty">
       <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><polyline points="9.5 9 11 10.5 14.5 7.5"/></svg>
-      <div>No ad creatives yet — click <strong>Add Ad</strong> to attach one to this webinar</div>
+      <div>No ad creatives yet. Click <strong>Add Ad</strong> to attach one to this webinar</div>
     </div>`;
   }
 
@@ -2397,15 +2397,15 @@ function renderAdCards(webinarId, ads) {
     const metsHTML = hasMets ? `
       <div class="ad-card-metrics">
         <div class="ad-metric">
-          <div class="ad-metric-val">${ad.impressions != null ? fmt(ad.impressions) : '—'}</div>
+          <div class="ad-metric-val">${ad.impressions != null ? fmt(ad.impressions) : 'N/A'}</div>
           <div class="ad-metric-label">Impressions</div>
         </div>
         <div class="ad-metric">
-          <div class="ad-metric-val">${ad.clicks != null ? fmt(ad.clicks) : '—'}</div>
+          <div class="ad-metric-val">${ad.clicks != null ? fmt(ad.clicks) : 'N/A'}</div>
           <div class="ad-metric-label">Clicks</div>
         </div>
         <div class="ad-metric">
-          <div class="ad-metric-val">${ad.conversions != null ? fmt(ad.conversions) : '—'}</div>
+          <div class="ad-metric-val">${ad.conversions != null ? fmt(ad.conversions) : 'N/A'}</div>
           <div class="ad-metric-label">Conv.</div>
         </div>
       </div>` : '';
@@ -2533,7 +2533,7 @@ async function openAttendeeModal(email, name) {
 
     if (profile.phone) metaEl.textContent = `${email}  ·  ${profile.phone}`;
 
-    // Webinar cards — max duration used for the bar scale
+    // Webinar cards - max duration used for the bar scale
     const maxDur = Math.max(...profile.webinars.map(w => w.duration_minutes || 0), 1);
 
     const cards = profile.webinars.map(w => {
@@ -2672,7 +2672,7 @@ function setBreadcrumb(page, sub) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   SIDEBAR RECENT (no-op — sidebar removed in website layout)
+   SIDEBAR RECENT (no-op - sidebar removed in website layout)
 ══════════════════════════════════════════════════════════════════════════ */
 function updateSidebarRecent() { /* no sidebar in website layout */ }
 
@@ -2941,7 +2941,7 @@ async function init() {
     }
   });
 
-  // Show skeleton immediately — replaced by real content once loadAll() finishes
+  // Show skeleton immediately - replaced by real content once loadAll() finishes
   showSkeletonHome();
 
   try {
