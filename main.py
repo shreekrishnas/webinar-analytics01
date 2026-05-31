@@ -207,14 +207,14 @@ async def _do_analyze(webinar_id: int, db):
     ).scalar() or 0
 
     att_count = db.execute(
-        text("SELECT COUNT(*) FROM attendances WHERE webinar_id=:wid AND attended=1"), {"wid": webinar_id}
+        text("SELECT COUNT(*) FROM attendances WHERE webinar_id=:wid AND attended=true"), {"wid": webinar_id}
     ).scalar() or 0
 
     att_rate = round(att_count / reg_count * 100, 1) if reg_count else 0
 
     # Duration breakdown
     durations = db.execute(
-        text("SELECT duration_minutes FROM attendances WHERE webinar_id=:wid AND attended=1 AND duration_minutes IS NOT NULL"),
+        text("SELECT duration_minutes FROM attendances WHERE webinar_id=:wid AND attended=true AND duration_minutes IS NOT NULL"),
         {"wid": webinar_id}
     ).fetchall()
     dur_vals = [r[0] for r in durations if r[0] is not None]
@@ -258,7 +258,7 @@ async def _do_analyze(webinar_id: int, db):
         FROM (
           SELECT w2.id,
             (SELECT COUNT(*) FROM registrations r WHERE r.webinar_id=w2.id) as reg_c,
-            (SELECT COUNT(*) FROM attendances a WHERE a.webinar_id=w2.id AND a.attended=1) as att_c
+            (SELECT COUNT(*) FROM attendances a WHERE a.webinar_id=w2.id AND a.attended=true) as att_c
           FROM webinars w2 WHERE w2.status='completed'
         ) x WHERE reg_c > 0
     """)).fetchone()
@@ -274,7 +274,7 @@ async def _do_analyze(webinar_id: int, db):
         FROM (
           SELECT w2.id,
             (SELECT COUNT(*) FROM registrations r WHERE r.webinar_id=w2.id) as reg_c,
-            (SELECT COUNT(*) FROM attendances a WHERE a.webinar_id=w2.id AND a.attended=1) as att_c
+            (SELECT COUNT(*) FROM attendances a WHERE a.webinar_id=w2.id AND a.attended=true) as att_c
           FROM webinars w2
           WHERE w2.speaker_id=:spk_id AND w2.id != :wid AND w2.status='completed'
         ) x WHERE reg_c > 0
