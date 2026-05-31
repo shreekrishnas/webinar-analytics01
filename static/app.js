@@ -300,14 +300,15 @@ async function api(url, method='GET', body=null) {
 }
 
 async function loadAll() {
-  const [webinars, speakers, stats] = await Promise.all([
+  // Use allSettled so one failure doesn't wipe all data
+  const [webRes, spkRes, stRes] = await Promise.allSettled([
     api('/api/webinars'),
     api('/api/speakers'),
     api('/api/stats'),
   ]);
-  S.webinars  = webinars;
-  S.speakers  = speakers;
-  S.stats     = stats;
+  if (webRes.status === 'fulfilled') S.webinars = webRes.value;
+  if (spkRes.status === 'fulfilled') S.speakers = spkRes.value;
+  if (stRes.status  === 'fulfilled') S.stats    = stRes.value;
   // Populate speaker datalist for modal
   const dl = document.getElementById('speaker-list');
   if (dl) {
