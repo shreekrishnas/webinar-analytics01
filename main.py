@@ -342,14 +342,19 @@ Return ONLY valid JSON, no markdown, no explanation."""
         raise HTTPException(status_code=503, detail="GROQ_API_KEY not configured")
 
     try:
-        from groq import Groq
-        client = Groq(api_key=api_key)
-        message = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            max_tokens=1200,
-            messages=[{"role": "user", "content": prompt}]
+        import httpx
+        resp = httpx.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "max_tokens": 1200,
+                "messages": [{"role": "user", "content": prompt}]
+            },
+            timeout=25.0
         )
-        raw = message.choices[0].message.content.strip()
+        resp.raise_for_status()
+        raw = resp.json()["choices"][0]["message"]["content"].strip()
         # Strip markdown code fences if Claude wraps in them
         if raw.startswith("```"):
             raw = raw.split("```")[1]
