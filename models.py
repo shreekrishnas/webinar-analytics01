@@ -30,6 +30,7 @@ class Webinar(Base):
     registrations = relationship("Registration", back_populates="webinar", cascade="all, delete-orphan")
     attendances = relationship("Attendance", back_populates="webinar", cascade="all, delete-orphan")
     upload_logs = relationship("UploadLog", back_populates="webinar", cascade="all, delete-orphan")
+    ads = relationship("WebinarAd", back_populates="webinar", cascade="all, delete-orphan")
 
 
 class Registration(Base):
@@ -76,3 +77,31 @@ class UploadLog(Base):
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 
     webinar = relationship("Webinar", back_populates="upload_logs")
+
+
+class WebinarAd(Base):
+    __tablename__ = "webinar_ads"
+
+    id = Column(Integer, primary_key=True, index=True)
+    webinar_id = Column(Integer, ForeignKey("webinars.id", ondelete="CASCADE"))
+    title = Column(String, nullable=False)
+    platform = Column(String)          # Facebook, Instagram, Google, LinkedIn, etc.
+    ad_type = Column(String)           # Image, Video, Carousel, Story, Reel, Banner
+    creative_image = Column(Text)      # base64 data URI (data:image/…;base64,…)
+    creative_url = Column(String)      # alternative: URL to hosted image
+    headline = Column(String)
+    description = Column(Text)
+    cta_text = Column(String)          # e.g. "Register Now"
+    landing_url = Column(String)
+    budget = Column(String)            # stored as free-form string (e.g. "₹5,000")
+    spend = Column(String)
+    impressions = Column(Integer)
+    clicks = Column(Integer)
+    conversions = Column(Integer)
+    start_date = Column(Date)
+    end_date = Column(Date)
+    status = Column(String, default="active")   # active | paused | completed
+    notes = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    webinar = relationship("Webinar", back_populates="ads")

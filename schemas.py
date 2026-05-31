@@ -40,6 +40,55 @@ class UploadResult(BaseModel):
     message: str
 
 
+# ── Ad Creative ──────────────────────────────────────────────────────────────
+
+class WebinarAdCreate(BaseModel):
+    title: str
+    platform: Optional[str] = None
+    ad_type: Optional[str] = None
+    creative_image: Optional[str] = None   # base64 data URI
+    creative_url: Optional[str] = None
+    headline: Optional[str] = None
+    description: Optional[str] = None
+    cta_text: Optional[str] = None
+    landing_url: Optional[str] = None
+    budget: Optional[str] = None
+    spend: Optional[str] = None
+    impressions: Optional[int] = None
+    clicks: Optional[int] = None
+    conversions: Optional[int] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    status: str = "active"
+    notes: Optional[str] = None
+
+
+class WebinarAdOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    webinar_id: int
+    title: str
+    platform: Optional[str] = None
+    ad_type: Optional[str] = None
+    creative_image: Optional[str] = None
+    creative_url: Optional[str] = None
+    headline: Optional[str] = None
+    description: Optional[str] = None
+    cta_text: Optional[str] = None
+    landing_url: Optional[str] = None
+    budget: Optional[str] = None
+    spend: Optional[str] = None
+    impressions: Optional[int] = None
+    clicks: Optional[int] = None
+    conversions: Optional[int] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    status: str
+    notes: Optional[str] = None
+    created_at: _dt
+
+
 # ── Webinar ───────────────────────────────────────────────────────────────────
 
 class WebinarCreate(BaseModel):
@@ -91,6 +140,7 @@ class WebinarDetail(BaseModel):
     registration_by_source: List[RegistrationBreakdown]
     duration_breakdown: List[DurationBreakdown]
     upload_logs: List[UploadLogOut]
+    ads: List[WebinarAdOut] = []
 
 
 # ── Speaker ───────────────────────────────────────────────────────────────────

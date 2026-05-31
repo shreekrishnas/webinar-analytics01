@@ -8,8 +8,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 if os.environ.get("DATABASE_URL"):
-    # PostgreSQL (Supabase): tables already exist — nothing to do at startup
-    pass
+    # PostgreSQL (Supabase): run create_all so new tables (e.g. webinar_ads) are
+    # created automatically. create_all is idempotent — it skips existing tables.
+    try:
+        from database import engine
+        import models
+        models.Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        import traceback
+        print("DB create_all error:", traceback.format_exc(), file=sys.stderr)
 elif os.environ.get("VERCEL"):
     # Vercel without Postgres: copy bundled SQLite DB to /tmp on cold start
     try:

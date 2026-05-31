@@ -5,6 +5,10 @@ const S = {
   filterStatus: 'all', filterSpeaker: 'all',
   _lbSpeaker: '', _lbWebinar: '',
 };
+
+/* Ad modal state (module-level so image stays across re-renders) */
+let _adWebinarId   = null;
+let _adImageBase64 = null;
 const detailCache = {};
 
 /* ── Helpers ────────────────────────────────────────────────────────────── */
@@ -311,13 +315,12 @@ async function loadAll() {
   }
 }
 
-/* ── Topbar chips ───────────────────────────────────────────────────────── */
+/* ── Navbar chips ───────────────────────────────────────────────────────── */
 function updateTopbarChips(page) {
-  const chips = document.getElementById('tb-chips');
+  const chips = document.getElementById('nav-chips');
   if (!chips) return;
   if (page === 'home') {
     chips.style.display = 'flex';
-    // Sync active chip to current filter
     chips.querySelectorAll('.tb-chip').forEach(c => {
       c.classList.toggle('active', c.dataset.filter === S.filterStatus);
     });
@@ -339,16 +342,17 @@ function setChipFilter(value) {
 function nav(page, sub) {
   S.page = page;
   S.sub  = sub ?? null;
-  document.querySelectorAll('.sb-link[data-page]').forEach(b =>
+  // Update all nav-link elements (desktop + mobile menus)
+  document.querySelectorAll('.nav-link[data-page]').forEach(b =>
     b.classList.toggle('active', b.dataset.page === page)
   );
   setBreadcrumb(page, sub);
   closeCmdPalette();
   closeNotifPanel();
-  // Close mobile sidebar when navigating
-  const sidebar = document.getElementById('sidebar');
-  if (sidebar && sidebar.classList.contains('mobile-open')) {
-    toggleMobileSidebar();
+  // Close mobile nav if open
+  const mobileMenu = document.getElementById('nav-mobile-menu');
+  if (mobileMenu && mobileMenu.classList.contains('open')) {
+    mobileMenu.classList.remove('open');
   }
   updateTopbarChips(page);
   switch (page) {
@@ -370,6 +374,8 @@ function setContent(html) {
     animateBars();
     runCountUps();
     decorateLeaderboardRows();
+    initScrollReveal();
+    initCardTilt();
   });
 }
 
@@ -748,12 +754,15 @@ function renderHome() {
       </div>`;
   }
 
+  const hour = new Date().getHours();
+  const timeMsg = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
   setContent(`
     <div>
-      <div class="dash-hero">
+      <div class="dash-hero reveal">
         <div>
-          <h1 class="dash-hero-title">Webinar Intelligence Dashboard</h1>
-          <p class="dash-hero-sub">Track performance, speaker impact, and audience engagement across all webinars.</p>
+          <h1 class="dash-hero-title">${timeMsg} 👋<br>Webinar Intelligence</h1>
+          <p class="dash-hero-sub">Track performance, speaker impact, and audience engagement across every webinar — all in one place.</p>
         </div>
         <div class="dash-hero-actions">
           <button class="btn btn-primary" onclick="openWebinarModal()">
@@ -762,12 +771,12 @@ function renderHome() {
           </button>
         </div>
       </div>
-      <div class="kpi-banner">${renderKpiBanner()}</div>
-      <div class="dash-mid-row">
+      <div class="kpi-banner reveal rd1">${renderKpiBanner()}</div>
+      <div class="dash-mid-row reveal rd2">
         ${renderAttendanceChart()}
         ${renderStatusBreakdown()}
       </div>
-      ${mainContent}
+      <div class="reveal rd3">${mainContent}</div>
     </div>
   `);
 
@@ -925,15 +934,31 @@ function _drawWebinarDetail(w) {
     </div>` : '';
 
   // Analysis cards
+  const regDlAttr = w.total_registrations > 0
+    ? `onclick="downloadRegistrations(${w.id})" title="Click to download registrations CSV" style="cursor:pointer"`
+    : '';
+  const attDlAttr = w.total_attendees > 0
+    ? `onclick="downloadAttendees(${w.id})" title="Click to download attendees CSV" style="cursor:pointer"`
+    : '';
   const analysisHTML = `
     <div class="analysis-grid">
-      <div class="an-stat-card">
+      <div class="an-stat-card an-stat-dl" ${regDlAttr}>
         <div class="an-stat-icon" style="background:rgba(59,130,246,0.15)">📝</div>
-        <div><div class="an-stat-val" style="color:var(--c-reg)">${fmt(w.total_registrations)}</div><div class="an-stat-lbl">Registered</div></div>
+        <div style="flex:1">
+          <div class="an-stat-val" style="color:var(--c-reg)">${fmt(w.total_registrations)}</div>
+          <div class="an-stat-lbl">Registered
+            ${w.total_registrations > 0 ? `<span class="dl-hint">↓ CSV</span>` : ''}
+          </div>
+        </div>
       </div>
-      <div class="an-stat-card">
+      <div class="an-stat-card an-stat-dl" ${attDlAttr}>
         <div class="an-stat-icon" style="background:rgba(16,185,129,0.15)">✅</div>
-        <div><div class="an-stat-val" style="color:var(--c-att)">${fmt(w.total_attendees)}</div><div class="an-stat-lbl">Attended</div></div>
+        <div style="flex:1">
+          <div class="an-stat-val" style="color:var(--c-att)">${fmt(w.total_attendees)}</div>
+          <div class="an-stat-lbl">Attended
+            ${w.total_attendees > 0 ? `<span class="dl-hint" style="background:rgba(16,185,129,.15);color:#059669">↓ CSV</span>` : ''}
+          </div>
+        </div>
       </div>
       <div class="an-stat-card">
         <div class="an-stat-icon" style="background:rgba(244,63,94,0.15)">❌</div>
@@ -1037,6 +1062,19 @@ function _drawWebinarDetail(w) {
       ` : ''}
 
       ${logsHTML}
+
+      <!-- Ad Creatives section -->
+      <div class="ads-section">
+        <div class="sec-hd" style="margin-bottom:16px">
+          <span class="sec-title">Ad Creatives</span>
+          <span style="font-size:12px;color:var(--text-3)">${(w.ads||[]).length} ad${(w.ads||[]).length !== 1 ? 's' : ''}</span>
+          <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="openAdModal(${w.id})">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Ad
+          </button>
+        </div>
+        ${renderAdCards(w.id, w.ads || [])}
+      </div>
     </div>`);
 }
 
@@ -1274,6 +1312,11 @@ function renderAnalytics() {
           <h1 class="page-title">Analytics</h1>
           <p class="page-sub">Platform-wide performance · ${S.webinars.length} webinars</p>
         </div>
+        ${st.total_attendees > 0 ? `
+        <button class="btn btn-ghost btn-sm" onclick="downloadAllAttendees()" style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download Attendees
+        </button>` : ''}
       </div>
 
       <!-- KPI strip — 6 metrics -->
@@ -1293,10 +1336,10 @@ function renderAnalytics() {
           <div class="an-kpi-val" data-countup="${st.total_registrations}">${fmt(st.total_registrations)}</div>
           <div class="an-kpi-label">Total Registrations</div>
         </div>
-        <div class="an-kpi-card">
+        <div class="an-kpi-card an-kpi-card-dl" ${st.total_attendees > 0 ? `onclick="downloadAllAttendees()" title="Download all attendees as CSV"` : ''}>
           <div class="an-kpi-icon">✅</div>
           <div class="an-kpi-val" data-countup="${st.total_attendees}">${fmt(st.total_attendees)}</div>
-          <div class="an-kpi-label">Total Attendees</div>
+          <div class="an-kpi-label">Total Attendees${st.total_attendees > 0 ? ` <span class="dl-hint" style="background:rgba(16,185,129,.15);color:#059669">↓ CSV</span>` : ''}</div>
         </div>
         <div class="an-kpi-card">
           <div class="an-kpi-icon">📅</div>
@@ -1665,6 +1708,270 @@ async function submitWebinarModal() {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   AD CREATIVE MODAL
+══════════════════════════════════════════════════════════════════════════ */
+
+function openAdModal(webinarId) {
+  _adWebinarId   = webinarId;
+  _adImageBase64 = null;
+
+  // Reset all form fields
+  ['ad-title','ad-headline','ad-cta','ad-description',
+   'ad-landing-url','ad-budget','ad-spend','ad-notes','ad-creative-url'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['ad-impressions','ad-clicks','ad-conversions'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['ad-start-date','ad-end-date'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const platformEl = document.getElementById('ad-platform');
+  const typeEl     = document.getElementById('ad-type');
+  const statusEl   = document.getElementById('ad-status');
+  if (platformEl) platformEl.value = '';
+  if (typeEl)     typeEl.value     = '';
+  if (statusEl)   statusEl.value   = 'active';
+
+  clearAdImage();
+
+  document.getElementById('ad-modal-overlay').classList.add('open');
+  setTimeout(() => { const t = document.getElementById('ad-title'); if (t) t.focus(); }, 80);
+}
+
+function closeAdModal() {
+  const overlay = document.getElementById('ad-modal-overlay');
+  if (overlay) overlay.classList.remove('open');
+  _adWebinarId   = null;
+  _adImageBase64 = null;
+}
+
+function handleAdImageSelect(event) {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+  _loadAdImageFile(file);
+}
+
+function handleAdImageDrop(event) {
+  event.preventDefault();
+  event.currentTarget.classList.remove('dragover');
+  const file = event.dataTransfer.files[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  _loadAdImageFile(file);
+}
+
+function _loadAdImageFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    _adImageBase64 = e.target.result;
+    const preview = document.getElementById('ad-creative-preview');
+    const holder  = document.getElementById('ad-creative-placeholder');
+    const clearBtn = document.getElementById('ad-creative-clear');
+    if (preview)  { preview.src = _adImageBase64; preview.style.display = 'block'; }
+    if (holder)   holder.style.display   = 'none';
+    if (clearBtn) clearBtn.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearAdImage() {
+  _adImageBase64 = null;
+  const preview  = document.getElementById('ad-creative-preview');
+  const holder   = document.getElementById('ad-creative-placeholder');
+  const clearBtn = document.getElementById('ad-creative-clear');
+  if (preview)  { preview.src = ''; preview.style.display = 'none'; }
+  if (holder)   holder.style.display   = 'flex';
+  if (clearBtn) clearBtn.style.display = 'none';
+}
+
+async function submitAdModal() {
+  const title = (document.getElementById('ad-title').value || '').trim();
+  if (!title) {
+    document.getElementById('ad-title').focus();
+    showToast('Please enter an ad title', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('ad-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  const parseIntOrNull = id => {
+    const v = parseInt(document.getElementById(id)?.value, 10);
+    return isNaN(v) ? null : v;
+  };
+  const strOrNull = id => document.getElementById(id)?.value.trim() || null;
+
+  const payload = {
+    title,
+    platform:       strOrNull('ad-platform'),
+    ad_type:        strOrNull('ad-type'),
+    creative_image: _adImageBase64 || null,
+    creative_url:   strOrNull('ad-creative-url'),
+    headline:       strOrNull('ad-headline'),
+    description:    strOrNull('ad-description'),
+    cta_text:       strOrNull('ad-cta'),
+    landing_url:    strOrNull('ad-landing-url'),
+    budget:         strOrNull('ad-budget'),
+    spend:          strOrNull('ad-spend'),
+    impressions:    parseIntOrNull('ad-impressions'),
+    clicks:         parseIntOrNull('ad-clicks'),
+    conversions:    parseIntOrNull('ad-conversions'),
+    start_date:     strOrNull('ad-start-date'),
+    end_date:       strOrNull('ad-end-date'),
+    status:         document.getElementById('ad-status')?.value || 'active',
+    notes:          strOrNull('ad-notes'),
+  };
+
+  const wid = _adWebinarId;
+  try {
+    await api(`/api/webinars/${wid}/ads`, 'POST', payload);
+    closeAdModal();
+    showToast('Ad creative saved!');
+    // Reload detail
+    const fresh = await api(`/api/webinars/${wid}`);
+    detailCache[wid] = fresh;
+    _drawWebinarDetail(fresh);
+  } catch(e) {
+    showToast('Failed to save ad — please try again.', 'error');
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Save Ad';
+    }
+  }
+}
+
+/* ── Download registrations / attendees as CSV ──────────────────────────── */
+function _triggerDownload(url) {
+  showToast('Preparing download…');
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function downloadRegistrations(webinarId) {
+  _triggerDownload(`/api/webinars/${webinarId}/registrations/download`);
+}
+
+function downloadAttendees(webinarId) {
+  _triggerDownload(`/api/webinars/${webinarId}/attendees/download`);
+}
+
+function downloadAllAttendees() {
+  _triggerDownload('/api/attendees/download');
+}
+
+async function deleteAdConfirm(adId, webinarId) {
+  if (!confirm('Delete this ad creative? This cannot be undone.')) return;
+  try {
+    await api(`/api/webinars/${webinarId}/ads/${adId}`, 'DELETE');
+    showToast('Ad deleted');
+    const fresh = await api(`/api/webinars/${webinarId}`);
+    detailCache[webinarId] = fresh;
+    _drawWebinarDetail(fresh);
+  } catch(e) {
+    showToast('Failed to delete ad', 'error');
+  }
+}
+
+function renderAdCards(webinarId, ads) {
+  if (!ads || !ads.length) {
+    return `<div class="ads-empty">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><polyline points="9.5 9 11 10.5 14.5 7.5"/></svg>
+      <div>No ad creatives yet — click <strong>Add Ad</strong> to attach one to this webinar</div>
+    </div>`;
+  }
+
+  return `<div class="ads-grid">${ads.map(ad => {
+    const platform = ad.platform || '';
+    // normalize platform to a CSS class key
+    const platCls = platform.toLowerCase()
+      .replace(/[^a-z]/g, '')
+      .replace('googleads', 'google')
+      .replace('twitterx', 'twitter') || 'other';
+    const platLabel = platform || 'Other';
+
+    const imgSrc = ad.creative_image || ad.creative_url;
+    const imageHTML = imgSrc
+      ? `<div class="ad-card-image"><img src="${imgSrc}" alt="${esc(ad.title)}" onerror="this.parentNode.innerHTML='<span class=ad-card-image-placeholder>Image unavailable</span>'" /></div>`
+      : `<div class="ad-card-image"><span class="ad-card-image-placeholder">No creative image</span></div>`;
+
+    const hasMets = ad.impressions != null || ad.clicks != null || ad.conversions != null;
+    const metsHTML = hasMets ? `
+      <div class="ad-card-metrics">
+        <div class="ad-metric">
+          <div class="ad-metric-val">${ad.impressions != null ? fmt(ad.impressions) : '—'}</div>
+          <div class="ad-metric-label">Impressions</div>
+        </div>
+        <div class="ad-metric">
+          <div class="ad-metric-val">${ad.clicks != null ? fmt(ad.clicks) : '—'}</div>
+          <div class="ad-metric-label">Clicks</div>
+        </div>
+        <div class="ad-metric">
+          <div class="ad-metric-val">${ad.conversions != null ? fmt(ad.conversions) : '—'}</div>
+          <div class="ad-metric-label">Conv.</div>
+        </div>
+      </div>` : '';
+
+    const budgetLine = [
+      ad.budget ? `Budget: ${esc(ad.budget)}` : '',
+      ad.spend  ? `Spend: ${esc(ad.spend)}`   : '',
+    ].filter(Boolean).join(' · ');
+
+    const ctrLine = (() => {
+      if (ad.clicks != null && ad.impressions != null && ad.impressions > 0) {
+        const ctr = (ad.clicks / ad.impressions * 100).toFixed(2);
+        return `CTR: ${ctr}%`;
+      }
+      return '';
+    })();
+
+    const dateRange = ad.start_date || ad.end_date
+      ? [ad.start_date ? fmtDate(ad.start_date) : '', ad.end_date ? fmtDate(ad.end_date) : ''].filter(Boolean).join(' – ')
+      : '';
+
+    return `
+      <div class="ad-card">
+        ${imageHTML}
+        <div class="ad-card-body">
+          <div class="ad-card-head-row">
+            <div class="ad-card-title">${esc(ad.title)}</div>
+            <span class="ad-platform-badge ${platCls}">${esc(platLabel)}</span>
+          </div>
+          ${ad.headline ? `<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px">${esc(ad.headline)}</div>` : ''}
+          ${ad.description ? `<div class="ad-card-desc">${esc(ad.description)}</div>` : ''}
+          ${ad.cta_text ? `<div style="display:inline-flex;align-items:center;background:var(--accent);color:#fff;font-size:10.5px;font-weight:700;padding:3px 11px;border-radius:20px;margin-bottom:6px">${esc(ad.cta_text)}</div>` : ''}
+          ${metsHTML}
+          ${ctrLine ? `<div style="font-size:11px;color:var(--text-3);margin-top:6px">${ctrLine}</div>` : ''}
+          ${budgetLine ? `<div style="font-size:11px;color:var(--text-3)">${budgetLine}</div>` : ''}
+          ${dateRange ? `<div style="font-size:11px;color:var(--text-3)">${dateRange}</div>` : ''}
+          ${ad.landing_url ? `<a href="${esc(ad.landing_url)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent);text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(ad.landing_url)}">🔗 ${esc(ad.landing_url)}</a>` : ''}
+          ${ad.notes ? `<div style="font-size:11.5px;color:var(--text-2);border-top:1px solid var(--border);padding-top:6px;margin-top:4px;line-height:1.4">${esc(ad.notes)}</div>` : ''}
+        </div>
+        <div class="ad-card-foot">
+          <div style="display:flex;align-items:center;gap:2px">
+            <span class="ad-status-dot ${esc(ad.status||'active')}"></span>
+            <span class="ad-status-text">${esc(ad.status || 'active')}</span>
+            ${ad.ad_type ? `<span style="margin-left:8px;font-size:11px;color:var(--text-3)">${esc(ad.ad_type)}</span>` : ''}
+          </div>
+          <button class="ad-delete-btn" onclick="event.stopPropagation();deleteAdConfirm(${ad.id},${webinarId})" title="Delete ad">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            </svg>
+          </button>
+        </div>
+      </div>`;
+  }).join('')}</div>`;
+}
+
 /* ── Delete webinar ─────────────────────────────────────────────────────── */
 async function confirmDeleteWebinar(id, title) {
   if (!confirm(`Delete "${title}"?\n\nThis will permanently remove all registration and attendance data. This cannot be undone.`)) return;
@@ -1875,37 +2182,89 @@ function setBreadcrumb(page, sub) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   SIDEBAR RECENT WEBINARS
+   SIDEBAR RECENT (no-op — sidebar removed in website layout)
 ══════════════════════════════════════════════════════════════════════════ */
-function updateSidebarRecent() {
-  const listEl = document.getElementById('sb-recent-list');
-  if (!listEl) return;
-  const recent = [...S.webinars].slice(0, 8);
-  if (!recent.length) {
-    listEl.innerHTML = '<div class="sb-recent-placeholder">No webinars yet</div>';
-    return;
-  }
-  listEl.innerHTML = recent.map(w => {
-    const color = avColor(w.speaker_name);
-    const safeName = esc(w.title).replace(/'/g, "\\'");
-    return `
-      <div class="sb-recent-item" onclick="nav('webinar',${w.id})" title="${esc(w.title)}">
-        <div class="sb-recent-dot" style="background:${color}"></div>
-        <span class="sb-recent-name">${esc(w.title)}</span>
-      </div>`;
-  }).join('');
+function updateSidebarRecent() { /* no sidebar in website layout */ }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MOBILE NAV TOGGLE
+══════════════════════════════════════════════════════════════════════════ */
+function toggleMobileNav() {
+  const menu = document.getElementById('nav-mobile-menu');
+  const btn  = document.getElementById('nav-hamburger');
+  if (!menu) return;
+  const isOpen = menu.classList.toggle('open');
+  if (btn) btn.setAttribute('aria-expanded', isOpen);
+  document.body.style.overflow = isOpen ? 'hidden' : '';
+}
+/* Keep old name as alias for any remaining references */
+function toggleMobileSidebar() { toggleMobileNav(); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CURSOR GLOW
+══════════════════════════════════════════════════════════════════════════ */
+function initCursorGlow() {
+  const glow = document.getElementById('cursor-glow');
+  if (!glow || window.matchMedia('(pointer: coarse)').matches) return; // skip touch
+  document.addEventListener('mousemove', e => {
+    glow.style.left = e.clientX + 'px';
+    glow.style.top  = e.clientY + 'px';
+  });
+  document.addEventListener('mouseleave', () => {
+    glow.style.left = '-600px';
+    glow.style.top  = '-600px';
+  });
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   MOBILE SIDEBAR
+   SCROLL REVEAL (IntersectionObserver)
 ══════════════════════════════════════════════════════════════════════════ */
-function toggleMobileSidebar() {
-  const sidebar = document.getElementById('sidebar');
-  const overlay = document.getElementById('mob-overlay');
-  if (!sidebar) return;
-  const isOpen = sidebar.classList.toggle('mobile-open');
-  if (overlay) overlay.classList.toggle('open', isOpen);
-  document.body.style.overflow = isOpen ? 'hidden' : '';
+function initScrollReveal() {
+  const els = document.querySelectorAll('.reveal:not(.visible)');
+  if (!els.length) return;
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        obs.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08, rootMargin: '0px 0px -30px 0px' });
+  els.forEach(el => obs.observe(el));
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   NAVBAR SCROLL EFFECT
+══════════════════════════════════════════════════════════════════════════ */
+function initNavbarScroll() {
+  const navbar = document.getElementById('navbar');
+  if (!navbar) return;
+  const onScroll = () => {
+    navbar.classList.toggle('scrolled', window.scrollY > 20);
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   3D CARD TILT on webinar cards
+══════════════════════════════════════════════════════════════════════════ */
+function initCardTilt() {
+  document.querySelectorAll('.wb-card, .spk-card').forEach(card => {
+    if (card._tiltInit) return;
+    card._tiltInit = true;
+    card.addEventListener('mousemove', e => {
+      const r  = card.getBoundingClientRect();
+      const x  = (e.clientX - r.left) / r.width  - 0.5; // -0.5 to 0.5
+      const y  = (e.clientY - r.top)  / r.height - 0.5;
+      const rx =  y * -8;  // rotate X (pitch)
+      const ry =  x *  8;  // rotate Y (yaw)
+      card.style.transform = `perspective(900px) rotateX(${rx}deg) rotateY(${ry}deg) translateY(-6px) scale(1.02)`;
+    });
+    card.addEventListener('mouseleave', () => {
+      card.style.transform = '';
+    });
+  });
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -2076,10 +2435,11 @@ async function init() {
       }
       return;
     }
-    // ESC → close palette or attendee drawer
+    // ESC → close palette or attendee drawer or ad modal
     if (e.key === 'Escape') {
       closeCmdPalette();
       closeAttendeeModal();
+      closeAdModal();
       return;
     }
     // Arrow keys for palette navigation
@@ -2100,9 +2460,14 @@ async function init() {
     console.error('API load failed:', e);
   }
 
-  updateSidebarRecent();
   updateNotifBadge();
   nav('home');
+  // Website enhancements
+  initCursorGlow();
+  initNavbarScroll();
+  // Remove loading splash
+  const _loader = document.getElementById('page-loader');
+  if (_loader) { _loader.classList.add('fade'); setTimeout(() => _loader.remove(), 380); }
 }
 
 document.addEventListener('DOMContentLoaded', init);

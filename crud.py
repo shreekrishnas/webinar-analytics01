@@ -102,6 +102,16 @@ def _duration_breakdown(db: Session, webinar_id: int) -> List[schemas.DurationBr
     ]
 
 
+def _get_ads(db: Session, webinar_id: int) -> List[schemas.WebinarAdOut]:
+    ads = (
+        db.query(models.WebinarAd)
+        .filter(models.WebinarAd.webinar_id == webinar_id)
+        .order_by(models.WebinarAd.created_at.desc())
+        .all()
+    )
+    return [schemas.WebinarAdOut.model_validate(a) for a in ads]
+
+
 def _upload_logs(db: Session, webinar_id: int) -> List[schemas.UploadLogOut]:
     logs = db.query(models.UploadLog).filter(
         models.UploadLog.webinar_id == webinar_id
@@ -161,6 +171,7 @@ def _to_detail(db: Session, w: models.Webinar) -> schemas.WebinarDetail:
         registration_by_source=_reg_by_source(db, w.id),
         duration_breakdown=_duration_breakdown(db, w.id),
         upload_logs=_upload_logs(db, w.id),
+        ads=_get_ads(db, w.id),
     )
 
 
@@ -405,11 +416,14 @@ def process_registration_upload(
     original_count = len(df)
     df, dups_removed = _dedup_df(df)
 
-    db.query(models.Attendance).filter(models.Attendance.webinar_id == webinar_id).delete()
-    db.query(models.Registration).filter(models.Registration.webinar_id == webinar_id).delete()
+    # Raw SQL deletes — bypass ORM to avoid sequence cache issues
+    db.execute(text("DELETE FROM attendances   WHERE webinar_id = :w"), {"w": webinar_id})
+    db.execute(text("DELETE FROM registrations WHERE webinar_id = :w"), {"w": webinar_id})
+    db.execute(text("DELETE FROM upload_logs   WHERE webinar_id = :w AND file_type = 'registrations'"), {"w": webinar_id})
     db.flush()
 
     now = datetime.utcnow()
+    reg_rows = []
     for _, row in df.iterrows():
         name = str(row.get('name', 'Unknown')).strip() or 'Unknown'
         email = str(row.get('email', '')).strip().lower() or None
@@ -422,30 +436,25 @@ def process_registration_upload(
                 reg_at = reg_at.to_pydatetime()
         except Exception:
             reg_at = now
+        reg_rows.append({
+            "w": webinar_id, "n": name, "e": email,
+            "p": phone, "s": source, "r": reg_at,
+        })
 
-        db.add(models.Registration(
-            webinar_id=webinar_id,
-            attendee_name=name,
-            email=email,
-            phone=phone,
-            source=source,
-            registered_at=reg_at,
-        ))
+    if reg_rows:
+        db.execute(
+            text("INSERT INTO registrations (webinar_id, attendee_name, email, phone, source, registered_at)"
+                 " VALUES (:w, :n, :e, :p, :s, :r)"),
+            reg_rows,
+        )
 
-    db.query(models.UploadLog).filter(
-        models.UploadLog.webinar_id == webinar_id,
-        models.UploadLog.file_type == "registrations",
-    ).delete()
-    db.add(models.UploadLog(
-        webinar_id=webinar_id,
-        file_type="registrations",
-        filename=filename,
-        original_count=original_count,
-        final_count=len(df),
-        duplicates_removed=dups_removed,
-        unmatched_attendees=0,
-        uploaded_at=now,
-    ))
+    db.execute(
+        text("INSERT INTO upload_logs (webinar_id, file_type, filename, original_count,"
+             " final_count, duplicates_removed, unmatched_attendees, uploaded_at)"
+             " VALUES (:w, 'registrations', :fn, :oc, :fc, :dr, 0, :ua)"),
+        {"w": webinar_id, "fn": filename, "oc": original_count,
+         "fc": len(df), "dr": dups_removed, "ua": now},
+    )
     db.commit()
 
     return schemas.UploadResult(
@@ -472,16 +481,24 @@ def process_attendee_upload(
     original_count = len(df)
     df, dups_removed = _dedup_df(df)
 
-    db.query(models.Attendance).filter(models.Attendance.webinar_id == webinar_id).delete()
+    # Raw SQL deletes — bypass ORM to avoid sequence cache issues
+    db.execute(text("DELETE FROM attendances WHERE webinar_id = :w"), {"w": webinar_id})
+    db.execute(text("DELETE FROM upload_logs  WHERE webinar_id = :w AND file_type = 'attendees'"), {"w": webinar_id})
     db.flush()
 
-    reg_by_email = {}
-    for r in db.query(models.Registration).filter(models.Registration.webinar_id == webinar_id).all():
+    # Load registrations for email matching
+    reg_rows_q = db.execute(
+        text("SELECT id, email FROM registrations WHERE webinar_id = :w"), {"w": webinar_id}
+    ).fetchall()
+    reg_by_email: dict = {}
+    for r in reg_rows_q:
         if r.email:
             reg_by_email[r.email.lower().strip()] = r.id
 
     now = datetime.utcnow()
     unmatched = 0
+    matched_att: List[dict] = []   # attendance rows for matched registrants
+    ghost_rows:  List[dict] = []   # rows that need a ghost registration
 
     for _, row in df.iterrows():
         name  = str(row.get('name', 'Unknown')).strip() or 'Unknown'
@@ -514,46 +531,51 @@ def process_attendee_upload(
 
         reg_id = reg_by_email.get(email) if email else None
 
-        if reg_id is None:
-            ghost = models.Registration(
-                webinar_id=webinar_id,
-                attendee_name=name,
-                email=email,
-                source="attendee_upload",
-                registered_at=now,
-            )
-            db.add(ghost)
-            db.flush()
-            reg_id = ghost.id
+        att_payload = {
+            "w": webinar_id, "rid": None,
+            "ja": joined_at, "la": left_at, "dur": duration,
+        }
+
+        if reg_id is not None:
+            att_payload["rid"] = reg_id
+            matched_att.append(att_payload)
+        else:
+            ghost_rows.append({
+                "name": name, "email": email, "att": att_payload
+            })
             unmatched += 1
 
-        db.add(models.Attendance(
-            webinar_id=webinar_id,
-            registration_id=reg_id,
-            joined_at=joined_at,
-            left_at=left_at,
-            duration_minutes=duration,
-            attended=True,
-        ))
+    # Insert ghost registrations one at a time with RETURNING id (raw SQL)
+    for g in ghost_rows:
+        res = db.execute(
+            text("INSERT INTO registrations (webinar_id, attendee_name, email, source, registered_at)"
+                 " VALUES (:w, :n, :e, 'attendee_upload', :r) RETURNING id"),
+            {"w": webinar_id, "n": g["name"], "e": g["email"], "r": now},
+        )
+        ghost_id = res.fetchone()[0]
+        g["att"]["rid"] = ghost_id
+        matched_att.append(g["att"])
 
-    w = db.query(models.Webinar).filter(models.Webinar.id == webinar_id).first()
-    if w and w.status == "upcoming":
-        w.status = "completed"
+    # Bulk insert all attendances (no id column → PostgreSQL uses sequence naturally)
+    if matched_att:
+        db.execute(
+            text("INSERT INTO attendances (webinar_id, registration_id, joined_at, left_at, duration_minutes, attended)"
+                 " VALUES (:w, :rid, :ja, :la, :dur, TRUE)"),
+            matched_att,
+        )
 
-    db.query(models.UploadLog).filter(
-        models.UploadLog.webinar_id == webinar_id,
-        models.UploadLog.file_type == "attendees",
-    ).delete()
-    db.add(models.UploadLog(
-        webinar_id=webinar_id,
-        file_type="attendees",
-        filename=filename,
-        original_count=original_count,
-        final_count=len(df),
-        duplicates_removed=dups_removed,
-        unmatched_attendees=unmatched,
-        uploaded_at=now,
-    ))
+    # Update webinar status and log — still use ORM for single-row ops (fine)
+    db.execute(
+        text("UPDATE webinars SET status = 'completed' WHERE id = :w AND status = 'upcoming'"),
+        {"w": webinar_id},
+    )
+    db.execute(
+        text("INSERT INTO upload_logs (webinar_id, file_type, filename, original_count,"
+             " final_count, duplicates_removed, unmatched_attendees, uploaded_at)"
+             " VALUES (:w, 'attendees', :fn, :oc, :fc, :dr, :um, :ua)"),
+        {"w": webinar_id, "fn": filename, "oc": original_count,
+         "fc": len(df), "dr": dups_removed, "um": unmatched, "ua": now},
+    )
     db.commit()
 
     return schemas.UploadResult(
@@ -693,6 +715,34 @@ def get_attendee_profile(db: Session, email: str) -> Optional[schemas.AttendeePr
         score=score,
         webinars=webinar_list,
     )
+
+
+# ── Ad Creative CRUD ─────────────────────────────────────────────────────────
+
+def create_webinar_ad(
+    db: Session, webinar_id: int, ad_in: schemas.WebinarAdCreate
+) -> models.WebinarAd:
+    ad = models.WebinarAd(webinar_id=webinar_id, **ad_in.model_dump())
+    db.add(ad)
+    db.commit()
+    db.refresh(ad)
+    return ad
+
+
+def get_webinar_ads(db: Session, webinar_id: int) -> List[schemas.WebinarAdOut]:
+    return _get_ads(db, webinar_id)
+
+
+def delete_webinar_ad(db: Session, ad_id: int, webinar_id: int) -> bool:
+    ad = db.query(models.WebinarAd).filter(
+        models.WebinarAd.id == ad_id,
+        models.WebinarAd.webinar_id == webinar_id,
+    ).first()
+    if not ad:
+        return False
+    db.delete(ad)
+    db.commit()
+    return True
 
 
 # ── Platform stats ────────────────────────────────────────────────────────────
