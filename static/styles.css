@@ -4219,3 +4219,22 @@ html.dark .topic-use-btn:hover { background: rgba(255,255,255,0.1); color: rgba(
   .topics-grid { grid-template-columns: 1fr; }
   .topics-hero { flex-direction: column; }
 }
+
+/* ══════════════════════════════════
+   22. ICP BADGES
+   ══════════════════════════════════ */
+.icp-badge {
+  display: inline-flex; align-items: center;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+  padding: 2px 7px; border-radius: 4px;
+  text-transform: uppercase; white-space: nowrap;
+  border: 1px solid;
+}
+.icp-pms              { background: rgba(99,102,241,0.12);  color: #6366f1; border-color: rgba(99,102,241,0.3); }
+.icp-retirement-planning { background: rgba(16,185,129,0.1); color: #059669; border-color: rgba(16,185,129,0.3); }
+.icp-nri              { background: rgba(245,158,11,0.12);  color: #d97706; border-color: rgba(245,158,11,0.3); }
+.icp-esops            { background: rgba(239,68,68,0.10);   color: #dc2626; border-color: rgba(239,68,68,0.25); }
+.icp-family-office    { background: rgba(168,85,247,0.12);  color: #9333ea; border-color: rgba(168,85,247,0.3); }
+.icp-others           { background: rgba(100,116,139,0.10); color: #64748b; border-color: rgba(100,116,139,0.2); }
+
+.filter-icp { min-width: 130px; }

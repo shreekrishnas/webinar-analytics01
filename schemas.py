@@ -114,6 +114,7 @@ class WebinarSummary(BaseModel):
     total_attendees: int
     attendance_rate: float
     status: str
+    icp: Optional[str] = "Others"
     has_registration_data: bool
     has_attendee_data: bool
 
@@ -135,6 +136,7 @@ class WebinarDetail(BaseModel):
     duplicates_removed: int
     unmatched_attendees: int
     status: str
+    icp: Optional[str] = "Others"
     has_registration_data: bool
     has_attendee_data: bool
     registration_by_source: List[RegistrationBreakdown]

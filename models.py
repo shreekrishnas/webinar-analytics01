@@ -25,6 +25,7 @@ class Webinar(Base):
     speaker_id = Column(Integer, ForeignKey("speakers.id"))
     description = Column(Text)
     status = Column(String, default="completed")
+    icp    = Column(String, default="Others")
 
     speaker = relationship("Speaker", back_populates="webinars")
     registrations = relationship("Registration", back_populates="webinar", cascade="all, delete-orphan")

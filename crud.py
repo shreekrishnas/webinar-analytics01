@@ -144,6 +144,7 @@ def _to_summary(db: Session, w: models.Webinar) -> schemas.WebinarSummary:
         total_attendees=s["total_attendees"],
         attendance_rate=s["attendance_rate"],
         status=w.status,
+        icp=getattr(w, 'icp', None) or 'Others',
         has_registration_data=_has_data(db, w.id, "registrations"),
         has_attendee_data=_has_data(db, w.id, "attendees"),
     )

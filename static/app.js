@@ -2,7 +2,7 @@
 const S = {
   webinars: [], speakers: [], stats: null,
   page: 'home', sub: null, dark: false, search: '',
-  filterStatus: 'all', filterSpeaker: 'all',
+  filterStatus: 'all', filterSpeaker: 'all', filterICP: 'all',
   _lbSpeaker: '', _lbWebinar: '',
 };
 
@@ -639,9 +639,15 @@ function renderHome() {
     list = list.filter(w => w.status === S.filterStatus);
   }
   if (S.filterSpeaker !== 'all') list = list.filter(w => w.speaker_id == S.filterSpeaker);
+  if (S.filterICP && S.filterICP !== 'all') list = list.filter(w => w.icp === S.filterICP);
 
   const speakerOptions = S.speakers.map(sp =>
     `<option value="${sp.id}" ${S.filterSpeaker==sp.id?'selected':''}>${esc(sp.name)}</option>`
+  ).join('');
+
+  const ICP_LIST = ['PMS', 'Retirement Planning', 'NRI', 'ESOPs', 'Family Office', 'Others'];
+  const icpOptions = ICP_LIST.map(icp =>
+    `<option value="${icp}" ${S.filterICP===icp?'selected':''}>${icp}</option>`
   ).join('');
 
   let mainContent;
@@ -685,7 +691,12 @@ function renderHome() {
           </div>
         </td>
         <td style="font-size:12px;color:var(--text-2);white-space:nowrap">${fmtDate(w.date)}</td>
-        <td><span class="wb-badge ${badgeCls}" style="font-size:10.5px;padding:3px 10px">${w.status}</span></td>
+        <td>
+          <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">
+            <span class="wb-badge ${badgeCls}" style="font-size:10px;padding:2px 8px">${w.status}</span>
+            ${w.icp && w.icp !== 'Others' ? `<span class="icp-badge icp-${(w.icp||'').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}">${esc(w.icp)}</span>` : ''}
+          </div>
+        </td>
         <td style="font-size:12px;text-align:right;color:var(--c-reg);font-weight:600">${fmt(w.total_registrations)}</td>
         <td style="min-width:110px">
           <div style="display:flex;align-items:center;gap:6px">
@@ -718,9 +729,13 @@ function renderHome() {
           <div class="wb-list-card-head">
             <div class="wb-list-card-title">All Webinars <span style="font-size:12px;color:var(--text-3);font-weight:400">${countLabel}</span></div>
             <input class="wb-list-search" placeholder="Search webinars…" oninput="onSearch(this.value)" value="${esc(S.search)}" />
-            <select class="filter-select" style="font-size:12px;padding:5px 8px;min-width:0" onchange="setFilter('speaker',this.value)">
+            <select class="filter-select" onchange="setFilter('speaker',this.value)">
               <option value="all">All Speakers</option>
               ${speakerOptions}
+            </select>
+            <select class="filter-select filter-icp" onchange="setFilter('icp',this.value)">
+              <option value="all">All ICPs</option>
+              ${icpOptions}
             </select>
           </div>
           ${list.length ? `
@@ -730,7 +745,7 @@ function renderHome() {
                 <th>Webinar</th>
                 <th>Speaker</th>
                 <th>Date</th>
-                <th>Status</th>
+                <th>Status / ICP</th>
                 <th style="text-align:right">Reg.</th>
                 <th>Attendance</th>
                 <th></th>
@@ -741,7 +756,7 @@ function renderHome() {
           <div style="padding:32px;text-align:center;color:var(--text-3);font-size:13px">
             No webinars match your current filters.
             <div style="margin-top:10px">
-              <button class="btn btn-ghost btn-sm" onclick="S.search='';onSearch('');setChipFilter('all');setFilter('speaker','all')">Clear filters</button>
+              <button class="btn btn-ghost btn-sm" onclick="S.search='';onSearch('');setChipFilter('all');setFilter('speaker','all');setFilter('icp','all')">Clear filters</button>
             </div>
           </div>`}
         </div>
@@ -787,6 +802,7 @@ function renderHome() {
 function setFilter(type, value) {
   if (type === 'status')  { S.filterStatus  = value; updateTopbarChips('home'); }
   if (type === 'speaker') S.filterSpeaker = value;
+  if (type === 'icp')     S.filterICP = value;
   renderHome();
 }
 
@@ -2550,6 +2566,7 @@ async function openAttendeeModal(email, name) {
             <span>${wbDate}</span>
             <span class="att-wb-card-meta-dot"></span>
             <span>${spkName}</span>
+            ${w.icp && w.icp !== 'Others' ? `<span class="att-wb-card-meta-dot"></span><span class="icp-badge icp-${(w.icp||'').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}" style="font-size:9px;padding:1px 6px">${esc(w.icp)}</span>` : ''}
           </div>
           ${dur ? `
           <div class="att-wb-dur">
