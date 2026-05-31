@@ -107,7 +107,7 @@ function getNotifications() {
   if (topWebinar && topWebinar.attendance_rate > 0) {
     notes.push({
       id: `top-${topWebinar.id}`,
-      icon: '🏆',
+      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>',
       title: `Top performer: ${topWebinar.title}`,
       desc: `${topWebinar.attendance_rate.toFixed(1)}% attendance rate — Grade ${gradeInfo(topWebinar.attendance_rate).grade}`,
       time: 'Best',
@@ -119,7 +119,7 @@ function getNotifications() {
   if (nextUp) {
     notes.push({
       id: `up-${nextUp.id}`,
-      icon: '📅',
+      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
       title: `Upcoming: ${nextUp.title}`,
       desc: `Scheduled for ${fmtDate(nextUp.date)}${nextUp.speaker_name ? ' · ' + nextUp.speaker_name : ''}`,
       time: 'Soon',
@@ -130,7 +130,7 @@ function getNotifications() {
   if (noData.length) {
     notes.push({
       id: 'missing-data',
-      icon: '⚠️',
+      icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
       title: `${noData.length} webinar${noData.length>1?'s':''} missing data`,
       desc: `Upload attendance & registration CSVs for accurate analytics`,
       time: 'Action',
@@ -144,7 +144,7 @@ function getNotifications() {
     const rate = totalReg ? ((totalAtt/totalReg)*100).toFixed(1) : 0;
     notes.push({
       id: 'platform-rate',
-      icon: '📊',
+      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>',
       title: 'Platform attendance rate',
       desc: `${rate}% across ${completed.length} completed webinars (${fmt(totalReg)} registrations)`,
       time: 'Stats',
@@ -154,7 +154,7 @@ function getNotifications() {
   // Leaderboard
   notes.push({
     id: 'leaderboard',
-    icon: '🎯',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
     title: 'Check the leaderboard',
     desc: `See your most engaged attendees ranked by score`,
     time: 'View',
@@ -246,7 +246,7 @@ function buildActivityFeed() {
   const topWebinar = [...completed].sort((a,b) => b.attendance_rate - a.attendance_rate)[0];
   if (topWebinar && topWebinar.attendance_rate > 0) {
     items.push({
-      icon: '🏆', time: 'Best',
+      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>', time: 'Best',
       title: topWebinar.title,
       desc:  `${topWebinar.attendance_rate.toFixed(1)}% attendance — Grade ${gradeInfo(topWebinar.attendance_rate).grade}`,
       onclick: `nav('webinar',${topWebinar.id})`,
@@ -255,7 +255,7 @@ function buildActivityFeed() {
   const nextUp = [...upcoming].sort((a,b) => new Date(a.date)-new Date(b.date))[0];
   if (nextUp) {
     items.push({
-      icon: '📅', time: 'Soon',
+      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>', time: 'Soon',
       title: nextUp.title,
       desc:  `${fmtDate(nextUp.date)}${nextUp.speaker_name ? ' · ' + nextUp.speaker_name : ''}`,
       onclick: `nav('webinar',${nextUp.id})`,
@@ -263,7 +263,7 @@ function buildActivityFeed() {
   }
   if (noData.length) {
     items.push({
-      icon: '⚠️', time: 'Action',
+      icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>', time: 'Action',
       title: `${noData.length} webinar${noData.length>1?'s':''} missing data`,
       desc:  'Upload CSV files to enable full analytics',
       onclick: `nav('home')`,
@@ -274,14 +274,14 @@ function buildActivityFeed() {
     const totalAtt = S.webinars.reduce((a,w) => a+w.total_attendees, 0);
     const rate = (totalAtt/totalReg*100).toFixed(1);
     items.push({
-      icon: '📊', time: 'Stats',
+      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>', time: 'Stats',
       title: 'Platform attendance rate',
       desc:  `${rate}% across ${completed.length} completed webinars`,
       onclick: `nav('analytics')`,
     });
   }
   items.push({
-    icon: '🎯', time: 'View',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>', time: 'View',
     title: 'Attendee Leaderboard',
     desc:  'Top attendees ranked by engagement score',
     onclick: `nav('leaderboard')`,
@@ -406,27 +406,27 @@ function renderKpiBanner() {
 
   const kpis = [
     {
-      icon: '🎙️', cls: 'kc-indigo',
+      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>', cls: 'kc-indigo',
       label: 'Total Webinars',
       value: total.toString(),
       trendUp: true, trend: `${upcoming.length} upcoming`, arrow: trendArrowUp,
     },
     {
-      icon: '👥', cls: 'kc-sky',
+      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>', cls: 'kc-sky',
       label: 'Avg. Attendance',
       value: avgRate > 0 ? fmtPct(avgRate) : '—',
       trendUp: avgRate >= 50, trend: avgRate >= 50 ? '+5% vs last period' : avgRate > 0 ? '-3% vs last period' : 'No data yet',
       arrow: avgRate >= 50 ? trendArrowUp : trendArrowDown,
     },
     {
-      icon: '✅', cls: 'kc-emerald',
+      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>', cls: 'kc-emerald',
       label: 'Completion Rate',
       value: total > 0 ? fmtPct(completionRate) : '—',
       trendUp: completionRate >= 50, trend: completed.length + ' completed',
       arrow: completionRate >= 50 ? trendArrowUp : trendArrowDown,
     },
     {
-      icon: '🏆', cls: 'kc-gold',
+      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>', cls: 'kc-gold',
       label: 'Top Speaker',
       value: topSpeakerDisplay,
       trendUp: null, trend: topSpeakerFull ? 'By total attendance' : 'No data yet',
@@ -457,7 +457,7 @@ function renderStatusBreakdown() {
   if (total === 0) return `<div class="status-donut-wrap">
     <div class="status-donut-title">Status Breakdown</div>
     <div class="empty-state" style="padding:30px 0;border:none">
-      <div class="empty-icon" style="font-size:28px">📊</div>
+      <div class="empty-icon" style="font-size:28px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg></div>
       <div class="empty-title" style="font-size:14px">No data yet</div>
     </div>
   </div>`;
@@ -648,7 +648,7 @@ function renderHome() {
   if (S.webinars.length === 0) {
     // Truly empty — first-time user
     mainContent = `<div class="empty-state">
-      <div class="empty-icon">🎙️</div>
+      <div class="empty-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
       <div class="empty-title">No webinars yet</div>
       <div class="empty-sub">Get started by creating your first webinar session. It only takes a few seconds.</div>
       <button class="btn btn-primary" onclick="openWebinarModal()">
@@ -761,7 +761,7 @@ function renderHome() {
     <div>
       <div class="dash-hero reveal">
         <div>
-          <h1 class="dash-hero-title">${timeMsg} 👋<br>Webinar Intelligence</h1>
+          <h1 class="dash-hero-title">${timeMsg}<br>Webinar Intelligence</h1>
           <p class="dash-hero-sub">Track performance, speaker impact, and audience engagement across every webinar — all in one place.</p>
         </div>
         <div class="dash-hero-actions">
@@ -845,13 +845,13 @@ function webinarCardHTML(w) {
       </div>
       <div class="wb-card-upload-bar">
         ${bothDone
-          ? `<span class="upload-tag has">✓ All data uploaded</span>`
+          ? `<span class="upload-tag has"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> All data uploaded</span>`
           : `
             <span class="upload-tag ${w.has_registration_data?'has':'none'}">
-              ${w.has_registration_data ? '✓' : '○'} Registrations
+              ${w.has_registration_data ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : '○'} Registrations
             </span>
             <span class="upload-tag ${w.has_attendee_data?'has':'none'}">
-              ${w.has_attendee_data ? '✓' : '○'} Attendees
+              ${w.has_attendee_data ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : '○'} Attendees
             </span>`
         }
       </div>
@@ -869,7 +869,7 @@ async function renderWebinarDetail(id) {
     detailCache[id] = w;
     _drawWebinarDetail(w);
   } catch(e) {
-    setContent('<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Failed to load</div></div>');
+    setContent('<div class="empty-state"><div class="empty-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><div class="empty-title">Failed to load</div></div>');
   }
 }
 
@@ -894,7 +894,7 @@ function _drawWebinarDetail(w) {
          ondragover="event.preventDefault();this.classList.add('dragover')"
          ondragleave="this.classList.remove('dragover')"
          ondrop="handleFileDrop(event,${w.id},'registrations')">
-      <div class="upload-card-icon">📤</div>
+      <div class="upload-card-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg></div>
       <div class="upload-card-title">Registration Data</div>
       <div class="upload-card-sub">Upload list of people who registered</div>
       <input type="file" class="upload-file-input" id="reg-file-input"
@@ -911,7 +911,7 @@ function _drawWebinarDetail(w) {
          ondragover="event.preventDefault();this.classList.add('dragover')"
          ondragleave="this.classList.remove('dragover')"
          ondrop="handleFileDrop(event,${w.id},'attendees')">
-      <div class="upload-card-icon">📥</div>
+      <div class="upload-card-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg></div>
       <div class="upload-card-title">Attendee Data</div>
       <div class="upload-card-sub">Upload list of people who attended (e.g. Zoom report)</div>
       <input type="file" class="upload-file-input" id="att-file-input"
@@ -943,7 +943,7 @@ function _drawWebinarDetail(w) {
   const analysisHTML = `
     <div class="analysis-grid">
       <div class="an-stat-card an-stat-dl" ${regDlAttr}>
-        <div class="an-stat-icon" style="background:rgba(59,130,246,0.15)">📝</div>
+        <div class="an-stat-icon" style="background:rgba(59,130,246,0.15)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
         <div style="flex:1">
           <div class="an-stat-val" style="color:var(--c-reg)">${fmt(w.total_registrations)}</div>
           <div class="an-stat-lbl">Registered
@@ -952,7 +952,7 @@ function _drawWebinarDetail(w) {
         </div>
       </div>
       <div class="an-stat-card an-stat-dl" ${attDlAttr}>
-        <div class="an-stat-icon" style="background:rgba(16,185,129,0.15)">✅</div>
+        <div class="an-stat-icon" style="background:rgba(16,185,129,0.15)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
         <div style="flex:1">
           <div class="an-stat-val" style="color:var(--c-att)">${fmt(w.total_attendees)}</div>
           <div class="an-stat-lbl">Attended
@@ -961,21 +961,21 @@ function _drawWebinarDetail(w) {
         </div>
       </div>
       <div class="an-stat-card">
-        <div class="an-stat-icon" style="background:rgba(244,63,94,0.15)">❌</div>
+        <div class="an-stat-icon" style="background:rgba(244,63,94,0.15)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>
         <div><div class="an-stat-val" style="color:var(--c-nosh)">${fmt(noShow)}</div><div class="an-stat-lbl">No-shows</div></div>
       </div>
       <div class="an-stat-card">
-        <div class="an-stat-icon" style="background:rgba(139,92,246,0.15)">📊</div>
+        <div class="an-stat-icon" style="background:rgba(139,92,246,0.15)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg></div>
         <div><div class="an-stat-val" style="color:${rateClr}">${rate}%</div><div class="an-stat-lbl">Attendance Rate</div></div>
       </div>
       ${w.duplicates_removed > 0 ? `
       <div class="an-stat-card">
-        <div class="an-stat-icon" style="background:rgba(245,158,11,0.15)">🔄</div>
+        <div class="an-stat-icon" style="background:rgba(245,158,11,0.15)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></div>
         <div><div class="an-stat-val" style="color:var(--gold)">${fmt(w.duplicates_removed)}</div><div class="an-stat-lbl">Duplicates Removed</div></div>
       </div>` : ''}
       ${w.unmatched_attendees > 0 ? `
       <div class="an-stat-card">
-        <div class="an-stat-icon" style="background:rgba(245,158,11,0.10)">⚠️</div>
+        <div class="an-stat-icon" style="background:rgba(245,158,11,0.10)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
         <div><div class="an-stat-val" style="color:var(--amber)">${fmt(w.unmatched_attendees)}</div><div class="an-stat-lbl">Walk-ins (not registered)</div></div>
       </div>` : ''}
     </div>`;
@@ -1231,7 +1231,7 @@ function renderMonthlyBars(months) {
 /* ── Engagement funnel ──────────────────────────────────────────────────── */
 function renderEngagementFunnel(totalReg, totalAtt, noShow) {
   if (!totalReg) return `<div class="empty-state" style="padding:24px 0;border:none">
-    <div class="empty-icon" style="font-size:24px">📊</div>
+    <div class="empty-icon" style="font-size:24px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg></div>
     <div class="empty-title" style="font-size:13px">No data yet</div>
   </div>`;
   const attPct    = (totalAtt / totalReg * 100).toFixed(1);
@@ -1240,7 +1240,7 @@ function renderEngagementFunnel(totalReg, totalAtt, noShow) {
     <div class="funnel-step" style="--fw:100%;--fc:#4f46e5">
       <div class="funnel-bar"></div>
       <div class="funnel-info">
-        <span class="funnel-label">📝 Registered</span>
+        <span class="funnel-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> Registered</span>
         <span class="funnel-val">${fmt(totalReg)}</span>
         <span class="funnel-pct">100%</span>
       </div>
@@ -1248,7 +1248,7 @@ function renderEngagementFunnel(totalReg, totalAtt, noShow) {
     <div class="funnel-step" style="--fw:${attPct}%;--fc:#10b981">
       <div class="funnel-bar"></div>
       <div class="funnel-info">
-        <span class="funnel-label">✅ Attended</span>
+        <span class="funnel-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Attended</span>
         <span class="funnel-val">${fmt(totalAtt)}</span>
         <span class="funnel-pct">${attPct}%</span>
       </div>
@@ -1256,7 +1256,7 @@ function renderEngagementFunnel(totalReg, totalAtt, noShow) {
     <div class="funnel-step" style="--fw:${noShowPct}%;--fc:#ef4444">
       <div class="funnel-bar"></div>
       <div class="funnel-info">
-        <span class="funnel-label">❌ No-show</span>
+        <span class="funnel-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> No-show</span>
         <span class="funnel-val">${fmt(Math.max(0, noShow))}</span>
         <span class="funnel-pct">${noShowPct}%</span>
       </div>
@@ -1330,32 +1330,32 @@ function renderAnalytics() {
       <!-- KPI strip — 6 metrics -->
       <div class="an-kpi-strip">
         <div class="an-kpi-card">
-          <div class="an-kpi-icon">🎙️</div>
+          <div class="an-kpi-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
           <div class="an-kpi-val" data-countup="${st.total_webinars}">${st.total_webinars}</div>
           <div class="an-kpi-label">Total Webinars</div>
         </div>
         <div class="an-kpi-card">
-          <div class="an-kpi-icon">🎤</div>
+          <div class="an-kpi-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
           <div class="an-kpi-val" data-countup="${st.total_speakers}">${st.total_speakers}</div>
           <div class="an-kpi-label">Speakers</div>
         </div>
         <div class="an-kpi-card">
-          <div class="an-kpi-icon">📝</div>
+          <div class="an-kpi-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
           <div class="an-kpi-val" data-countup="${st.total_registrations}">${fmt(st.total_registrations)}</div>
           <div class="an-kpi-label">Total Registrations</div>
         </div>
         <div class="an-kpi-card an-kpi-card-dl" ${st.total_attendees > 0 ? `onclick="downloadAllAttendees()" title="Download all attendees as CSV"` : ''}>
-          <div class="an-kpi-icon">✅</div>
+          <div class="an-kpi-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
           <div class="an-kpi-val" data-countup="${st.total_attendees}">${fmt(st.total_attendees)}</div>
           <div class="an-kpi-label">Total Attendees${st.total_attendees > 0 ? ` <span class="dl-hint" style="background:rgba(16,185,129,.15);color:#059669">↓ CSV</span>` : ''}</div>
         </div>
         <div class="an-kpi-card">
-          <div class="an-kpi-icon">📅</div>
+          <div class="an-kpi-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
           <div class="an-kpi-val" data-countup="${st.upcoming_webinars}" style="color:var(--gold)">${st.upcoming_webinars}</div>
           <div class="an-kpi-label">Upcoming</div>
         </div>
         <div class="an-kpi-card">
-          <div class="an-kpi-icon">📊</div>
+          <div class="an-kpi-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg></div>
           <div class="an-kpi-val" data-countup="${st.overall_attendance_rate}" style="color:var(--accent)">${st.overall_attendance_rate}</div>
           <div class="an-kpi-label">Avg. Attendance %</div>
         </div>
@@ -1389,7 +1389,7 @@ function renderAnalytics() {
               <div class="an-spk-rate">${sp.avgR > 0 ? fmtPct(sp.avgR) : '—'}</div>
             </div>`).join('') : `
           <div class="empty-state" style="padding:24px 0;border:none">
-            <div class="empty-icon" style="font-size:24px">🎤</div>
+            <div class="empty-icon" style="font-size:24px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
             <div class="empty-title" style="font-size:13px">No speaker data yet</div>
           </div>`}
         </div>
@@ -1485,10 +1485,10 @@ async function renderSpeakerDetail(id) {
           <div class="wb-acc-body">
             <div class="wb-acc-content">
               <div class="bk-metrics">
-                <div class="bk-metric"><span class="bk-metric-icon">📝</span><div><div class="bk-metric-val" style="color:#2563eb">${fmt(w.total_registrations)}</div><div class="bk-metric-lbl">Registered</div></div></div>
-                <div class="bk-metric"><span class="bk-metric-icon">✅</span><div><div class="bk-metric-val" style="color:#059669">${fmt(w.total_attendees)}</div><div class="bk-metric-lbl">Attended</div></div></div>
-                <div class="bk-metric"><span class="bk-metric-icon">❌</span><div><div class="bk-metric-val" style="color:#dc2626">${fmt(noShow)}</div><div class="bk-metric-lbl">No-shows</div></div></div>
-                <div class="bk-metric"><span class="bk-metric-icon">📊</span><div><div class="bk-metric-val" style="color:${rc}">${w.attendance_rate}%</div><div class="bk-metric-lbl">Rate</div></div></div>
+                <div class="bk-metric"><span class="bk-metric-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span><div><div class="bk-metric-val" style="color:#2563eb">${fmt(w.total_registrations)}</div><div class="bk-metric-lbl">Registered</div></div></div>
+                <div class="bk-metric"><span class="bk-metric-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span><div><div class="bk-metric-val" style="color:#059669">${fmt(w.total_attendees)}</div><div class="bk-metric-lbl">Attended</div></div></div>
+                <div class="bk-metric"><span class="bk-metric-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></span><div><div class="bk-metric-val" style="color:#dc2626">${fmt(noShow)}</div><div class="bk-metric-lbl">No-shows</div></div></div>
+                <div class="bk-metric"><span class="bk-metric-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg></span><div><div class="bk-metric-val" style="color:${rc}">${w.attendance_rate}%</div><div class="bk-metric-lbl">Rate</div></div></div>
               </div>
               ${durRows ? `<div class="bk-dur-title">Time Spent in Session</div>${durRows}` : ''}
             </div>
@@ -1513,17 +1513,17 @@ async function renderSpeakerDetail(id) {
               <div><div class="spk-hero-stat-val">${fmt(totalAtt)}</div><div class="spk-hero-stat-lbl">Attendees</div></div>
               <div><div class="spk-hero-stat-val">${avgRate}%</div><div class="spk-hero-stat-lbl">Avg. Rate</div></div>
             </div>
-            ${sp.email ? `<div class="spk-hero-email">✉ ${esc(sp.email)}</div>` : ''}
+            ${sp.email ? `<div class="spk-hero-email"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> ${esc(sp.email)}</div>` : ''}
           </div>
         </div>
         <div class="sec-hd">
           <span class="sec-title">Webinar History</span>
           <span style="font-size:12px;color:var(--text-3)">${sp.total_webinars} total</span>
         </div>
-        ${wbItems || '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No webinars yet</div></div>'}
+        ${wbItems || '<div class="empty-state"><div class="empty-icon"><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.25"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></div><div class="empty-title">No webinars yet</div></div>'}
       </div>`);
   } catch(e) {
-    setContent('<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Failed to load speaker data</div></div>');
+    setContent('<div class="empty-state"><div class="empty-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><div class="empty-title">Failed to load speaker data</div></div>');
   }
 }
 
@@ -1626,7 +1626,7 @@ async function renderLeaderboard(speakerId, webinarId) {
         ${tableHTML}
       </div>`);
   } catch(e) {
-    setContent('<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Failed to load leaderboard</div></div>');
+    setContent('<div class="empty-state"><div class="empty-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><div class="empty-title">Failed to load leaderboard</div></div>');
   }
 }
 
@@ -1903,7 +1903,7 @@ async function runAIAnalysis(webinarId) {
   } catch (e) {
     panel.innerHTML = `
       <div class="ai-panel ai-error">
-        <div class="ai-panel-header">⚠️ <span>${esc(e.message)}</span></div>
+        <div class="ai-panel-header"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> <span>${esc(e.message)}</span></div>
       </div>`;
     if (btn) {
       btn.disabled = false;
@@ -2309,7 +2309,7 @@ function renderAdCards(webinarId, ads) {
           ${ctrLine ? `<div style="font-size:11px;color:var(--text-3);margin-top:6px">${ctrLine}</div>` : ''}
           ${budgetLine ? `<div style="font-size:11px;color:var(--text-3)">${budgetLine}</div>` : ''}
           ${dateRange ? `<div style="font-size:11px;color:var(--text-3)">${dateRange}</div>` : ''}
-          ${ad.landing_url ? `<a href="${esc(ad.landing_url)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent);text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(ad.landing_url)}">🔗 ${esc(ad.landing_url)}</a>` : ''}
+          ${ad.landing_url ? `<a href="${esc(ad.landing_url)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent);text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(ad.landing_url)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> ${esc(ad.landing_url)}</a>` : ''}
           ${ad.notes ? `<div style="font-size:11.5px;color:var(--text-2);border-top:1px solid var(--border);padding-top:6px;margin-top:4px;line-height:1.4">${esc(ad.notes)}</div>` : ''}
         </div>
         <div class="ad-card-foot">
@@ -2662,11 +2662,11 @@ function renderCmdResults(q) {
 
   // Quick actions (always shown when q is empty)
   const actions = [
-    { icon: '➕', title: 'New Webinar',        sub: 'Create a webinar session',           fn: () => { closeCmdPalette(); openWebinarModal(); } },
-    { icon: '🏠', title: 'Dashboard',           sub: 'Go to webinar overview',             fn: () => nav('home') },
-    { icon: '📊', title: 'Analytics',           sub: 'Platform-wide statistics',           fn: () => nav('analytics') },
-    { icon: '🎤', title: 'Speakers',            sub: 'Browse all speakers',                fn: () => nav('speakers') },
-    { icon: '🏆', title: 'Leaderboard',         sub: 'Top attendees by score',             fn: () => nav('leaderboard') },
+    { icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>', title: 'New Webinar',        sub: 'Create a webinar session',           fn: () => { closeCmdPalette(); openWebinarModal(); } },
+    { icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>', title: 'Dashboard',           sub: 'Go to webinar overview',             fn: () => nav('home') },
+    { icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>', title: 'Analytics',           sub: 'Platform-wide statistics',           fn: () => nav('analytics') },
+    { icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>', title: 'Speakers',            sub: 'Browse all speakers',                fn: () => nav('speakers') },
+    { icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>', title: 'Leaderboard',         sub: 'Top attendees by score',             fn: () => nav('leaderboard') },
   ];
 
   // Webinar results

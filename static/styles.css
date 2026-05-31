@@ -1019,7 +1019,7 @@ html.dark ::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.55); }
 }
 .an-stat-card:hover { box-shadow: var(--shadow); transform: translateY(-2px); }
 .an-stat-card:hover::before { opacity: 1; }
-.an-stat-icon { width: 42px; height: 42px; border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+.an-stat-icon { width: 42px; height: 42px; border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .an-stat-val  { font-size: 24px; font-weight: 800; color: var(--text); line-height: 1; }
 .an-stat-lbl  { font-size: 11px; color: var(--text-3); margin-top: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
 
@@ -1035,7 +1035,7 @@ html.dark ::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.55); }
 .upload-card.has-data      { border-style: solid; border-color: rgba(16,185,129,0.50); background: rgba(16,185,129,0.04); }
 .upload-card:hover:not(.has-data) { border-color: var(--accent); background: var(--accent-bg); box-shadow: 0 0 0 4px rgba(79,70,229,0.06); }
 .upload-card.dragover      { border-color: var(--accent); background: var(--accent-bg); box-shadow: 0 0 0 4px rgba(79,70,229,0.10); }
-.upload-card-icon  { width: 52px; height: 52px; border-radius: var(--r); background: var(--bg); display: flex; align-items: center; justify-content: center; font-size: 22px; }
+.upload-card-icon  { width: 52px; height: 52px; border-radius: var(--r); background: var(--bg); display: flex; align-items: center; justify-content: center; }
 .upload-card.has-data .upload-card-icon { background: rgba(16,185,129,0.15); }
 .upload-card-title { font-size: 15px; font-weight: 700; color: var(--text); }
 .upload-card-sub   { font-size: 12px; color: var(--text-3); }
@@ -1151,7 +1151,7 @@ html.dark ::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.55); }
 .spk-hero-stats { display: flex; gap: 28px; flex-wrap: wrap; }
 .spk-hero-stat-val { font-size: 24px; font-weight: 800; background: var(--grad-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
 .spk-hero-stat-lbl { font-size: 11px; color: var(--text-3); }
-.spk-hero-email    { font-size: 12px; color: var(--text-3); margin-top: 10px; }
+.spk-hero-email    { font-size: 12px; color: var(--text-3); margin-top: 10px; display:flex;align-items:center;gap:5px; }
 
 /* Webinar accordion */
 .wb-acc-item { background: var(--card); border: 1px solid var(--border); border-radius: var(--r); margin-bottom: 10px; overflow: hidden; box-shadow: var(--shadow-xs); transition: box-shadow var(--transition); }
@@ -1278,7 +1278,7 @@ html.dark ::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.55); }
 
 /* Empty state */
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 80px 20px; text-align: center; }
-.empty-icon  { font-size: 44px; opacity: 0.7; }
+.empty-icon  { width:52px;height:52px;display:flex;align-items:center;justify-content:center;opacity:0.25;color:var(--text-3); }
 .empty-title { font-size: 16px; font-weight: 700; color: var(--text); }
 .empty-sub   { font-size: 13px; color: var(--text-3); }
 
@@ -1432,7 +1432,7 @@ html.dark ::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.55); }
   .an-card.full { grid-column: unset; }
   .stats-strip  { padding: 14px 16px; }
   .ss-item      { padding: 0 12px; }
-  .ss-val       { font-size: 22px; }
+  .ss-val       { }
   .content      { padding: 16px; }
   .upload-section { grid-template-columns: 1fr; }
 }
@@ -2040,7 +2040,7 @@ html.dark .status-pill input:checked + .sp-content {
   transition: box-shadow var(--transition), transform var(--transition);
 }
 .an-kpi-card:hover { box-shadow: var(--shadow-sm); transform: translateY(-1px); }
-.an-kpi-icon  { font-size: 18px; margin-bottom: 6px; }
+.an-kpi-icon  { width:36px;height:36px;display:flex;align-items:center;justify-content:center;margin-bottom:6px;color:var(--text-2); }
 .an-kpi-val   { font-size: 22px; font-weight: 800; color: var(--text); letter-spacing: -0.4px; }
 .an-kpi-label { font-size: 11px; color: var(--text-2); font-weight: 500; margin-top: 3px; }
 
