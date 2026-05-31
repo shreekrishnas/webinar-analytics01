@@ -238,12 +238,15 @@ def get_all_webinars(db: Session) -> List[schemas.WebinarSummary]:
             COALESCE(w.icp, 'Others')            AS icp,
             COALESCE(w.speaker_id, 0)           AS speaker_id,
             COALESCE(s.name, 'Unknown')          AS speaker_name,
+            COALESCE(w.co_speaker_id, 0)        AS co_speaker_id,
+            COALESCE(cs.name, '')               AS co_speaker_name,
             COALESCE(r_stats.total_reg,  0)      AS total_registrations,
             COALESCE(a_stats.total_att,  0)      AS total_attendees,
             CASE WHEN real_r.real_reg  > 0 THEN 1 ELSE 0 END AS has_reg,
             CASE WHEN real_a.real_att  > 0 THEN 1 ELSE 0 END AS has_att
         FROM webinars w
         LEFT JOIN speakers s ON s.id = w.speaker_id
+        LEFT JOIN speakers cs ON cs.id = w.co_speaker_id
         LEFT JOIN (
             SELECT webinar_id, COUNT(*) AS total_reg
             FROM registrations
@@ -283,6 +286,7 @@ def get_all_webinars(db: Session) -> List[schemas.WebinarSummary]:
             time=row.time,
             speaker_name=row.speaker_name,
             speaker_id=int(row.speaker_id or 0),
+            co_speaker_name=getattr(row, 'co_speaker_name', '') or '',
             total_registrations=reg,
             total_attendees=att,
             attendance_rate=rate,
@@ -305,8 +309,10 @@ def get_all_speakers(db: Session) -> List[schemas.Speaker]:
     speakers = db.query(models.Speaker).order_by(models.Speaker.name).all()
     result = []
     for sp in speakers:
+        # Count webinars where speaker is primary OR co-speaker
         count = db.query(func.count(models.Webinar.id)).filter(
-            models.Webinar.speaker_id == sp.id
+            (models.Webinar.speaker_id == sp.id) |
+            (models.Webinar.co_speaker_id == sp.id)
         ).scalar() or 0
         result.append(
             schemas.Speaker(id=sp.id, name=sp.name, email=sp.email, bio=sp.bio, total_webinars=count)
@@ -321,7 +327,10 @@ def get_speaker_detail(db: Session, speaker_id: int) -> Optional[schemas.Speaker
 
     webinars = (
         db.query(models.Webinar)
-        .filter(models.Webinar.speaker_id == speaker_id)
+        .filter(
+            (models.Webinar.speaker_id == speaker_id) |
+            (models.Webinar.co_speaker_id == speaker_id)
+        )
         .order_by(models.Webinar.date.desc())
         .all()
     )

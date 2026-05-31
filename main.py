@@ -254,7 +254,7 @@ async def chat(payload: dict, db: Session = Depends(get_db)):
 
     context = "\n".join(ctx_parts)
 
-    system_prompt = f"""You are WebinarIQ Assistant — an AI analyst for Right Horizons Financial Services webinar platform.
+    system_prompt = f"""You are WebinarIQ Assistant, an AI analyst for Right Horizons Financial Services webinar platform.
 You have access to live webinar data. Answer questions clearly, use numbers, be specific and concise.
 If asked about a specific webinar, speaker, or ICP, use the data provided.
 Keep responses under 200 words unless a detailed breakdown is explicitly asked for.
@@ -305,7 +305,7 @@ Use their exact framing style and topic DNA:
 SPEAKER PROFILES:
 - Rachna Rego: Retirement income (SWP, ₹1L monthly), PMS for wealth milestones, women & finance, child education savings, behavioral finance. Frames topics as personal journeys ("How I would...", "What changes now?", "The Real Math"). Never generic.
 - Anil Rego: Macro events (budget, RBI, tariffs, geopolitics), ESOPs, portfolio repositioning, market timing. Reacts to breaking news. Frames as urgent decisions ("After X, what now?", "The tax trap", "Smart money is doing this").
-- Sunil Kawariya: NRI investing (GIFT City, global asset allocation), large corpus (₹10Cr+), structured products, SIF, tax-efficient wealth. Frames as exclusive insider knowledge ("The strategy most NRIs miss", "₹X Crore — what changes").
+- Sunil Kawariya: NRI investing (GIFT City, global asset allocation), large corpus (₹10Cr+), structured products, SIF, tax-efficient wealth. Frames as exclusive insider knowledge ("The strategy most NRIs miss", "₹X Crore , what changes").
 - Preethi Shukla: Special needs children financial planning (3×), SIP mechanics, tax-efficient investing, corpus building. Frames as step-by-step systems and parent-focused empathy ("The gap nobody talks about", "Step-by-step for parents").
 - Prabhat Ranjan: Equity markets, small/midcap, sectoral themes, PMS strategy, FY outlook. Co-presents with Vijay Chauhan. Frames as research-driven conviction ("Hidden in the data", "3 sectors the market hasn't priced in").
 
@@ -313,12 +313,12 @@ CONTEXT for {today}:
 - India-Pakistan tensions post-Operation Sindoor, ceasefire holding but uncertainty remains
 - RBI rate cut cycle beginning, repo rate moving lower
 - US-India trade deal negotiations ongoing, tariff clarity improving
-- GIFT City rapidly expanding — new fund categories approved
+- GIFT City rapidly expanding, new fund categories approved
 - Nifty near all-time highs, mid/smallcaps corrected 15-20% from peaks
-- SIF (Specialised Investment Funds) — new SEBI category launched
-- Budget FY27 — higher capital gains tax on equity, new NPS rules
+- SIF (Specialised Investment Funds), new SEBI category launched
+- Budget FY27: higher capital gains tax on equity, new NPS rules
 - Rupee stabilizing at 84-85/USD
-- Gold at record highs — ₹9,000+ per gram
+- Gold at record highs, ₹9,000+ per gram
 - NPS Vatsalya (children's NPS) gaining traction
 
 Return a JSON array with this exact structure:
@@ -329,7 +329,7 @@ Return a JSON array with this exact structure:
     "topics": [
       {{
         "title": "exact webinar title",
-        "hook": "one sharp sentence — why this topic right now, what's the tension",
+        "hook": "one sharp sentence on why this topic is urgent right now and the tension it creates",
         "angle": "the unique Right Horizons angle that makes this different from generic content",
         "expected": "High/Medium registration expected based on past patterns"
       }}
@@ -338,7 +338,7 @@ Return a JSON array with this exact structure:
 ]
 
 Rules:
-- Titles must feel like Rachna/Anil/Sunil/Preethi/Prabhat would say them — use ₹ figures, timeframes, specific scenarios
+- Titles must feel like Rachna/Anil/Sunil/Preethi/Prabhat would say them, use ₹ figures, timeframes, specific scenarios
 - No generic titles like "How to Invest Wisely" or "Understanding Mutual Funds"
 - Hook must reference something happening TODAY in markets/news
 - Return ONLY valid JSON, no markdown"""
@@ -424,7 +424,7 @@ async def _do_analyze(webinar_id: int, db):
     source_breakdown = {r[0]: r[1] for r in sources}
     top_source = max(source_breakdown, key=source_breakdown.get) if source_breakdown else "direct"
 
-    # Registration timeline — days before webinar
+    # Registration timeline: days before webinar
     reg_times = db.execute(
         text("SELECT registered_at FROM registrations WHERE webinar_id=:wid ORDER BY registered_at"),
         {"wid": webinar_id}
@@ -533,7 +533,7 @@ The sections must cover exactly these 5 topics in order:
 4. Speaker Performance (vs their own average and platform average)
 5. Timing & Momentum (last-minute registrations, registration window)
 
-Be specific — use the actual numbers. Be direct, not generic. Tone: professional but actionable.
+Be specific, use the actual numbers. Be direct, not generic. Tone: professional but actionable.
 
 Webinar data:
 {json.dumps(metrics, indent=2, default=lambda o: float(o) if hasattr(o,'__float__') else str(o))}

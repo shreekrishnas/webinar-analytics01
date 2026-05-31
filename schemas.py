@@ -110,6 +110,7 @@ class WebinarSummary(BaseModel):
     time: Optional[str] = None
     speaker_name: str
     speaker_id: int
+    co_speaker_name: Optional[str] = ""
     total_registrations: int
     total_attendees: int
     attendance_rate: float
