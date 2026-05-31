@@ -1913,59 +1913,253 @@ async function runAIAnalysis(webinarId) {
 }
 
 function renderAIPanel(panel, data) {
-  const a = data.analysis;
-  const gradeColor = { A:'#10b981', B:'#3b82f6', C:'#f59e0b', D:'#ef4444' }[a.grade] || '#94a3b8';
+  const a  = data.analysis;
+  const m  = data.metrics;
+  const gc = { A:'#10b981', B:'#3b82f6', C:'#f59e0b', D:'#ef4444' };
+  const gradeColor = gc[a.grade] || '#94a3b8';
 
-  const sectionsHTML = (a.sections || []).map(s => `
-    <div class="ai-section">
-      <div class="ai-section-icon">${esc(s.icon)}</div>
-      <div class="ai-section-body">
-        <div class="ai-section-title">${esc(s.title)}</div>
-        <div class="ai-section-insight">${esc(s.insight)}</div>
-        <div class="ai-section-highlight">${esc(s.highlight)}</div>
+  // ── helpers ──────────────────────────────────────────────────────────────
+  const pct  = (n, d) => d ? Math.round(n / d * 100) : 0;
+  const fmtN = n => n >= 1000 ? (n/1000).toFixed(1)+'k' : String(n || 0);
+
+  // ── Funnel data ───────────────────────────────────────────────────────────
+  const regs    = m.registrations || 0;
+  const attds   = m.attendees     || 0;
+  const engaged = (m.engaged_45plus_min || {}).count || 0;
+  const attRate = regs ? pct(attds, regs) : 0;
+  const engRate = attds ? pct(engaged, attds) : 0;
+
+  // ── Duration bars ─────────────────────────────────────────────────────────
+  const durTotal = attds || 1;
+  const durEngaged  = (m.engaged_45plus_min   || {}).count || 0;
+  const durModerate = (m.moderate_15_44_min   || {}).count || 0;
+  const durDropped  = (m.dropped_under_15_min || {}).count || 0;
+  const durBars = [
+    { label:'45+ min (Engaged)',   count: durEngaged,  color:'#10b981' },
+    { label:'15–44 min (Moderate)',count: durModerate, color:'#3b82f6' },
+    { label:'<15 min (Dropped)',   count: durDropped,  color:'#ef4444' },
+  ].map(b => {
+    const w = Math.round(b.count / durTotal * 100);
+    return `<div class="ai-dur-row">
+      <span class="ai-dur-lbl">${b.label}</span>
+      <div class="ai-dur-track">
+        <div class="ai-dur-fill" style="width:${w}%;background:${b.color}" data-w="${w}"></div>
       </div>
+      <span class="ai-dur-stat" style="color:${b.color}">${w}%</span>
+      <span class="ai-dur-cnt">${fmtN(b.count)}</span>
+    </div>`;
+  }).join('');
+
+  // ── Source donut ──────────────────────────────────────────────────────────
+  const srcColors = { direct:'#6366f1', email:'#3b82f6', social:'#10b981', referral:'#f59e0b' };
+  const srcData   = m.registration_sources || {};
+  const srcTotal  = Object.values(srcData).reduce((s, v) => s + v, 0) || 1;
+  const srcItems  = Object.entries(srcData).sort((a,b) => b[1]-a[1]);
+  let  donutOffset = 25; // start at top
+  const CIRC = 2 * Math.PI * 36; // r=36
+  const donutSegs = srcItems.map(([src, cnt]) => {
+    const frac = cnt / srcTotal;
+    const dash = frac * CIRC;
+    const gap  = CIRC - dash;
+    const seg  = `<circle cx="44" cy="44" r="36" fill="none"
+      stroke="${srcColors[src] || '#94a3b8'}" stroke-width="13"
+      stroke-dasharray="${dash.toFixed(1)} ${gap.toFixed(1)}"
+      stroke-dashoffset="${-donutOffset}" transform="rotate(-90 44 44)"/>`;
+    donutOffset += dash;
+    return seg;
+  }).join('');
+  const donutLegend = srcItems.map(([src, cnt]) => `
+    <div class="ai-src-leg">
+      <span class="ai-src-dot" style="background:${srcColors[src]||'#94a3b8'}"></span>
+      <span class="ai-src-name">${src}</span>
+      <span class="ai-src-pct">${pct(cnt, srcTotal)}%</span>
     </div>`).join('');
 
+  // ── Benchmark bars ────────────────────────────────────────────────────────
+  const platRate  = m.platform_avg_attendance_rate_pct || 0;
+  const platRegs  = m.platform_avg_registrations       || 1;
+  const spkRate   = m.speaker_avg_attendance_rate_pct;
+  const spkRegs   = m.speaker_avg_registrations;
+  const maxRate   = Math.max(attRate, platRate, spkRate || 0, 1);
+  const maxRegs   = Math.max(regs, platRegs, spkRegs || 0, 1);
+
+  function benchBar(label, val, max, color, suffix='') {
+    const w = Math.round(val / max * 100);
+    return `<div class="ai-bench-row">
+      <span class="ai-bench-lbl">${label}</span>
+      <div class="ai-bench-track">
+        <div class="ai-bench-fill" style="width:${w}%;background:${color}" data-w="${w}"></div>
+      </div>
+      <span class="ai-bench-val" style="color:${color}">${typeof val==='number'?val.toFixed(1):val}${suffix}</span>
+    </div>`;
+  }
+
+  const rateBarThis = benchBar('This webinar', attRate, maxRate, gradeColor, '%');
+  const rateBarPlat = benchBar('Platform avg', platRate, maxRate, '#64748b', '%');
+  const rateBarSpk  = spkRate != null
+    ? benchBar(`${esc(m.speaker||'')} avg`, spkRate, maxRate, '#8b5cf6', '%')
+    : '';
+  const regBarThis  = benchBar('This webinar', regs, maxRegs, gradeColor);
+  const regBarPlat  = benchBar('Platform avg', platRegs, maxRegs, '#64748b');
+  const regBarSpk   = spkRegs != null
+    ? benchBar(`${esc(m.speaker||'')} avg`, spkRegs, maxRegs, '#8b5cf6')
+    : '';
+
+  // ── Gauge SVG ─────────────────────────────────────────────────────────────
+  const gaugeR = 38, gaugeCx = 50, gaugeCy = 54;
+  const gaugeLen = Math.PI * gaugeR; // semicircle
+  const gaugeFill = (attRate / 100) * gaugeLen;
+  const gaugeGap  = gaugeLen - gaugeFill;
+
+  // ── Recommendations ───────────────────────────────────────────────────────
   const recsHTML = (a.recommendations || []).map((r, i) => `
     <div class="ai-rec">
-      <span class="ai-rec-num">${i + 1}</span>
+      <span class="ai-rec-num">${i+1}</span>
       <span>${esc(r)}</span>
     </div>`).join('');
 
   panel.innerHTML = `
-    <div class="ai-panel">
-      <div class="ai-panel-header">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
-        <span>AI Analysis</span>
-        <span class="ai-powered-by">Powered by Claude</span>
+  <div class="ai-panel ai-panel-v2">
+
+    <!-- Header -->
+    <div class="ai-panel-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+      <span>AI Analysis</span>
+      <span class="ai-powered-by">Powered by Groq · LLaMA 3.3 70B</span>
+    </div>
+
+    <!-- Grade + Gauge row -->
+    <div class="ai-top-row">
+
+      <!-- Grade card -->
+      <div class="ai-grade-card">
+        <div class="ai-grade-ring" style="--gc:${gradeColor}">
+          <svg viewBox="0 0 100 100" class="ai-ring-svg">
+            <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="8"/>
+            <circle cx="50" cy="50" r="40" fill="none" stroke="${gradeColor}" stroke-width="8"
+              stroke-linecap="round"
+              stroke-dasharray="${(attRate/100*251.2).toFixed(1)} 251.2"
+              transform="rotate(-90 50 50)"
+              style="transition:stroke-dasharray 1s ease"/>
+            <text x="50" y="46" text-anchor="middle" fill="${gradeColor}" font-size="28" font-weight="800">${esc(a.grade)}</text>
+            <text x="50" y="62" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="9">${esc(a.grade_label).toUpperCase()}</text>
+          </svg>
+        </div>
+        <div class="ai-grade-summary">${esc(a.score_summary)}</div>
       </div>
 
-      <!-- Grade banner -->
-      <div class="ai-grade-banner">
-        <div class="ai-grade-circle" style="border-color:${gradeColor};color:${gradeColor}">${esc(a.grade)}</div>
-        <div>
-          <div class="ai-grade-label" style="color:${gradeColor}">${esc(a.grade_label)}</div>
-          <div class="ai-score-summary">${esc(a.score_summary)}</div>
+      <!-- Attendance funnel -->
+      <div class="ai-funnel-card">
+        <div class="ai-card-title">Audience Funnel</div>
+        <div class="ai-funnel">
+          <div class="ai-funnel-row">
+            <span class="ai-funnel-label">Registered</span>
+            <div class="ai-funnel-bar-wrap">
+              <div class="ai-funnel-bar" style="width:100%;background:linear-gradient(90deg,#6366f1,#818cf8)">
+                <span>${fmtN(regs)}</span>
+              </div>
+            </div>
+          </div>
+          <div class="ai-funnel-row">
+            <span class="ai-funnel-label">Attended</span>
+            <div class="ai-funnel-bar-wrap">
+              <div class="ai-funnel-bar ai-funnel-att" style="width:${attRate}%;background:linear-gradient(90deg,#10b981,#34d399)" data-w="${attRate}">
+                <span>${fmtN(attds)} <em>${attRate}%</em></span>
+              </div>
+            </div>
+          </div>
+          <div class="ai-funnel-row">
+            <span class="ai-funnel-label">Engaged 45m+</span>
+            <div class="ai-funnel-bar-wrap">
+              <div class="ai-funnel-bar ai-funnel-eng" style="width:${Math.round(attRate*engRate/100)}%;background:linear-gradient(90deg,#f59e0b,#fbbf24)" data-w="${Math.round(attRate*engRate/100)}">
+                <span>${fmtN(engaged)} <em>${engRate}%</em></span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+    </div>
 
-      <!-- 5 sections -->
-      <div class="ai-sections">
-        ${sectionsHTML}
+    <!-- Charts row -->
+    <div class="ai-charts-row">
+
+      <!-- Duration breakdown -->
+      <div class="ai-chart-card">
+        <div class="ai-card-title">⏱ Time in Session</div>
+        <div class="ai-dur-chart">${durBars}</div>
+        <div class="ai-avg-dur">Avg session: <strong>${m.avg_session_duration_min || 0} min</strong></div>
       </div>
 
-      <!-- Recommendations -->
-      <div class="ai-recs-block">
-        <div class="ai-recs-title">💡 Recommendations</div>
+      <!-- Source donut -->
+      <div class="ai-chart-card">
+        <div class="ai-card-title">📣 Registration Sources</div>
+        <div class="ai-donut-wrap">
+          <svg viewBox="0 0 88 88" class="ai-donut-svg">
+            <circle cx="44" cy="44" r="36" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="13"/>
+            ${donutSegs}
+            <text x="44" y="41" text-anchor="middle" fill="white" font-size="13" font-weight="700">${fmtN(regs)}</text>
+            <text x="44" y="53" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="7">TOTAL</text>
+          </svg>
+          <div class="ai-src-legend">${donutLegend}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Benchmark -->
+    <div class="ai-bench-card">
+      <div class="ai-card-title">📊 Benchmark Comparison</div>
+      <div class="ai-bench-grid">
+        <div>
+          <div class="ai-bench-group-title">Attendance Rate</div>
+          ${rateBarThis}${rateBarSpk}${rateBarPlat}
+        </div>
+        <div>
+          <div class="ai-bench-group-title">Registrations</div>
+          ${regBarThis}${regBarSpk}${regBarPlat}
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Insights from LLM -->
+    <div class="ai-insights-card">
+      <div class="ai-card-title">🧠 AI Insights</div>
+      <div class="ai-insights-grid">
+        ${(a.sections||[]).map(s => `
+        <div class="ai-insight-chip">
+          <div class="ai-insight-icon">${esc(s.icon)}</div>
+          <div>
+            <div class="ai-insight-title">${esc(s.title)}</div>
+            <div class="ai-insight-txt">${esc(s.insight)}</div>
+            <span class="ai-insight-hl">${esc(s.highlight)}</span>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- Recommendations + Verdict -->
+    <div class="ai-bottom-row">
+      <div class="ai-recs-card">
+        <div class="ai-card-title">💡 Recommendations</div>
         ${recsHTML}
       </div>
-
-      <!-- Verdict -->
-      <div class="ai-verdict">
-        <div class="ai-verdict-label">AI Verdict</div>
+      <div class="ai-verdict-card">
+        <div class="ai-card-title">🎯 AI Verdict</div>
         <div class="ai-verdict-text">${esc(a.verdict)}</div>
       </div>
-    </div>`;
+    </div>
+
+  </div>`;
+
+  // Animate bars after render
+  requestAnimationFrame(() => {
+    panel.querySelectorAll('[data-w]').forEach(el => {
+      el.style.width = '0%';
+      requestAnimationFrame(() => {
+        el.style.transition = 'width 0.9s cubic-bezier(.4,0,.2,1)';
+        el.style.width = el.dataset.w + '%';
+      });
+    });
+  });
 }
 
 function downloadRegistrations(webinarId) {
