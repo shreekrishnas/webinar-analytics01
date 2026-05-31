@@ -178,8 +178,19 @@ async def upload_attendees(
 # ── AI Webinar Analysis ───────────────────────────────────────────────────────
 
 @app.post("/api/webinars/{webinar_id}/analyze")
-async def analyze_webinar(webinar_id: int, db: Session = Depends(get_db)):
+async def analyze_webinar(webinar_id: int, db: Session = Depends(get_db)):  # noqa: C901
     """Run AI-powered analysis on a webinar using Claude."""
+    import os, json, traceback
+    from sqlalchemy import text
+    try:
+        return await _do_analyze(webinar_id, db)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
+
+
+async def _do_analyze(webinar_id: int, db):
     import os, json
     from sqlalchemy import text
 
