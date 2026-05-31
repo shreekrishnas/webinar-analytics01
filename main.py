@@ -759,8 +759,12 @@ def delete_webinar_ad(webinar_id: int, ad_id: int, db: Session = Depends(get_db)
 
 @app.get("/api/speakers", response_model=List[schemas.Speaker])
 def list_speakers(response: Response, db: Session = Depends(get_db)):
+    import traceback
     response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=120"
-    return crud.get_all_speakers(db)
+    try:
+        return crud.get_all_speakers(db)
+    except Exception:
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
 @app.get("/api/speakers/{speaker_id}", response_model=schemas.SpeakerDetail)
