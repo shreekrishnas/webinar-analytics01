@@ -175,6 +175,199 @@ async def upload_attendees(
         raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
+# ── AI Webinar Analysis ───────────────────────────────────────────────────────
+
+@app.post("/api/webinars/{webinar_id}/analyze")
+async def analyze_webinar(webinar_id: int, db: Session = Depends(get_db)):
+    """Run AI-powered analysis on a webinar using Claude."""
+    import os, json
+    from sqlalchemy import text
+
+    w = db.query(models.Webinar).filter(models.Webinar.id == webinar_id).first()
+    if not w:
+        raise HTTPException(status_code=404, detail="Webinar not found")
+
+    speaker = db.query(models.Speaker).filter(models.Speaker.id == w.speaker_id).first()
+    speaker_name = speaker.name if speaker else "Unknown"
+
+    # ── Gather metrics ────────────────────────────────────────────────────────
+    reg_count = db.execute(
+        text("SELECT COUNT(*) FROM registrations WHERE webinar_id=:wid"), {"wid": webinar_id}
+    ).scalar() or 0
+
+    att_count = db.execute(
+        text("SELECT COUNT(*) FROM attendances WHERE webinar_id=:wid AND attended=1"), {"wid": webinar_id}
+    ).scalar() or 0
+
+    att_rate = round(att_count / reg_count * 100, 1) if reg_count else 0
+
+    # Duration breakdown
+    durations = db.execute(
+        text("SELECT duration_minutes FROM attendances WHERE webinar_id=:wid AND attended=1 AND duration_minutes IS NOT NULL"),
+        {"wid": webinar_id}
+    ).fetchall()
+    dur_vals = [r[0] for r in durations if r[0] is not None]
+    avg_duration = round(sum(dur_vals) / len(dur_vals), 1) if dur_vals else 0
+    engaged     = sum(1 for d in dur_vals if d >= 45)   # stayed 45+ min
+    moderate    = sum(1 for d in dur_vals if 15 <= d < 45)
+    dropped     = sum(1 for d in dur_vals if d < 15)
+    pct_engaged = round(engaged / len(dur_vals) * 100, 1) if dur_vals else 0
+
+    # Source breakdown
+    sources = db.execute(
+        text("SELECT source, COUNT(*) FROM registrations WHERE webinar_id=:wid GROUP BY source"),
+        {"wid": webinar_id}
+    ).fetchall()
+    source_breakdown = {r[0]: r[1] for r in sources}
+    top_source = max(source_breakdown, key=source_breakdown.get) if source_breakdown else "direct"
+
+    # Registration timeline — days before webinar
+    reg_times = db.execute(
+        text("SELECT registered_at FROM registrations WHERE webinar_id=:wid ORDER BY registered_at"),
+        {"wid": webinar_id}
+    ).fetchall()
+    last_day_regs = 0
+    if reg_times and w.date:
+        from datetime import datetime, date
+        webinar_date = datetime.fromisoformat(str(w.date)).date() if isinstance(w.date, str) else w.date
+        for (rt,) in reg_times:
+            try:
+                reg_date = datetime.fromisoformat(str(rt)).date() if rt else None
+                if reg_date and (webinar_date - reg_date).days <= 1:
+                    last_day_regs += 1
+            except Exception:
+                pass
+    pct_lastday = round(last_day_regs / reg_count * 100, 1) if reg_count else 0
+
+    # Platform benchmarks (all completed webinars)
+    bench = db.execute(text("""
+        SELECT
+          AVG(att_c * 1.0 / NULLIF(reg_c,0)) as avg_rate,
+          AVG(reg_c) as avg_regs
+        FROM (
+          SELECT w2.id,
+            (SELECT COUNT(*) FROM registrations r WHERE r.webinar_id=w2.id) as reg_c,
+            (SELECT COUNT(*) FROM attendances a WHERE a.webinar_id=w2.id AND a.attended=1) as att_c
+          FROM webinars w2 WHERE w2.status='completed'
+        ) x WHERE reg_c > 0
+    """)).fetchone()
+    platform_avg_rate = round((bench[0] or 0) * 100, 1)
+    platform_avg_regs = round(bench[1] or 0)
+
+    # Speaker benchmarks (this speaker's other webinars)
+    spk_bench = db.execute(text("""
+        SELECT
+          AVG(att_c * 1.0 / NULLIF(reg_c,0)) as spk_avg_rate,
+          AVG(reg_c) as spk_avg_regs,
+          COUNT(*) as spk_webinar_count
+        FROM (
+          SELECT w2.id,
+            (SELECT COUNT(*) FROM registrations r WHERE r.webinar_id=w2.id) as reg_c,
+            (SELECT COUNT(*) FROM attendances a WHERE a.webinar_id=w2.id AND a.attended=1) as att_c
+          FROM webinars w2
+          WHERE w2.speaker_id=:spk_id AND w2.id != :wid AND w2.status='completed'
+        ) x WHERE reg_c > 0
+    """), {"spk_id": w.speaker_id, "wid": webinar_id}).fetchone()
+    spk_avg_rate = round((spk_bench[0] or 0) * 100, 1) if spk_bench[0] else None
+    spk_avg_regs = round(spk_bench[1] or 0) if spk_bench[1] else None
+    spk_webinar_count = spk_bench[2] or 0
+
+    # Performance grade
+    if att_rate >= 50: grade = "A"
+    elif att_rate >= 35: grade = "B"
+    elif att_rate >= 20: grade = "C"
+    else: grade = "D"
+
+    # ── Build Claude prompt ───────────────────────────────────────────────────
+    metrics = {
+        "webinar_title": w.title,
+        "date": str(w.date),
+        "speaker": speaker_name,
+        "topic": w.description or "",
+        "registrations": reg_count,
+        "attendees": att_count,
+        "no_shows": reg_count - att_count,
+        "attendance_rate_pct": att_rate,
+        "platform_avg_attendance_rate_pct": platform_avg_rate,
+        "platform_avg_registrations": platform_avg_regs,
+        "performance_grade": grade,
+        "avg_session_duration_min": avg_duration,
+        "engaged_45plus_min": {"count": engaged, "pct": pct_engaged},
+        "moderate_15_44_min": {"count": moderate},
+        "dropped_under_15_min": {"count": dropped},
+        "registration_sources": source_breakdown,
+        "top_source": top_source,
+        "last_day_registrations_pct": pct_lastday,
+        "speaker_other_webinars": spk_webinar_count,
+        "speaker_avg_attendance_rate_pct": spk_avg_rate,
+        "speaker_avg_registrations": spk_avg_regs,
+    }
+
+    prompt = f"""You are an expert webinar analytics consultant for Right Horizons, a financial advisory firm.
+
+Analyze this webinar performance data and return a JSON object with exactly these keys:
+
+{{
+  "grade": "A/B/C/D",
+  "grade_label": "one phrase like Excellent / Good / Needs Work / Poor",
+  "score_summary": "one sentence overall verdict (max 20 words)",
+  "sections": [
+    {{
+      "title": "section title",
+      "icon": "single emoji",
+      "insight": "2-3 sentence insight specific to this webinar's numbers",
+      "highlight": "one short key stat or takeaway (max 10 words)"
+    }}
+  ],
+  "recommendations": ["recommendation 1", "recommendation 2", "recommendation 3"],
+  "verdict": "3-4 sentence plain-English summary: what went well, what to improve, one specific action"
+}}
+
+The sections must cover exactly these 5 topics in order:
+1. Audience Reach (registrations vs platform average)
+2. Engagement Quality (attendance rate, session duration, drop-offs)
+3. Registration Channels (which source drove the most sign-ups)
+4. Speaker Performance (vs their own average and platform average)
+5. Timing & Momentum (last-minute registrations, registration window)
+
+Be specific — use the actual numbers. Be direct, not generic. Tone: professional but actionable.
+
+Webinar data:
+{json.dumps(metrics, indent=2)}
+
+Return ONLY valid JSON, no markdown, no explanation."""
+
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="GROQ_API_KEY not configured")
+
+    try:
+        from groq import Groq
+        client = Groq(api_key=api_key)
+        message = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            max_tokens=1200,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw = message.choices[0].message.content.strip()
+        # Strip markdown code fences if Claude wraps in them
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        analysis = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail=f"AI returned invalid JSON: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI analysis failed: {e}")
+
+    return {
+        "webinar_id": webinar_id,
+        "metrics": metrics,
+        "analysis": analysis
+    }
+
+
 # ── Registrations download ───────────────────────────────────────────────────
 
 @app.get("/api/webinars/{webinar_id}/registrations/download")

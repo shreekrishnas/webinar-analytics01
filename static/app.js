@@ -1027,6 +1027,11 @@ function _drawWebinarDetail(w) {
             </div>
             <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
               <span class="wb-badge ${badgeCls}" style="font-size:12px;padding:5px 14px">${w.status}</span>
+              ${w.total_registrations > 0 ? `
+              <button class="btn-ai-analyze" id="ai-analyze-btn" onclick="runAIAnalysis(${w.id})">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+                Analyze with AI
+              </button>` : ''}
               <button class="wb-card-del" style="width:32px;height:32px" title="Delete webinar"
                 onclick="confirmDeleteWebinar(${w.id},'${safeTitle}')">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -1060,6 +1065,9 @@ function _drawWebinarDetail(w) {
         ${durRows}
       </div>` : ''}
       ` : ''}
+
+      <!-- AI Analysis Panel -->
+      <div id="ai-analysis-panel"></div>
 
       ${logsHTML}
 
@@ -1854,6 +1862,110 @@ function _triggerDownload(url) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+}
+
+/* ── AI Analysis ─────────────────────────────────────────────────────────── */
+async function runAIAnalysis(webinarId) {
+  const btn   = document.getElementById('ai-analyze-btn');
+  const panel = document.getElementById('ai-analysis-panel');
+  if (!panel) return;
+
+  // Loading state
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<svg class="spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg> Analyzing…`;
+  }
+  panel.innerHTML = `
+    <div class="ai-panel ai-loading">
+      <div class="ai-panel-header">
+        <svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg>
+        <span>Running AI analysis…</span>
+      </div>
+      <div class="ai-shimmer-rows">
+        <div class="ai-shimmer"></div><div class="ai-shimmer" style="width:75%"></div>
+        <div class="ai-shimmer" style="width:90%"></div><div class="ai-shimmer" style="width:60%"></div>
+      </div>
+    </div>`;
+
+  try {
+    const res = await fetch(`/api/webinars/${webinarId}/analyze`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || 'Analysis failed');
+    }
+    const data = await res.json();
+    renderAIPanel(panel, data);
+    if (btn) {
+      btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> Analysis Done`;
+      btn.classList.add('ai-done');
+    }
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    panel.innerHTML = `
+      <div class="ai-panel ai-error">
+        <div class="ai-panel-header">⚠️ <span>${esc(e.message)}</span></div>
+      </div>`;
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg> Retry Analysis`;
+    }
+  }
+}
+
+function renderAIPanel(panel, data) {
+  const a = data.analysis;
+  const gradeColor = { A:'#10b981', B:'#3b82f6', C:'#f59e0b', D:'#ef4444' }[a.grade] || '#94a3b8';
+
+  const sectionsHTML = (a.sections || []).map(s => `
+    <div class="ai-section">
+      <div class="ai-section-icon">${esc(s.icon)}</div>
+      <div class="ai-section-body">
+        <div class="ai-section-title">${esc(s.title)}</div>
+        <div class="ai-section-insight">${esc(s.insight)}</div>
+        <div class="ai-section-highlight">${esc(s.highlight)}</div>
+      </div>
+    </div>`).join('');
+
+  const recsHTML = (a.recommendations || []).map((r, i) => `
+    <div class="ai-rec">
+      <span class="ai-rec-num">${i + 1}</span>
+      <span>${esc(r)}</span>
+    </div>`).join('');
+
+  panel.innerHTML = `
+    <div class="ai-panel">
+      <div class="ai-panel-header">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+        <span>AI Analysis</span>
+        <span class="ai-powered-by">Powered by Claude</span>
+      </div>
+
+      <!-- Grade banner -->
+      <div class="ai-grade-banner">
+        <div class="ai-grade-circle" style="border-color:${gradeColor};color:${gradeColor}">${esc(a.grade)}</div>
+        <div>
+          <div class="ai-grade-label" style="color:${gradeColor}">${esc(a.grade_label)}</div>
+          <div class="ai-score-summary">${esc(a.score_summary)}</div>
+        </div>
+      </div>
+
+      <!-- 5 sections -->
+      <div class="ai-sections">
+        ${sectionsHTML}
+      </div>
+
+      <!-- Recommendations -->
+      <div class="ai-recs-block">
+        <div class="ai-recs-title">💡 Recommendations</div>
+        ${recsHTML}
+      </div>
+
+      <!-- Verdict -->
+      <div class="ai-verdict">
+        <div class="ai-verdict-label">AI Verdict</div>
+        <div class="ai-verdict-text">${esc(a.verdict)}</div>
+      </div>
+    </div>`;
 }
 
 function downloadRegistrations(webinarId) {

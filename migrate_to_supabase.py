@@ -1,100 +1,111 @@
 # -*- coding: utf-8 -*-
 """
-Migration script: copies all data from local SQLite to new Supabase PostgreSQL.
-Run once from the project root:
+Migration script: syncs local SQLite → Supabase PostgreSQL using UPSERTS.
+Safe to run multiple times — never duplicates, only inserts new / updates changed rows.
+
     python migrate_to_supabase.py
 """
 
-import os
-import sys
-
+import os, sys, ssl
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.stdout.reconfigure(encoding="utf-8")
 
-# ── Connection strings ────────────────────────────────────────────────────────
-SQLITE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "webinar_analytics.db")
-SQLITE_URL = "sqlite:///" + SQLITE_PATH
-
-# New Supabase project — @ in password encoded as %40
-PG_URL = "postgresql+pg8000://postgres.agwzlnljqfqjkybbqteb:shreekrishna%401234@aws-1-ap-south-1.pooler.supabase.com:5432/postgres"
-
-# ── Engines ──────────────────────────────────────────────────────────────────
-import ssl
 from sqlalchemy import create_engine, text, MetaData
+
+SQLITE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "webinar_analytics.db")
+SQLITE_URL  = "sqlite:///" + SQLITE_PATH
+PG_URL      = "postgresql+pg8000://postgres.agwzlnljqfqjkybbqteb:shreekrishna%401234@aws-1-ap-south-1.pooler.supabase.com:5432/postgres"
 
 print("Connecting to SQLite ...")
 sqlite_engine = create_engine(SQLITE_URL, connect_args={"check_same_thread": False})
 
-print("Connecting to new Supabase project ...")
+print("Connecting to Supabase ...")
 ssl_ctx = ssl.create_default_context()
 ssl_ctx.check_hostname = False
 ssl_ctx.verify_mode = ssl.CERT_NONE
-
 pg_engine = create_engine(
-    PG_URL,
-    pool_pre_ping=True,
-    pool_size=1,
-    max_overflow=0,
+    PG_URL, pool_pre_ping=True, pool_size=1, max_overflow=0,
     connect_args={"ssl_context": ssl_ctx},
 )
+with pg_engine.connect() as c:
+    c.execute(text("SELECT 1"))
+print("[OK] Supabase connected")
 
-with pg_engine.connect() as conn:
-    conn.execute(text("SELECT 1"))
-print("[OK] Supabase connection OK")
-
-# ── Create tables ─────────────────────────────────────────────────────────────
+# Create tables if they don't exist yet
 import models
-from models import Base
+models.Base.metadata.create_all(bind=pg_engine)
+print("[OK] Tables ready\n")
 
-print("Creating tables in Supabase ...")
-Base.metadata.create_all(bind=pg_engine)
-print("[OK] Tables ready")
 
-# ── Raw table copy ────────────────────────────────────────────────────────────
-def copy_table(table_name, chunk_size=500):
+def upsert_table(table_name, conflict_col="id", chunk_size=500):
+    """
+    Upsert rows from SQLite → Supabase.
+    - Rows with a new id are inserted.
+    - Rows with an existing id are updated with the latest values.
+    - Rows that were deleted locally are NOT removed from Supabase.
+    """
     meta = MetaData()
     meta.reflect(bind=sqlite_engine, only=[table_name])
-    tbl = meta.tables[table_name]
+    tbl  = meta.tables[table_name]
+    cols = [c.name for c in tbl.columns]
 
-    with sqlite_engine.connect() as src_conn:
-        total = src_conn.execute(text("SELECT COUNT(*) FROM " + table_name)).scalar()
-        print("  " + table_name + ": " + str(total) + " rows", end="", flush=True)
+    # Build the SET clause for updates (all cols except the conflict col)
+    update_cols = [c for c in cols if c != conflict_col]
+    set_clause  = ", ".join(f'"{c}" = EXCLUDED."{c}"' for c in update_cols)
 
+    with sqlite_engine.connect() as src:
+        total = src.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
         if total == 0:
-            print(" (skipped)")
+            print(f"  {table_name}: empty — skipped")
             return
 
-        with pg_engine.connect() as dst_conn:
-            dst_conn.execute(text("TRUNCATE TABLE " + table_name + " RESTART IDENTITY CASCADE"))
-            dst_conn.commit()
+        # Check how many already exist in Supabase
+        with pg_engine.connect() as dst:
+            existing = dst.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
 
-            offset = 0
-            copied = 0
+        print(f"  {table_name}: {total} local rows | {existing} already in Supabase")
+
+        offset  = 0
+        upserted = 0
+        with pg_engine.connect() as dst:
             while True:
-                rows = src_conn.execute(
-                    text("SELECT * FROM " + table_name + " LIMIT " + str(chunk_size) + " OFFSET " + str(offset))
+                rows = src.execute(
+                    text(f"SELECT * FROM {table_name} LIMIT {chunk_size} OFFSET {offset}")
                 ).fetchall()
                 if not rows:
                     break
-                data = [dict(row._mapping) for row in rows]
-                dst_conn.execute(tbl.insert(), data)
-                dst_conn.commit()
-                copied += len(rows)
-                print("\r  " + table_name + ": " + str(copied) + "/" + str(total), end="", flush=True)
+                data = [dict(r._mapping) for r in rows]
+
+                col_list   = ", ".join(f'"{c}"' for c in cols)
+                val_list   = ", ".join(f":{c}" for c in cols)
+                sql = text(
+                    f"INSERT INTO {table_name} ({col_list}) VALUES ({val_list}) "
+                    f"ON CONFLICT ({conflict_col}) DO UPDATE SET {set_clause}"
+                )
+                dst.execute(sql, data)
+                dst.commit()
+                upserted += len(rows)
+                print(f"\r    {upserted}/{total}", end="", flush=True)
                 offset += chunk_size
 
-            print("\r  [DONE] " + table_name + ": " + str(copied) + " rows copied.   ")
+            # Keep sequence in sync
+            try:
+                dst.execute(text(
+                    f"SELECT setval(pg_get_serial_sequence('{table_name}', 'id'), "
+                    f"(SELECT MAX(id) FROM {table_name}), true)"
+                ))
+                dst.commit()
+            except Exception:
+                pass
 
-            dst_conn.execute(text(
-                "SELECT setval(pg_get_serial_sequence('" + table_name + "', 'id'), "
-                "(SELECT MAX(id) FROM " + table_name + "), true)"
-            ))
-            dst_conn.commit()
+        print(f"\r  [DONE] {table_name}: {upserted} rows upserted\n")
 
-print("\nMigrating data ...")
-copy_table("speakers")
-copy_table("webinars")
-copy_table("registrations")
-copy_table("attendances")
-copy_table("upload_logs")
 
-print("\nMigration complete! All data is now in the new Supabase project.")
+print("Syncing data (upsert — safe to re-run) ...")
+upsert_table("speakers")
+upsert_table("webinars")
+upsert_table("registrations")
+upsert_table("attendances")
+upsert_table("upload_logs")
+
+print("Sync complete! Supabase is now up to date.")
