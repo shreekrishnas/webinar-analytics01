@@ -175,6 +175,113 @@ async def upload_attendees(
         raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
+# ── AI Chatbot ───────────────────────────────────────────────────────────────
+
+@app.post("/api/chat")
+async def chat(payload: dict, db: Session = Depends(get_db)):
+    """Answer questions about webinar data using AI + live DB context."""
+    import os, json, httpx
+    from sqlalchemy import text
+
+    question = (payload.get("question") or "").strip()
+    history   = payload.get("history") or []   # list of {role, content}
+    if not question:
+        raise HTTPException(status_code=400, detail="question is required")
+
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="GROQ_API_KEY not configured")
+
+    # ── Pull live context from DB ─────────────────────────────────────────────
+    stats = db.execute(text("""
+        SELECT
+          COUNT(*) as total_webinars,
+          SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) as completed,
+          SUM(CASE WHEN status='incomplete' THEN 1 ELSE 0 END) as incomplete
+        FROM webinars
+    """)).fetchone()
+
+    speaker_stats = db.execute(text("""
+        SELECT s.name,
+          COUNT(w.id) as webinars,
+          SUM((SELECT COUNT(*) FROM registrations r WHERE r.webinar_id=w.id)) as total_regs,
+          SUM((SELECT COUNT(*) FROM attendances a WHERE a.webinar_id=w.id AND a.attended=TRUE)) as total_att
+        FROM speakers s JOIN webinars w ON w.speaker_id=s.id
+        GROUP BY s.name ORDER BY webinars DESC
+    """)).fetchall()
+
+    icp_stats = db.execute(text("""
+        SELECT COALESCE(icp,'Others') as icp, COUNT(*) as cnt
+        FROM webinars GROUP BY icp ORDER BY cnt DESC
+    """)).fetchall()
+
+    top_webinars = db.execute(text("""
+        SELECT w.title, w.date, s.name as speaker,
+          COALESCE(w.icp,'Others') as icp,
+          (SELECT COUNT(*) FROM registrations r WHERE r.webinar_id=w.id) as regs,
+          (SELECT COUNT(*) FROM attendances a WHERE a.webinar_id=w.id AND a.attended=TRUE) as att
+        FROM webinars w LEFT JOIN speakers s ON s.id=w.speaker_id
+        ORDER BY regs DESC LIMIT 10
+    """)).fetchall()
+
+    recent = db.execute(text("""
+        SELECT w.title, w.date, s.name as speaker, COALESCE(w.icp,'Others') as icp, w.status
+        FROM webinars w LEFT JOIN speakers s ON s.id=w.speaker_id
+        ORDER BY w.date DESC LIMIT 8
+    """)).fetchall()
+
+    # Build context string
+    ctx_parts = [
+        f"Platform: {stats.total_webinars} total webinars ({stats.completed} completed, {stats.incomplete} incomplete)",
+        "\nSpeaker performance:",
+    ]
+    for sp in speaker_stats:
+        att_rate = round(sp.total_att / sp.total_regs * 100, 1) if sp.total_regs else 0
+        ctx_parts.append(f"  {sp.name}: {sp.webinars} webinars, {sp.total_regs} total regs, {att_rate}% avg attendance")
+
+    ctx_parts.append("\nICP breakdown:")
+    for icp in icp_stats:
+        ctx_parts.append(f"  {icp.icp}: {icp.cnt} webinars")
+
+    ctx_parts.append("\nTop 10 webinars by registrations:")
+    for w in top_webinars:
+        rate = round(w.att / w.regs * 100, 1) if w.regs else 0
+        ctx_parts.append(f"  [{w.date}] {w.title[:55]} | Speaker: {w.speaker} | ICP: {w.icp} | Regs: {w.regs} | Att: {w.att} ({rate}%)")
+
+    ctx_parts.append("\nMost recent 8 webinars:")
+    for w in recent:
+        ctx_parts.append(f"  [{w.date}] {w.title[:55]} | {w.speaker} | {w.icp} | {w.status}")
+
+    context = "\n".join(ctx_parts)
+
+    system_prompt = f"""You are WebinarIQ Assistant — an AI analyst for Right Horizons Financial Services webinar platform.
+You have access to live webinar data. Answer questions clearly, use numbers, be specific and concise.
+If asked about a specific webinar, speaker, or ICP, use the data provided.
+Keep responses under 200 words unless a detailed breakdown is explicitly asked for.
+Format numbers cleanly. Use bullet points for lists.
+
+LIVE DATA (as of today):
+{context}"""
+
+    messages = [{"role": "system", "content": system_prompt}]
+    for h in history[-6:]:  # last 6 turns for context
+        messages.append({"role": h["role"], "content": h["content"]})
+    messages.append({"role": "user", "content": question})
+
+    try:
+        resp = httpx.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={"model": "llama-3.3-70b-versatile", "max_tokens": 600, "messages": messages},
+            timeout=20.0
+        )
+        resp.raise_for_status()
+        answer = resp.json()["choices"][0]["message"]["content"].strip()
+        return {"answer": answer}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Chat failed: {e}")
+
+
 # ── Weekly Topic Suggestions ─────────────────────────────────────────────────
 
 @app.get("/api/topics")

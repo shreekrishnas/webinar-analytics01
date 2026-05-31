@@ -692,9 +692,9 @@ function renderHome() {
         </td>
         <td style="font-size:12px;color:var(--text-2);white-space:nowrap">${fmtDate(w.date)}</td>
         <td>
-          <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">
-            <span class="wb-badge ${badgeCls}" style="font-size:10px;padding:2px 8px">${w.status}</span>
+          <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">
             ${w.icp && w.icp !== 'Others' ? `<span class="icp-badge icp-${(w.icp||'').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}">${esc(w.icp)}</span>` : ''}
+            <span class="wb-badge ${badgeCls}" style="font-size:9.5px;padding:2px 7px;opacity:0.7">${w.status}</span>
           </div>
         </td>
         <td style="font-size:12px;text-align:right;color:var(--c-reg);font-weight:600">${fmt(w.total_registrations)}</td>
@@ -822,8 +822,8 @@ function webinarCardHTML(w) {
         <div class="wb-card-hd">
           <div class="wb-card-title">${esc(w.title)}</div>
           <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
-            <span class="wb-badge ${badgeCls}">${w.status}</span>
             ${w.icp && w.icp !== 'Others' ? `<span class="icp-badge icp-${(w.icp||'').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}">${esc(w.icp)}</span>` : ''}
+            <span class="wb-badge ${badgeCls}" style="font-size:10px;opacity:0.75">${w.status}</span>
             <button class="wb-card-del" title="Delete webinar"
               onclick="event.stopPropagation();confirmDeleteWebinar(${w.id},'${esc(w.title).replace(/'/g,"\\'")}')">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -2379,6 +2379,136 @@ function prefillTopicWebinar(speaker, title) {
   }, 150);
 }
 
+/* ── AI Chatbot ──────────────────────────────────────────────────────────── */
+let _chatOpen   = false;
+let _chatHistory = [];
+
+function initChatbot() {
+  if (document.getElementById('chatbot-wrap')) return;
+  document.body.insertAdjacentHTML('beforeend', `
+    <!-- Chatbot FAB -->
+    <button class="chat-fab" id="chat-fab" onclick="toggleChat()" title="Ask WebinarIQ AI">
+      <svg id="chat-fab-open" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <svg id="chat-fab-close" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="display:none"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      <span class="chat-fab-label">Ask AI</span>
+    </button>
+
+    <!-- Chat panel -->
+    <div class="chatbot-wrap" id="chatbot-wrap">
+      <div class="chatbot-header">
+        <div class="chatbot-hd-left">
+          <div class="chatbot-avatar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+          </div>
+          <div>
+            <div class="chatbot-hd-title">WebinarIQ AI</div>
+            <div class="chatbot-hd-sub">Powered by LLaMA 3.3 · 70B</div>
+          </div>
+        </div>
+        <button class="chatbot-close-btn" onclick="toggleChat()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="chatbot-messages" id="chatbot-messages">
+        <div class="chat-msg chat-msg-ai">
+          <div class="chat-bubble">Hi! I can answer any question about your webinars — attendance rates, top speakers, ICP breakdown, trends, and more. What would you like to know?</div>
+          <div class="chat-suggestions">
+            <button onclick="sendChatSuggestion(this)">Which speaker has the best attendance rate?</button>
+            <button onclick="sendChatSuggestion(this)">Top 3 webinars by registrations</button>
+            <button onclick="sendChatSuggestion(this)">How are PMS webinars performing?</button>
+            <button onclick="sendChatSuggestion(this)">NRI webinar attendance trend</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="chatbot-input-wrap">
+        <input class="chatbot-input" id="chatbot-input" placeholder="Ask anything about your webinars…"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}" />
+        <button class="chatbot-send" id="chatbot-send" onclick="sendChat()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </div>
+  `);
+}
+
+function toggleChat() {
+  _chatOpen = !_chatOpen;
+  const wrap = document.getElementById('chatbot-wrap');
+  const fab  = document.getElementById('chat-fab');
+  const openIcon  = document.getElementById('chat-fab-open');
+  const closeIcon = document.getElementById('chat-fab-close');
+  if (wrap)  wrap.classList.toggle('open', _chatOpen);
+  if (fab)   fab.classList.toggle('active', _chatOpen);
+  if (openIcon)  openIcon.style.display  = _chatOpen ? 'none'  : '';
+  if (closeIcon) closeIcon.style.display = _chatOpen ? ''      : 'none';
+  if (_chatOpen) setTimeout(() => document.getElementById('chatbot-input')?.focus(), 300);
+}
+
+function sendChatSuggestion(btn) {
+  const q = btn.textContent.trim();
+  // Remove suggestions
+  btn.closest('.chat-suggestions')?.remove();
+  _sendChatMessage(q);
+}
+
+function sendChat() {
+  const input = document.getElementById('chatbot-input');
+  const q = (input?.value || '').trim();
+  if (!q) return;
+  input.value = '';
+  _sendChatMessage(q);
+}
+
+function _appendChatMsg(role, text, typing=false) {
+  const msgs = document.getElementById('chatbot-messages');
+  if (!msgs) return null;
+  const div = document.createElement('div');
+  div.className = `chat-msg chat-msg-${role}`;
+  div.innerHTML = `<div class="chat-bubble">${typing ? '<span class="chat-typing"><span></span><span></span><span></span></span>' : esc(text).replace(/\n/g,'<br>')}</div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+async function _sendChatMessage(question) {
+  // Show user message
+  _appendChatMsg('user', question);
+  _chatHistory.push({ role: 'user', content: question });
+
+  // Disable input
+  const input = document.getElementById('chatbot-input');
+  const send  = document.getElementById('chatbot-send');
+  if (input) input.disabled = true;
+  if (send)  send.disabled  = true;
+
+  // Show typing indicator
+  const typingDiv = _appendChatMsg('ai', '', true);
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, history: _chatHistory.slice(-6) })
+    });
+    const data = await res.json();
+    const answer = res.ok ? (data.answer || 'Sorry, I could not get an answer.') : (data.detail || 'Something went wrong.');
+
+    // Replace typing with answer
+    if (typingDiv) typingDiv.querySelector('.chat-bubble').innerHTML = esc(answer).replace(/\n/g,'<br>');
+    _chatHistory.push({ role: 'assistant', content: answer });
+
+    const msgs = document.getElementById('chatbot-messages');
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  } catch(e) {
+    if (typingDiv) typingDiv.querySelector('.chat-bubble').textContent = 'Network error. Please try again.';
+  } finally {
+    if (input) { input.disabled = false; input.focus(); }
+    if (send)  send.disabled = false;
+  }
+}
+
 function downloadRegistrations(webinarId) {
   _triggerDownload(`/api/webinars/${webinarId}/registrations/download`);
 }
@@ -2989,6 +3119,7 @@ async function init() {
   // Website enhancements
   initCursorGlow();
   initNavbarScroll();
+  initChatbot();
   // Remove loading splash
   const _loader = document.getElementById('page-loader');
   if (_loader) { _loader.classList.add('fade'); setTimeout(() => _loader.remove(), 380); }
