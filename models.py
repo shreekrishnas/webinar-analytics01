@@ -12,7 +12,7 @@ class Speaker(Base):
     email = Column(String)
     bio = Column(Text)
 
-    webinars = relationship("Webinar", back_populates="speaker")
+    webinars = relationship("Webinar", foreign_keys="[Webinar.speaker_id]", back_populates="speaker")
 
 
 class Webinar(Base):
