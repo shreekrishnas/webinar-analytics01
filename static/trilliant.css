@@ -1132,25 +1132,54 @@ html.dark .topic-angle { background: rgba(245,158,11,0.15) !important; color: #F
 /* ── 23. FILTER CHIPS (navbar) ── */
 .tb-chip {
   font-family: var(--font-ui) !important;
-  background: rgba(255,255,255,0.45) !important;
-  border: 1px solid var(--border-subtle) !important;
+  background: rgba(255,255,255,0.55) !important;
+  border: 1.5px solid var(--border-default) !important;
   color: var(--text-secondary) !important;
   border-radius: 9999px !important;
   font-weight: 600 !important;
   font-size: 0.78rem !important;
-  padding: 6px 14px !important;
+  padding: 7px 16px !important;
   backdrop-filter: blur(8px) !important;
+  cursor: pointer !important;
+  transition: all 0.18s ease !important;
 }
-.tb-chip:hover { background: rgba(255,255,255,0.70) !important; color: var(--text-primary) !important; }
+.tb-chip:hover:not(.active) {
+  background: rgba(255,255,255,0.85) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--accent-indigo) !important;
+  transform: translateY(-1px) !important;
+}
 .tb-chip.active {
-  background: var(--surface-card-elevated) !important;
-  color: var(--accent-indigo) !important;
-  border-color: rgba(99,102,241,0.30) !important;
-  box-shadow: 0 2px 6px rgba(99,102,241,0.15) !important;
+  background: var(--accent-indigo) !important;
+  color: #fff !important;
+  border-color: var(--accent-indigo) !important;
+  box-shadow: 0 4px 14px rgba(99,102,241,0.45) !important;
+  font-weight: 700 !important;
+}
+.tb-chip.active:hover {
+  background: var(--accent-indigo-deep) !important;
+  transform: translateY(-1px) !important;
+}
+html.dark .tb-chip {
+  background: rgba(30,41,59,0.55) !important;
+  border-color: rgba(255,255,255,0.14) !important;
+  color: var(--text-secondary) !important;
+}
+html.dark .tb-chip:hover:not(.active) {
+  background: rgba(30,41,59,0.85) !important;
+  color: var(--text-primary) !important;
 }
 
-/* Dashboard nav chips (status filter) */
-.nav-chips { gap: 6px; }
+/* Dashboard nav chips container */
+.nav-chips {
+  gap: 6px !important;
+  background: rgba(255,255,255,0.40) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 9999px !important;
+  padding: 4px !important;
+  backdrop-filter: blur(8px) !important;
+}
+html.dark .nav-chips { background: rgba(30,41,59,0.40) !important; }
 
 /* ── 24. STATUS BREAKDOWN CHART ── */
 .sb-title { font-family: var(--font-serif) !important; font-weight: 700 !important; color: var(--text-primary) !important; }

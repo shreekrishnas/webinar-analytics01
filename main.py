@@ -179,8 +179,19 @@ async def upload_attendees(
 
 # ── AI helpers ────────────────────────────────────────────────────────────────
 
+def _strip_em_dashes(obj):
+    """Recursively replace em dashes and en dashes with commas in any string within a JSON structure."""
+    if isinstance(obj, str):
+        return obj.replace("—", ", ").replace("–", ", ").replace(" - ", ", ")
+    if isinstance(obj, list):
+        return [_strip_em_dashes(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _strip_em_dashes(v) for k, v in obj.items()}
+    return obj
+
+
 def _extract_json(text: str):
-    """Robust JSON extractor — handles markdown code fences, leading text, and trailing commas."""
+    """Robust JSON extractor: handles markdown code fences, leading text, and trailing commas."""
     import json, re
     if not text:
         raise ValueError("empty response")
@@ -319,6 +330,7 @@ STRICT RULES (these are absolute, no exceptions):
 3. For COMPARISONS between webinars/speakers/ICPs in the data, that is allowed and encouraged - that's analysis of our data.
 4. NEVER make up names, emails, dates, numbers, percentages. Only use what is in LIVE DATA below.
 5. Be concise: under 180 words unless the user explicitly asks for more. Use bullets and bold for key numbers.
+6. NEVER use em dashes (the long dash character). Use commas, periods, colons, or parentheses instead. This is mandatory.
 
 LIVE DATA (the ONLY source of truth):
 {context}
@@ -339,6 +351,7 @@ Remember: nothing outside this data exists for you. You are a closed-book analys
         )
         resp.raise_for_status()
         answer = resp.json()["choices"][0]["message"]["content"].strip()
+        answer = answer.replace("—", ", ").replace("–", ", ")
         return {"answer": answer}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat failed: {e}")
@@ -400,6 +413,7 @@ Return a JSON array with this exact structure:
 ]
 
 Rules:
+- NEVER use em dashes (long dash). Use commas, periods, colons, or parentheses instead. This rule is absolute.
 - Titles must feel like Rachna/Anil/Sunil/Preethi/Prabhat would say them, use ₹ figures, timeframes, specific scenarios
 - No generic titles like "How to Invest Wisely" or "Understanding Mutual Funds"
 - Hook must reference something happening TODAY in markets/news
@@ -418,7 +432,7 @@ Rules:
         )
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"].strip()
-        topics = _extract_json(raw)
+        topics = _strip_em_dashes(_extract_json(raw))
         return {"topics": topics, "generated_on": today}
     except ValueError as e:
         raise HTTPException(status_code=500, detail=f"AI returned invalid JSON: {e}")
@@ -601,6 +615,7 @@ Return ONLY a JSON object with this exact shape:
 
 Avoid words: 'consider', 'leverage', 'utilize', 'engage', 'optimize', 'maximize', 'enhance' (these are generic filler).
 Prefer: specific verbs (test, send, replace, swap, drop, double, halve, A/B, schedule).
+NEVER use em dashes. Use commas, periods, colons, or parentheses instead. This rule is absolute.
 
 Webinar data:
 {json.dumps(metrics, indent=2, default=lambda o: float(o) if hasattr(o,'__float__') else str(o))}
@@ -625,7 +640,7 @@ Return ONLY the JSON object, nothing before or after, no markdown fences."""
         )
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"].strip()
-        analysis = _extract_json(raw)
+        analysis = _strip_em_dashes(_extract_json(raw))
     except ValueError as e:
         raise HTTPException(status_code=500, detail=f"AI returned invalid JSON: {e}")
     except Exception as e:
@@ -750,6 +765,7 @@ Rules:
 - Use ONLY the numbers in the data above. No invented figures.
 - Be direct. No filler. No 'consider', 'leverage', 'utilize'.
 - Numbers must match the deltas shown exactly.
+- NEVER use em dashes. Use commas, periods, colons, or parentheses instead.
 
 Return ONLY the JSON, no markdown, no preamble."""
 
@@ -764,7 +780,7 @@ Return ONLY the JSON, no markdown, no preamble."""
         )
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"].strip()
-        analysis = _extract_json(raw)
+        analysis = _strip_em_dashes(_extract_json(raw))
 
         return {
             "current": this_meta,
