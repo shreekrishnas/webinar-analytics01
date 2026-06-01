@@ -1030,6 +1030,10 @@ function _drawWebinarDetail(w) {
               <button class="btn-ai-analyze" id="ai-analyze-btn" onclick="runAIAnalysis(${w.id})">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
                 Analyze with AI
+              </button>
+              <button class="btn-ai-compare" id="ai-compare-btn" onclick="runAIComparison(${w.id})">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                Compare vs Previous
               </button>` : ''}
               <button class="wb-card-del" style="width:32px;height:32px" title="Delete webinar"
                 onclick="confirmDeleteWebinar(${w.id},'${safeTitle}')">
@@ -1067,6 +1071,7 @@ function _drawWebinarDetail(w) {
 
       <!-- AI Analysis Panel -->
       <div id="ai-analysis-panel"></div>
+      <div id="ai-compare-panel"></div>
 
       ${logsHTML}
 
@@ -1542,7 +1547,16 @@ async function renderLeaderboard(speakerId, webinarId) {
   if (selWebinar) params.set('webinar_id', selWebinar);
 
   try {
-    const lb = await api('/api/leaderboard?' + params.toString());
+    const lbAll = await api('/api/leaderboard?' + params.toString());
+
+    // Score range filter (client-side)
+    const minS = S._lbScoreMin !== undefined && S._lbScoreMin !== '' ? +S._lbScoreMin : null;
+    const maxS = S._lbScoreMax !== undefined && S._lbScoreMax !== '' ? +S._lbScoreMax : null;
+    const lb = lbAll.filter(e => {
+      if (minS !== null && e.score < minS) return false;
+      if (maxS !== null && e.score > maxS) return false;
+      return true;
+    });
 
     const speakerOpts = S.speakers.map(sp =>
       `<option value="${sp.id}" ${selSpeaker==sp.id?'selected':''}>${esc(sp.name)}</option>`
@@ -1611,8 +1625,14 @@ async function renderLeaderboard(speakerId, webinarId) {
             <option value="" ${!selWebinar?'selected':''}>All Webinars</option>
             ${webinarOpts}
           </select>
-          <button class="btn btn-ghost btn-sm" onclick="S._lbSpeaker='';S._lbWebinar='';renderLeaderboard()">Clear Filters</button>
-          <span style="font-size:12px;color:var(--text-3);margin-left:6px">
+          <div class="lb-score-range">
+            <span class="lb-score-lbl">Score:</span>
+            <input type="number" class="filter-select lb-score-input" placeholder="min" value="${S._lbScoreMin||''}" onchange="S._lbScoreMin=this.value;renderLeaderboard()" />
+            <span class="lb-score-dash">to</span>
+            <input type="number" class="filter-select lb-score-input" placeholder="max" value="${S._lbScoreMax||''}" onchange="S._lbScoreMax=this.value;renderLeaderboard()" />
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="S._lbSpeaker='';S._lbWebinar='';S._lbScoreMin='';S._lbScoreMax='';renderLeaderboard()">Clear Filters</button>
+          <span style="font-size:12px;color:var(--text-muted);margin-left:6px">
             Score = 10 pts per webinar attended + bonus for longer sessions
           </span>
         </div>
@@ -2486,6 +2506,131 @@ async function _sendChatMessage(question) {
     if (input) { input.disabled = false; input.focus(); }
     if (send)  send.disabled = false;
   }
+}
+
+/* ── AI Comparison ─────────────────────────────────────────────────────────── */
+async function runAIComparison(webinarId) {
+  const btn   = document.getElementById('ai-compare-btn');
+  const panel = document.getElementById('ai-compare-panel');
+  if (!panel) return;
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<svg class="spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg> Comparing…`;
+  }
+  panel.innerHTML = `
+    <div class="aip ai-loading" style="padding:24px;border:1px solid rgba(124,58,237,0.20);border-radius:1.5rem;background:rgba(255,255,255,0.85);backdrop-filter:blur(16px) saturate(140%);margin-top:18px">
+      <div style="display:flex;align-items:center;gap:10px;color:var(--accent-primary);font-weight:600">
+        <svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg>
+        <span>Pulling previous webinar and computing deltas…</span>
+      </div>
+    </div>`;
+
+  try {
+    const res = await fetch(`/api/webinars/${webinarId}/compare`, { method:'POST' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Comparison failed' }));
+      throw new Error(err.detail || 'Comparison failed');
+    }
+    const data = await res.json();
+    renderComparePanel(panel, data);
+    if (btn) {
+      btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Comparison Done`;
+      btn.classList.add('ai-done');
+    }
+    panel.scrollIntoView({ behavior:'smooth', block:'start' });
+  } catch(e) {
+    panel.innerHTML = `
+      <div class="aip ai-error" style="padding:18px;border:1px solid rgba(220,38,38,0.30);border-radius:1.5rem;background:rgba(254,242,242,0.85);color:#991B1B;margin-top:18px">
+        ${esc(e.message || 'Comparison failed')}
+      </div>`;
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg> Retry Comparison`;
+    }
+  }
+}
+
+function renderComparePanel(panel, data) {
+  const a = data.analysis || {};
+  const cur = data.current, prev = data.previous, d = data.deltas;
+  const fmt = n => n >= 1000 ? (n/1000).toFixed(1)+'k' : String(n);
+  const deltaCls = (v) => v > 0 ? 'cmp-up' : v < 0 ? 'cmp-down' : 'cmp-flat';
+  const deltaSym = (v) => v > 0 ? '↑' : v < 0 ? '↓' : '→';
+
+  const rows = [
+    { label:'Registrations',    cur: cur.registrations,    prev: prev.registrations,    d: d.registrations },
+    { label:'Attendees',        cur: cur.attendees,        prev: prev.attendees,        d: d.attendees },
+    { label:'Attendance rate',  cur: cur.attendance_rate+'%', prev: prev.attendance_rate+'%', d: d.attendance_rate, unit:'pp' },
+    { label:'Avg duration',     cur: cur.avg_duration_min+'m', prev: prev.avg_duration_min+'m', d: d.avg_duration_min, unit:'m' },
+    { label:'Engaged 45m+',     cur: cur.engaged_45plus,   prev: prev.engaged_45plus,   d: d.engaged_45plus },
+  ].map(r => `
+    <tr>
+      <td class="cmp-lbl">${r.label}</td>
+      <td class="cmp-val cmp-cur">${r.cur}</td>
+      <td class="cmp-val cmp-prev">${r.prev}</td>
+      <td class="cmp-delta ${deltaCls(r.d.abs)}">${deltaSym(r.d.abs)} ${r.d.abs > 0 ? '+' : ''}${r.d.abs}${r.unit||''}${r.d.pct!=null?` <span class="cmp-pct">(${r.d.pct>0?'+':''}${r.d.pct}%)</span>`:''}</td>
+    </tr>`).join('');
+
+  const wins  = (a.key_wins || []).map(s => `<li>${esc(s)}</li>`).join('');
+  const losses = (a.key_losses || []).map(s => `<li>${esc(s)}</li>`).join('');
+
+  panel.innerHTML = `
+    <div class="aip cmp-panel" style="margin-top:18px">
+      <div class="aip-header">
+        <span style="color:var(--accent-primary);display:flex;align-items:center">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        </span>
+        <span class="aip-header-title">Comparison Analysis</span>
+        <span class="aip-header-badge">vs ${esc(data.comparison_basis)}</span>
+      </div>
+
+      <div class="cmp-headline">${esc(a.headline || '')}</div>
+
+      <div class="cmp-context">
+        <div class="cmp-card cmp-card-cur">
+          <div class="cmp-card-tag">CURRENT</div>
+          <div class="cmp-card-title">${esc(cur.title)}</div>
+          <div class="cmp-card-meta">${esc(cur.date)} · ${esc(cur.speaker)} · ${esc(cur.icp)}</div>
+        </div>
+        <div class="cmp-vs">vs</div>
+        <div class="cmp-card cmp-card-prev">
+          <div class="cmp-card-tag">PREVIOUS</div>
+          <div class="cmp-card-title">${esc(prev.title)}</div>
+          <div class="cmp-card-meta">${esc(prev.date)} · ${esc(prev.speaker)} · ${esc(prev.icp)}</div>
+        </div>
+      </div>
+
+      <table class="cmp-table">
+        <thead>
+          <tr>
+            <th>Metric</th><th>Current</th><th>Previous</th><th>Delta</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+
+      <div class="cmp-grid">
+        <div class="cmp-block cmp-wins">
+          <div class="cmp-block-title">✓ Wins</div>
+          <ul>${wins || '<li class="cmp-empty">None notable</li>'}</ul>
+        </div>
+        <div class="cmp-block cmp-losses">
+          <div class="cmp-block-title">✗ Losses</div>
+          <ul>${losses || '<li class="cmp-empty">None notable</li>'}</ul>
+        </div>
+      </div>
+
+      <div class="cmp-diagnosis">
+        <div class="aip-card-hd">DIAGNOSIS</div>
+        <p>${esc(a.diagnosis || '')}</p>
+      </div>
+
+      <div class="cmp-action">
+        <div class="aip-card-hd">NEXT ACTION</div>
+        <p><strong>${esc(a.next_action || '')}</strong></p>
+      </div>
+    </div>`;
 }
 
 function downloadRegistrations(webinarId) {

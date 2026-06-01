@@ -177,6 +177,61 @@ async def upload_attendees(
         raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
+# ── AI helpers ────────────────────────────────────────────────────────────────
+
+def _extract_json(text: str):
+    """Robust JSON extractor — handles markdown code fences, leading text, and trailing commas."""
+    import json, re
+    if not text:
+        raise ValueError("empty response")
+    s = text.strip()
+    # Strip code fences
+    if s.startswith("```"):
+        # Find content between first and last ```
+        s = re.sub(r"^```[a-z]*\s*", "", s, count=1)
+        s = re.sub(r"\s*```\s*$", "", s, count=1)
+    # Find the first JSON object or array
+    obj_start = s.find("{")
+    arr_start = s.find("[")
+    if obj_start == -1 and arr_start == -1:
+        raise ValueError("no JSON found")
+    if arr_start != -1 and (obj_start == -1 or arr_start < obj_start):
+        start, open_c, close_c = arr_start, "[", "]"
+    else:
+        start, open_c, close_c = obj_start, "{", "}"
+    # Walk to the matching close bracket (handles nested structures + string escapes)
+    depth = 0
+    in_str = False
+    esc = False
+    end = -1
+    for i in range(start, len(s)):
+        ch = s[i]
+        if esc:
+            esc = False
+            continue
+        if ch == "\\":
+            esc = True
+            continue
+        if ch == '"':
+            in_str = not in_str
+            continue
+        if in_str:
+            continue
+        if ch == open_c:
+            depth += 1
+        elif ch == close_c:
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    if end == -1:
+        raise ValueError("unbalanced JSON brackets")
+    candidate = s[start:end]
+    # Remove trailing commas before } or ]
+    candidate = re.sub(r",(\s*[}\]])", r"\1", candidate)
+    return json.loads(candidate)
+
+
 # ── AI Chatbot ───────────────────────────────────────────────────────────────
 
 @app.post("/api/chat")
@@ -256,14 +311,19 @@ async def chat(payload: dict, db: Session = Depends(get_db)):
 
     context = "\n".join(ctx_parts)
 
-    system_prompt = f"""You are WebinarIQ Assistant, an AI analyst for Right Horizons Financial Services webinar platform.
-You have access to live webinar data. Answer questions clearly, use numbers, be specific and concise.
-If asked about a specific webinar, speaker, or ICP, use the data provided.
-Keep responses under 200 words unless a detailed breakdown is explicitly asked for.
-Format numbers cleanly. Use bullet points for lists.
+    system_prompt = f"""You are WebinarIQ Assistant, an AI analyst for Right Horizons Financial Services.
 
-LIVE DATA (as of today):
-{context}"""
+STRICT RULES (these are absolute, no exceptions):
+1. You may ONLY use the LIVE DATA below to answer questions. Never invent numbers, never use external knowledge about markets, finance, world events, or anything not in the data.
+2. If the user asks about something NOT in the data (e.g. "What is PMS?", "Tell me about NIFTY", "current market trends"), respond: "I can only answer questions about the webinar data shown in WebinarIQ. Try asking about speakers, ICPs, attendance, or specific webinars."
+3. For COMPARISONS between webinars/speakers/ICPs in the data, that is allowed and encouraged - that's analysis of our data.
+4. NEVER make up names, emails, dates, numbers, percentages. Only use what is in LIVE DATA below.
+5. Be concise: under 180 words unless the user explicitly asks for more. Use bullets and bold for key numbers.
+
+LIVE DATA (the ONLY source of truth):
+{context}
+
+Remember: nothing outside this data exists for you. You are a closed-book analyst."""
 
     messages = [{"role": "system", "content": system_prompt}]
     for h in history[-6:]:  # last 6 turns for context
@@ -358,12 +418,9 @@ Rules:
         )
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"].strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"): raw = raw[4:]
-        topics = json.loads(raw)
+        topics = _extract_json(raw)
         return {"topics": topics, "generated_on": today}
-    except json.JSONDecodeError as e:
+    except ValueError as e:
         raise HTTPException(status_code=500, detail=f"AI returned invalid JSON: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Topic generation failed: {e}")
@@ -508,39 +565,47 @@ async def _do_analyze(webinar_id: int, db):
         "speaker_avg_registrations": spk_avg_regs,
     }
 
-    prompt = f"""You are an expert webinar analytics consultant for Right Horizons, a financial advisory firm.
+    prompt = f"""You are a sharp webinar performance analyst for Right Horizons, an Indian financial advisory firm.
 
-Analyze this webinar performance data and return a JSON object with exactly these keys:
+STRICT RULES:
+- Use ONLY the numbers in 'Webinar data' below. Never fabricate numbers, names, or comparisons.
+- Every insight must reference a specific number from the data with the actual figure shown.
+- Recommendations must be SPECIFIC and ACTIONABLE - no generic phrases like "improve marketing" or "engage audience". Tie each to ONE concrete number in the data.
+- Tone: direct, expert, no fluff. Skip throat-clearing intros.
+
+Return ONLY a JSON object with this exact shape:
 
 {{
-  "grade": "A/B/C/D",
-  "grade_label": "one phrase like Excellent / Good / Needs Work / Poor",
-  "score_summary": "one sentence overall verdict (max 20 words)",
+  "grade": "A|B|C|D",
+  "grade_label": "Excellent|Good|Needs Work|Poor",
+  "score_summary": "12-word verdict, lead with the most striking number",
   "sections": [
     {{
-      "title": "section title",
+      "title": "Audience Reach",
       "icon": "single emoji",
-      "insight": "2-3 sentence insight specific to this webinar's numbers",
-      "highlight": "one short key stat or takeaway (max 10 words)"
-    }}
+      "insight": "2 sentences citing specific numbers from data. State the delta vs platform avg in absolute terms (eg '337 above platform avg of 244')",
+      "highlight": "max 8 words, end with a number"
+    }},
+    {{ "title": "Engagement Quality", "icon": "...", "insight": "cite attendance rate AND avg duration AND engaged 45m+ count. Compare to platform avg.", "highlight": "..." }},
+    {{ "title": "Registration Channels", "icon": "...", "insight": "name the dominant source with % share. Flag if any source under-performs.", "highlight": "..." }},
+    {{ "title": "Speaker Performance", "icon": "...", "insight": "compare to speaker's own avg (if available) AND platform avg. State delta in pp.", "highlight": "..." }},
+    {{ "title": "Timing & Momentum", "icon": "...", "insight": "cite last-day registration % and registration window length. Flag if momentum was concentrated.", "highlight": "..." }}
   ],
-  "recommendations": ["recommendation 1", "recommendation 2", "recommendation 3"],
-  "verdict": "3-4 sentence plain-English summary: what went well, what to improve, one specific action"
+  "recommendations": [
+    "ONE sharp, non-generic move tied to a specific weakness in THIS webinar's numbers. Format: 'Action verb + specific tactic + expected lift'. Example: 'Send 24h reminder SMS to no-shows - based on 64% no-show rate, recovering 10% adds 37 attendees'",
+    "Second strategy - must propose a SPECIFIC experiment or channel/format shift, not 'try X harder'",
+    "Third strategy - reference one of the strong metrics and how to EXPLOIT it for the next webinar"
+  ],
+  "verdict": "3 sentences. Sentence 1: the single best number. Sentence 2: the single worst number with the gap to fix. Sentence 3: one concrete experiment to run next webinar with expected outcome."
 }}
 
-The sections must cover exactly these 5 topics in order:
-1. Audience Reach (registrations vs platform average)
-2. Engagement Quality (attendance rate, session duration, drop-offs)
-3. Registration Channels (which source drove the most sign-ups)
-4. Speaker Performance (vs their own average and platform average)
-5. Timing & Momentum (last-minute registrations, registration window)
-
-Be specific, use the actual numbers. Be direct, not generic. Tone: professional but actionable.
+Avoid words: 'consider', 'leverage', 'utilize', 'engage', 'optimize', 'maximize', 'enhance' (these are generic filler).
+Prefer: specific verbs (test, send, replace, swap, drop, double, halve, A/B, schedule).
 
 Webinar data:
 {json.dumps(metrics, indent=2, default=lambda o: float(o) if hasattr(o,'__float__') else str(o))}
 
-Return ONLY valid JSON, no markdown, no explanation."""
+Return ONLY the JSON object, nothing before or after, no markdown fences."""
 
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
@@ -560,13 +625,8 @@ Return ONLY valid JSON, no markdown, no explanation."""
         )
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"].strip()
-        # Strip markdown code fences if Claude wraps in them
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        analysis = json.loads(raw)
-    except json.JSONDecodeError as e:
+        analysis = _extract_json(raw)
+    except ValueError as e:
         raise HTTPException(status_code=500, detail=f"AI returned invalid JSON: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI analysis failed: {e}")
@@ -576,6 +636,147 @@ Return ONLY valid JSON, no markdown, no explanation."""
         "metrics": metrics,
         "analysis": analysis
     }
+
+
+# ── Webinar vs Previous Comparison ────────────────────────────────────────────
+
+@app.post("/api/webinars/{webinar_id}/compare")
+async def compare_webinar(webinar_id: int, db: Session = Depends(get_db)):
+    """Compare this webinar to the most recent previous webinar by same speaker (fallback: same ICP, then platform avg)."""
+    import os, json, traceback
+    from sqlalchemy import text as _text
+    try:
+        w = db.query(models.Webinar).filter(models.Webinar.id == webinar_id).first()
+        if not w:
+            raise HTTPException(status_code=404, detail="Webinar not found")
+
+        def stats_for(wid):
+            r = db.execute(_text(
+                "SELECT (SELECT COUNT(*) FROM registrations WHERE webinar_id=:w) AS regs, "
+                "(SELECT COUNT(*) FROM attendances WHERE webinar_id=:w AND attended=TRUE) AS att, "
+                "(SELECT AVG(duration_minutes) FROM attendances WHERE webinar_id=:w AND attended=TRUE) AS avg_dur, "
+                "(SELECT COUNT(*) FROM attendances WHERE webinar_id=:w AND attended=TRUE AND duration_minutes>=45) AS engaged"
+            ), {"w": wid}).fetchone()
+            regs = int(r.regs or 0); att = int(r.att or 0)
+            avg_dur = round(float(r.avg_dur or 0), 1)
+            engaged = int(r.engaged or 0)
+            rate = round(att/regs*100, 1) if regs else 0
+            return {"registrations": regs, "attendees": att, "attendance_rate": rate,
+                    "avg_duration_min": avg_dur, "engaged_45plus": engaged}
+
+        this_stats = stats_for(webinar_id)
+        this_meta = {
+            "id": webinar_id, "title": w.title, "date": str(w.date),
+            "speaker": w.speaker.name if w.speaker else "Unknown",
+            "icp": w.icp or "Others",
+            **this_stats,
+        }
+
+        # Find best comparison target — prefer same speaker, fallback same ICP
+        prev = db.execute(_text("""
+            SELECT id, title, date, speaker_id, icp
+            FROM webinars
+            WHERE date < :d AND status='completed' AND speaker_id = :spk
+            ORDER BY date DESC LIMIT 1
+        """), {"d": w.date, "spk": w.speaker_id}).fetchone()
+
+        comparison_basis = "same speaker"
+        if not prev:
+            prev = db.execute(_text("""
+                SELECT id, title, date, speaker_id, icp
+                FROM webinars
+                WHERE date < :d AND status='completed' AND COALESCE(icp,'Others') = :icp
+                ORDER BY date DESC LIMIT 1
+            """), {"d": w.date, "icp": w.icp or "Others"}).fetchone()
+            comparison_basis = "same ICP"
+        if not prev:
+            prev = db.execute(_text("""
+                SELECT id, title, date, speaker_id, icp FROM webinars
+                WHERE date < :d AND status='completed'
+                ORDER BY date DESC LIMIT 1
+            """), {"d": w.date}).fetchone()
+            comparison_basis = "most recent prior webinar"
+        if not prev:
+            raise HTTPException(status_code=404, detail="No previous webinar available to compare.")
+
+        prev_speaker_row = db.execute(_text("SELECT name FROM speakers WHERE id=:s"), {"s": prev.speaker_id}).fetchone()
+        prev_meta = {
+            "id": prev.id, "title": prev.title, "date": str(prev.date),
+            "speaker": prev_speaker_row.name if prev_speaker_row else "Unknown",
+            "icp": prev.icp or "Others",
+            **stats_for(prev.id),
+        }
+
+        # Compute deltas
+        def delta(a, b):
+            if b == 0: return {"abs": a, "pct": None}
+            return {"abs": round(a - b, 1), "pct": round((a - b)/b * 100, 1)}
+        deltas = {
+            "registrations": delta(this_stats["registrations"], prev_meta["registrations"]),
+            "attendees": delta(this_stats["attendees"], prev_meta["attendees"]),
+            "attendance_rate": delta(this_stats["attendance_rate"], prev_meta["attendance_rate"]),
+            "avg_duration_min": delta(this_stats["avg_duration_min"], prev_meta["avg_duration_min"]),
+            "engaged_45plus": delta(this_stats["engaged_45plus"], prev_meta["engaged_45plus"]),
+        }
+
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=503, detail="OPENROUTER_API_KEY not configured")
+
+        prompt = f"""You are a webinar performance analyst. Compare these two webinars and return a JSON object.
+
+Comparison basis: {comparison_basis}
+
+CURRENT WEBINAR:
+{json.dumps(this_meta, indent=2)}
+
+PREVIOUS WEBINAR:
+{json.dumps(prev_meta, indent=2)}
+
+COMPUTED DELTAS (current vs previous):
+{json.dumps(deltas, indent=2)}
+
+Return JSON with this exact shape:
+
+{{
+  "headline": "single sentence verdict (max 18 words), lead with the biggest swing in absolute or %",
+  "key_wins": ["2-3 strings, each a specific metric where current beat previous, format: 'Metric: from X to Y (+Z%)'"],
+  "key_losses": ["2-3 strings, each a specific metric where current was worse, same format"],
+  "diagnosis": "2-3 sentences explaining the likely cause based on title/ICP/speaker differences in the data above",
+  "next_action": "ONE specific tactic for the next webinar, tied to the biggest gap. Format: 'Action verb + tactic + expected lift'"
+}}
+
+Rules:
+- Use ONLY the numbers in the data above. No invented figures.
+- Be direct. No filler. No 'consider', 'leverage', 'utilize'.
+- Numbers must match the deltas shown exactly.
+
+Return ONLY the JSON, no markdown, no preamble."""
+
+        import httpx
+        resp = httpx.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
+            json={"model": "anthropic/claude-haiku-4.5", "max_tokens": 800,
+                  "messages": [{"role": "user", "content": prompt}]},
+            timeout=25.0
+        )
+        resp.raise_for_status()
+        raw = resp.json()["choices"][0]["message"]["content"].strip()
+        analysis = _extract_json(raw)
+
+        return {
+            "current": this_meta,
+            "previous": prev_meta,
+            "deltas": deltas,
+            "comparison_basis": comparison_basis,
+            "analysis": analysis,
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
 # ── Registrations download ───────────────────────────────────────────────────
