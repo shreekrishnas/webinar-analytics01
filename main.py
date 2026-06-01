@@ -411,10 +411,10 @@ Rules:
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
             json={
                 "model": "anthropic/claude-haiku-4.5",
-                "max_tokens": 2000,
+                "max_tokens": 4000,
                 "messages": [{"role": "user", "content": prompt}]
             },
-            timeout=30.0
+            timeout=45.0
         )
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"].strip()
