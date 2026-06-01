@@ -759,15 +759,16 @@ function renderHome() {
   }
 
   const today = new Date();
-  const dateStr = today.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
+  const hour = today.getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   setContent(`
     <div>
       <div class="dash-hero reveal">
         <div>
-          <div class="dash-hero-eyebrow">${dateStr.toUpperCase()}</div>
-          <h1 class="dash-hero-title">Webinar Intelligence,<br>distilled.</h1>
-          <p class="dash-hero-sub">A single editorial lens on speaker performance, audience engagement and ICP-aligned outcomes across every Right Horizons webinar.</p>
+          <div class="dash-hero-eyebrow">WEBINAR INTELLIGENCE</div>
+          <h1 class="dash-hero-title">${greeting}.</h1>
+          <p class="dash-hero-sub">Track speaker performance, audience engagement and ICP-aligned outcomes across every Right Horizons webinar, all in one place.</p>
         </div>
         <div class="dash-hero-actions">
           <button class="btn btn-primary" onclick="openWebinarModal()">

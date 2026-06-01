@@ -5,21 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>WebinarIQ · Webinar Intelligence</title>
 
-  <!-- Editorial typography stack -->
+  <!-- Trilliant typography stack: Inter UI, Fraunces display, JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800;9..144,900&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
 
   <!-- Preload critical assets so they start downloading immediately -->
-  <link rel="preload" href="/static/styles.css?v=50" as="style" />
-  <link rel="preload" href="/static/app.js?v=50" as="script" />
-  <link rel="stylesheet" href="/static/styles.css?v=50" />
+  <link rel="preload" href="/static/styles.css?v=51" as="style" />
+  <link rel="preload" href="/static/trilliant.css?v=51" as="style" />
+  <link rel="preload" href="/static/app.js?v=51" as="script" />
+  <link rel="stylesheet" href="/static/styles.css?v=51" />
+  <link rel="stylesheet" href="/static/trilliant.css?v=51" />
   <!-- Inline loader: visible instantly, removed by JS once data loads -->
   <style>
-    #page-loader{position:fixed;inset:0;background:#0c0c0a;display:flex;align-items:center;justify-content:center;z-index:99999;transition:opacity .35s ease}
+    #page-loader{position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:99999;transition:opacity .35s ease}
+    html.dark #page-loader{background:#0F172A}
     #page-loader.fade{opacity:0;pointer-events:none}
-    .pl-ring{width:42px;height:42px;border:2.5px solid rgba(52,211,153,.15);border-top-color:#34d399;border-radius:50%;animation:plspin .75s linear infinite}
-    .pl-label{color:rgba(255,255,255,.35);font-size:12px;font-family:system-ui,sans-serif;margin-top:14px;letter-spacing:.05em}
+    .pl-ring{width:44px;height:44px;border:3px solid rgba(124,58,237,.15);border-top-color:#7C3AED;border-radius:50%;animation:plspin .75s linear infinite}
+    .pl-label{color:#9CA3AF;font-size:12px;font-family:'Inter',system-ui,sans-serif;margin-top:14px;letter-spacing:.05em;font-weight:500}
     @keyframes plspin{to{transform:rotate(360deg)}}
   </style>
 </head>
