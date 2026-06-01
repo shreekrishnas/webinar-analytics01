@@ -190,9 +190,9 @@ async def chat(payload: dict, db: Session = Depends(get_db)):
     if not question:
         raise HTTPException(status_code=400, detail="question is required")
 
-    api_key = os.environ.get("GROQ_API_KEY")
+    api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=503, detail="GROQ_API_KEY not configured")
+        raise HTTPException(status_code=503, detail="OPENROUTER_API_KEY not configured")
 
     # ── Pull live context from DB ─────────────────────────────────────────────
     stats = db.execute(text("""
@@ -272,9 +272,9 @@ LIVE DATA (as of today):
 
     try:
         resp = httpx.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": "llama-3.3-70b-versatile", "max_tokens": 600, "messages": messages},
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
+            json={"model": "anthropic/claude-haiku-4.5", "max_tokens": 600, "messages": messages},
             timeout=20.0
         )
         resp.raise_for_status()
@@ -292,9 +292,9 @@ async def get_topic_suggestions():
     import os, json, httpx
     from datetime import date
 
-    api_key = os.environ.get("GROQ_API_KEY")
+    api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=503, detail="GROQ_API_KEY not configured")
+        raise HTTPException(status_code=503, detail="OPENROUTER_API_KEY not configured")
 
     today = date.today().strftime("%B %d, %Y")
 
@@ -347,10 +347,10 @@ Rules:
 
     try:
         resp = httpx.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
             json={
-                "model": "llama-3.3-70b-versatile",
+                "model": "anthropic/claude-haiku-4.5",
                 "max_tokens": 2000,
                 "messages": [{"role": "user", "content": prompt}]
             },
@@ -542,17 +542,17 @@ Webinar data:
 
 Return ONLY valid JSON, no markdown, no explanation."""
 
-    api_key = os.environ.get("GROQ_API_KEY")
+    api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=503, detail="GROQ_API_KEY not configured")
+        raise HTTPException(status_code=503, detail="OPENROUTER_API_KEY not configured")
 
     try:
         import httpx
         resp = httpx.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
             json={
-                "model": "llama-3.3-70b-versatile",
+                "model": "anthropic/claude-haiku-4.5",
                 "max_tokens": 1200,
                 "messages": [{"role": "user", "content": prompt}]
             },
