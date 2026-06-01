@@ -3871,7 +3871,20 @@ html.dark .form-textarea:focus { border-color: #34d399 !important; box-shadow: 0
 /* ══════════════════════════════════
    19. MISC COMPONENTS
    ══════════════════════════════════ */
-.lb-score { background: linear-gradient(135deg, rgba(5,150,105,0.10), rgba(13,148,136,0.10)) !important; border-color: rgba(5,150,105,0.26) !important; }
+.lb-score {
+  background: linear-gradient(135deg, #059669, #0d9488) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(5,150,105,0.6) !important;
+  box-shadow: 0 2px 12px rgba(5,150,105,0.35), inset 0 1px 0 rgba(255,255,255,0.18) !important;
+  font-weight: 800 !important;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.15);
+}
+html.dark .lb-score {
+  background: linear-gradient(135deg, #10b981, #14b8a6) !important;
+  color: #052e2b !important;
+  text-shadow: none;
+  box-shadow: 0 0 0 1px rgba(52,211,153,0.4), 0 4px 16px rgba(16,185,129,0.25) !important;
+}
 .modal-box { box-shadow: 0 24px 80px rgba(0,0,0,0.16), 0 8px 24px rgba(5,150,105,0.07) !important; }
 .toast { background: linear-gradient(135deg, #0c0c0a, #1a1a18) !important; box-shadow: 0 4px 28px rgba(0,0,0,0.30) !important; }
 html.dark .modal-box { box-shadow: 0 24px 80px rgba(0,0,0,0.72), 0 8px 24px rgba(5,150,105,0.12) !important; }
