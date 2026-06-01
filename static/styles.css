@@ -4241,7 +4241,7 @@ html.dark .topic-use-btn:hover { background: rgba(255,255,255,0.1); color: rgba(
 .icp-nri              { background: rgba(245,158,11,0.15);  color: #fbbf24; border-color: rgba(245,158,11,0.4);  box-shadow: 0 0 10px rgba(245,158,11,0.15); }
 .icp-esops            { background: rgba(239,68,68,0.13);   color: #f87171; border-color: rgba(239,68,68,0.35);  box-shadow: 0 0 10px rgba(239,68,68,0.12); }
 .icp-family-office    { background: rgba(168,85,247,0.15);  color: #c084fc; border-color: rgba(168,85,247,0.4);  box-shadow: 0 0 10px rgba(168,85,247,0.15); }
-.icp-others           { background: rgba(100,116,139,0.10); color: #94a3b8; border-color: rgba(100,116,139,0.25); }
+.icp-others           { background: rgba(14,165,233,0.15);  color: #38bdf8; border-color: rgba(14,165,233,0.4);  box-shadow: 0 0 10px rgba(14,165,233,0.15); }
 
 /* Light mode ICP adjustments */
 html:not(.dark) .icp-pms              { color: #4f46e5; background: rgba(99,102,241,0.1);  box-shadow: none; }
@@ -4249,6 +4249,7 @@ html:not(.dark) .icp-retirement-planning { color: #059669; background: rgba(16,1
 html:not(.dark) .icp-nri              { color: #d97706; background: rgba(245,158,11,0.1);  box-shadow: none; }
 html:not(.dark) .icp-esops            { color: #dc2626; background: rgba(239,68,68,0.08);   box-shadow: none; }
 html:not(.dark) .icp-family-office    { color: #9333ea; background: rgba(168,85,247,0.1);   box-shadow: none; }
+html:not(.dark) .icp-others           { color: #0284c7; background: rgba(14,165,233,0.1);   border-color: rgba(14,165,233,0.3); box-shadow: none; }
 
 .filter-icp { min-width: 130px; }
 

@@ -692,7 +692,7 @@ function renderHome() {
           </div>
         </td>
         <td style="font-size:12px;color:var(--text-2);white-space:nowrap">${fmtDate(w.date)}</td>
-        <td>${w.icp && w.icp !== 'Others' ? `<span class="icp-badge icp-${(w.icp||'').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}">${esc(w.icp)}</span>` : `<span style="font-size:11px;color:var(--text-3)">Others</span>`}</td>
+        <td><span class="icp-badge icp-${(w.icp||'others').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}">${esc(w.icp || 'Others')}</span></td>
         <td><span class="wb-badge ${badgeCls}" style="font-size:10px;padding:3px 8px">${w.status}</span></td>
         <td style="font-size:12px;text-align:right;color:var(--c-reg);font-weight:600">${fmt(w.total_registrations)}</td>
         <td style="min-width:100px">
