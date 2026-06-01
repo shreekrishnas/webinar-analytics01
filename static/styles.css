@@ -5156,3 +5156,120 @@ html.dark .an-bar-fill, html.dark .progress-fill, html.dark .bar-fill { backgrou
 
 /* Make sure dark mode hero gradient is gone */
 html.dark .dash-hero::before { display: none !important; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   CONTRAST FIXES v25.1 - text visibility on light editorial bg
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* AI Analysis - average session pill */
+.aip-avg-pill {
+  background: var(--rh-tint-paper) !important;
+  border: 1px solid rgba(180,83,9,0.25) !important;
+  color: var(--rh-text-1) !important;
+  font-family: var(--rh-sans) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+.aip-avg-pill strong { color: var(--rh-text-1) !important; font-family: var(--rh-mono) !important; font-weight: 600 !important; }
+html.dark .aip-avg-pill { background: rgba(245,158,11,0.10) !important; border-color: rgba(245,158,11,0.25) !important; color: var(--rh-text-1) !important; }
+
+/* AI Analysis - no-shows row */
+.aip-fn-noshow { opacity: 1 !important; }
+.aip-fn-noshow .aip-fn-label { color: var(--rh-text-2) !important; }
+.aip-fn-noshow .aip-fn-num   { color: var(--rh-text-2) !important; }
+.aip-fn-noshow .aip-fn-pct   { color: var(--rh-red) !important; }
+
+/* AI Analysis - benchmark labels */
+.aip-bench-lbl { color: var(--rh-text-2) !important; font-weight: 500 !important; }
+.aip-bench-this .aip-bench-lbl { color: var(--rh-text-1) !important; font-weight: 700 !important; }
+.aip-bench-val { color: var(--rh-text-1) !important; font-family: var(--rh-mono) !important; font-weight: 600 !important; }
+.aip-bench-this .aip-bench-val { color: var(--rh-text-1) !important; }
+
+/* AI Analysis - funnel labels */
+.aip-fn-label { color: var(--rh-text-2) !important; }
+.aip-fn-num   { color: var(--rh-text-1) !important; font-family: var(--rh-mono) !important; font-weight: 600 !important; }
+
+/* AI Analysis - KPI strip values */
+.aip-kpi-val { color: var(--rh-text-1) !important; font-weight: 600 !important; }
+.aip-kpi-lbl { color: var(--rh-text-3) !important; font-weight: 600 !important; letter-spacing: 0.08em !important; }
+
+/* AI Analysis - duration list */
+.aip-dur-lbl { color: var(--rh-text-2) !important; }
+.aip-dur-pct { color: var(--rh-text-1) !important; font-family: var(--rh-mono) !important; font-weight: 600 !important; }
+.aip-dur-count { color: var(--rh-text-3) !important; font-family: var(--rh-mono) !important; }
+.aip-dur-sub { color: var(--rh-text-3) !important; }
+
+/* Insight cards inside AI Analysis */
+.aip-insight-icon-wrap { background: var(--rh-tint-red) !important; border-color: rgba(196,30,58,0.2) !important; color: var(--rh-red) !important; }
+
+/* Grade ring center text */
+.aip-ring-svg text { fill: var(--rh-text-1) !important; }
+.aip-ring-svg text + text { fill: var(--rh-text-3) !important; }
+
+/* Navbar brand: definitely visible */
+.nav-brand-name { color: var(--rh-text-1) !important; }
+html.dark .nav-brand-name { color: var(--rh-text-1) !important; }
+
+/* Dash hero in dark mode - make sure text contrasts */
+html.dark .dash-hero { background: var(--rh-surface) !important; }
+html.dark .dash-hero-title { color: var(--rh-text-1) !important; -webkit-text-fill-color: var(--rh-text-1) !important; }
+html.dark .dash-hero-sub { color: var(--rh-text-2) !important; }
+html.dark .dash-hero-eyebrow { color: var(--rh-text-3) !important; border-bottom-color: var(--rh-border) !important; }
+
+/* KPI banner numbers */
+.kpi-card-val, .an-kpi-val, [data-countup] {
+  color: var(--rh-text-1) !important;
+  -webkit-text-fill-color: var(--rh-text-1) !important;
+  background: none !important;
+}
+
+/* Webinar card stat values */
+.wb-card-stat-val { color: var(--rh-text-1) !important; }
+
+/* Table values & rates */
+.wb-list-table td { color: var(--rh-text-1) !important; }
+.wb-list-table td span[style*="color:"] {
+  /* preserve inline color overrides for status colors */
+}
+
+/* Form input labels in modal */
+.modal-box .form-label { color: var(--rh-text-2) !important; }
+.modal-box .form-input { color: var(--rh-text-1) !important; background: var(--rh-surface) !important; }
+.modal-box .form-input::placeholder { color: var(--rh-text-3) !important; }
+
+/* Status pills in modal: visible labels */
+.sp-label { color: var(--rh-text-1) !important; font-weight: 600 !important; }
+.sp-desc  { color: var(--rh-text-3) !important; }
+
+/* Topics page elements */
+.topic-card .topic-title { color: var(--rh-text-1) !important; }
+.topic-card .topic-hook  { color: var(--rh-text-2) !important; }
+.topic-card .topic-angle { color: var(--rh-amber) !important; }
+.topic-card .topic-exp   { color: var(--rh-text-1) !important; }
+
+/* Speaker page stat values */
+.spk-stat-val, .stat-val { color: var(--rh-text-1) !important; }
+.spk-bio { color: var(--rh-text-2) !important; }
+
+/* Leaderboard table cells */
+.lb-row td, .leaderboard-row td { color: var(--rh-text-1) !important; }
+.lb-pos, .lb-position { color: var(--rh-text-2) !important; font-family: var(--rh-mono) !important; }
+
+/* Activity feed */
+.act-item-title { color: var(--rh-text-1) !important; }
+.act-item-desc  { color: var(--rh-text-2) !important; }
+.act-item-time  { color: var(--rh-text-3) !important; font-family: var(--rh-mono) !important; }
+
+/* Generic any element with text-3 inheritance issue */
+.an-stat-lbl, .stat-lbl { color: var(--rh-text-3) !important; }
+
+/* Filter chips visibility */
+.tb-chip { color: var(--rh-text-2) !important; }
+
+/* No-data states */
+.empty-state, .empty-title, .empty-state-title { color: var(--rh-text-1) !important; }
+.empty-state-sub, .empty-state-desc { color: var(--rh-text-2) !important; }
+.empty-icon { color: var(--rh-text-3) !important; opacity: 0.4 !important; }
+
+/* Status breakdown headers (dashboard) */
+.sb-title, .status-breakdown-title { color: var(--rh-text-1) !important; font-family: var(--rh-serif) !important; font-weight: 600 !important; }
