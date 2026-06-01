@@ -3618,9 +3618,9 @@ html.dark .navbar { background: #000000 !important; border-bottom-color: rgba(25
 .notif-badge { background: #059669 !important; }
 
 /* Filter chips on dark nav */
-.tb-chip { color: rgba(255,255,255,0.55) !important; border-color: rgba(255,255,255,0.12) !important; background: rgba(255,255,255,0.05) !important; }
-.tb-chip:hover { color: rgba(255,255,255,0.90) !important; border-color: rgba(52,211,153,0.35) !important; background: rgba(5,150,105,0.12) !important; }
-.tb-chip.active { background: #059669 !important; color: #fff !important; border-color: #047857 !important; }
+/* superseded by trilliant.css */
+/* superseded by trilliant.css */
+/* superseded by trilliant.css */
 
 /* ══════════════════════════════════
    6. PRIMARY BUTTON — Solid carbon black

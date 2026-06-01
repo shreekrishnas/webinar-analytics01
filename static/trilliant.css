@@ -1627,3 +1627,90 @@ html.dark .cmp-card { background: rgba(15,23,42,0.50); }
   .cmp-grid { grid-template-columns: 1fr; }
   .cmp-block:first-child { border-right: none; border-bottom: 1px solid var(--border-subtle); }
 }
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   v3.2 FILTER CHIP HARD OVERRIDE (max specificity wins over old styles.css)
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Use compound + attribute selectors to win specificity battles */
+html body .navbar .nav-chips button.tb-chip,
+html body button.tb-chip[data-filter] {
+  background: rgba(255,255,255,0.85) !important;
+  border: 1.5px solid #cbd5e1 !important;
+  color: #475569 !important;
+  border-radius: 9999px !important;
+  font-family: var(--font-ui) !important;
+  font-weight: 600 !important;
+  font-size: 0.78rem !important;
+  padding: 7px 18px !important;
+  cursor: pointer !important;
+  transition: all 0.18s ease !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+html body .navbar .nav-chips button.tb-chip:hover:not(.active),
+html body button.tb-chip[data-filter]:hover:not(.active) {
+  background: #fff !important;
+  color: #1E1B4B !important;
+  border-color: #6366F1 !important;
+  transform: translateY(-1px) !important;
+}
+
+html body .navbar .nav-chips button.tb-chip.active,
+html body button.tb-chip[data-filter].active {
+  background: linear-gradient(135deg, #6366F1, #4F46E5) !important;
+  background-color: #6366F1 !important;
+  color: #ffffff !important;
+  border-color: #4F46E5 !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 14px rgba(99,102,241,0.50) !important;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.06) !important;
+}
+
+html body .navbar .nav-chips button.tb-chip.active:hover,
+html body button.tb-chip[data-filter].active:hover {
+  background: linear-gradient(135deg, #4F46E5, #4338CA) !important;
+  box-shadow: 0 6px 18px rgba(99,102,241,0.60) !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Dark mode */
+html.dark body .navbar .nav-chips button.tb-chip,
+html.dark body button.tb-chip[data-filter] {
+  background: rgba(30,41,59,0.70) !important;
+  border-color: rgba(255,255,255,0.18) !important;
+  color: #CBD5E1 !important;
+}
+html.dark body .navbar .nav-chips button.tb-chip:hover:not(.active),
+html.dark body button.tb-chip[data-filter]:hover:not(.active) {
+  background: rgba(51,65,85,0.90) !important;
+  color: #F1F5F9 !important;
+  border-color: #818CF8 !important;
+}
+html.dark body .navbar .nav-chips button.tb-chip.active,
+html.dark body button.tb-chip[data-filter].active {
+  background: linear-gradient(135deg, #818CF8, #6366F1) !important;
+  background-color: #6366F1 !important;
+  color: #ffffff !important;
+  border-color: #818CF8 !important;
+}
+
+/* Container glass pill */
+html body .navbar .nav-chips {
+  background: rgba(255,255,255,0.50) !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+  border-radius: 9999px !important;
+  padding: 5px !important;
+  gap: 4px !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}
+html.dark body .navbar .nav-chips {
+  background: rgba(30,41,59,0.50) !important;
+  border-color: rgba(255,255,255,0.10) !important;
+}
