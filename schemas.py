@@ -99,6 +99,7 @@ class WebinarCreate(BaseModel):
     speaker_name: str   # will find existing or create new speaker
     speaker_email: Optional[str] = None
     status: str = "upcoming"
+    icp: Optional[str] = "Others"
 
 
 class WebinarSummary(BaseModel):
@@ -218,6 +219,7 @@ class AttendeeWebinarItem(BaseModel):
     date: date
     time: Optional[str] = None
     speaker_name: str
+    icp: Optional[str] = "Others"
     duration_minutes: Optional[int] = None
 
 

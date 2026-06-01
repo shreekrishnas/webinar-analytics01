@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>WebinarIQ · Webinar Intelligence</title>
   <!-- Preload critical assets so they start downloading immediately -->
-  <link rel="preload" href="/static/styles.css?v=44" as="style" />
-  <link rel="preload" href="/static/app.js?v=44" as="script" />
-  <link rel="stylesheet" href="/static/styles.css?v=44" />
+  <link rel="preload" href="/static/styles.css?v=45" as="style" />
+  <link rel="preload" href="/static/app.js?v=45" as="script" />
+  <link rel="stylesheet" href="/static/styles.css?v=45" />
   <!-- Inline loader: visible instantly, removed by JS once data loads -->
   <style>
     #page-loader{position:fixed;inset:0;background:#0c0c0a;display:flex;align-items:center;justify-content:center;z-index:99999;transition:opacity .35s ease}
@@ -225,6 +225,17 @@
         <datalist id="speaker-list"></datalist>
       </div>
       <div class="form-field">
+        <label class="form-label">ICP (Ideal Customer Profile)</label>
+        <select class="form-input" id="nw-icp">
+          <option value="Others">Others</option>
+          <option value="PMS">PMS</option>
+          <option value="Retirement Planning">Retirement Planning</option>
+          <option value="NRI">NRI</option>
+          <option value="ESOPs">ESOPs</option>
+          <option value="Family Office">Family Office</option>
+        </select>
+      </div>
+      <div class="form-field">
         <label class="form-label">Status</label>
         <div class="status-pills" id="nw-status-pills">
           <label class="status-pill">
@@ -427,6 +438,6 @@
 <!-- ── TOAST ──────────────────────────────────────────────── -->
 <div class="toast" id="toast"></div>
 
-<script src="/static/app.js?v=44"></script>
+<script src="/static/app.js?v=45"></script>
 </body>
 </html>

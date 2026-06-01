@@ -116,6 +116,8 @@ def update_webinar(webinar_id: int, payload: dict, db: Session = Depends(get_db)
         w.description = payload["description"]
     if "status" in payload:
         w.status = payload["status"]
+    if "icp" in payload:
+        w.icp = payload["icp"] or "Others"
     if "speaker_name" in payload:
         sp_name = payload["speaker_name"].strip()
         speaker = db.query(models.Speaker).filter(

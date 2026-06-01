@@ -197,6 +197,7 @@ def create_webinar(db: Session, webinar_in: schemas.WebinarCreate) -> models.Web
         description=webinar_in.description,
         speaker_id=speaker.id,
         status=webinar_in.status,
+        icp=getattr(webinar_in, 'icp', None) or 'Others',
     )
     db.add(webinar)
     db.commit()
@@ -686,6 +687,7 @@ def get_attendee_profile(db: Session, email: str) -> Optional[schemas.AttendeePr
             w.title,
             w.date,
             w.time,
+            COALESCE(w.icp, 'Others') AS icp,
             COALESCE(s.name, 'Unknown') AS speaker_name,
             a.duration_minutes
         FROM registrations r
@@ -694,7 +696,7 @@ def get_attendee_profile(db: Session, email: str) -> Optional[schemas.AttendeePr
         LEFT JOIN speakers s ON s.id = w.speaker_id
         WHERE LOWER(TRIM(COALESCE(r.email, ''))) = :email
           AND a.attended = TRUE
-        GROUP BY r.email, w.id, w.title, w.date, w.time, s.name, a.duration_minutes
+        GROUP BY r.email, w.id, w.title, w.date, w.time, w.icp, s.name, a.duration_minutes
         ORDER BY w.date DESC
     """)
     rows = db.execute(sql, {"email": email_norm}).fetchall()
@@ -708,6 +710,7 @@ def get_attendee_profile(db: Session, email: str) -> Optional[schemas.AttendeePr
             date=row.date,
             time=row.time,
             speaker_name=row.speaker_name,
+            icp=row.icp or 'Others',
             duration_minutes=row.duration_minutes,
         )
         for row in rows

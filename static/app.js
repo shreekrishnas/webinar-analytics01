@@ -939,31 +939,21 @@ function _drawWebinarDetail(w) {
       ${attCard}
     </div>` : '';
 
-  // Analysis cards
-  const regDlAttr = w.total_registrations > 0
-    ? `onclick="downloadRegistrations(${w.id})" title="Click to download registrations CSV" style="cursor:pointer"`
-    : '';
-  const attDlAttr = w.total_attendees > 0
-    ? `onclick="downloadAttendees(${w.id})" title="Click to download attendees CSV" style="cursor:pointer"`
-    : '';
+  // Analysis cards (download removed - data is placeholder for many webinars)
   const analysisHTML = `
     <div class="analysis-grid">
-      <div class="an-stat-card an-stat-dl" ${regDlAttr}>
+      <div class="an-stat-card">
         <div class="an-stat-icon" style="background:rgba(59,130,246,0.15)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
         <div style="flex:1">
           <div class="an-stat-val" style="color:var(--c-reg)">${fmt(w.total_registrations)}</div>
-          <div class="an-stat-lbl">Registered
-            ${w.total_registrations > 0 ? `<span class="dl-hint">↓ CSV</span>` : ''}
-          </div>
+          <div class="an-stat-lbl">Registered</div>
         </div>
       </div>
-      <div class="an-stat-card an-stat-dl" ${attDlAttr}>
+      <div class="an-stat-card">
         <div class="an-stat-icon" style="background:rgba(16,185,129,0.15)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
         <div style="flex:1">
           <div class="an-stat-val" style="color:var(--c-att)">${fmt(w.total_attendees)}</div>
-          <div class="an-stat-lbl">Attended
-            ${w.total_attendees > 0 ? `<span class="dl-hint" style="background:rgba(16,185,129,.15);color:#059669">↓ CSV</span>` : ''}
-          </div>
+          <div class="an-stat-lbl">Attended</div>
         </div>
       </div>
       <div class="an-stat-card">
@@ -1327,11 +1317,6 @@ function renderAnalytics() {
           <h1 class="page-title">Analytics</h1>
           <p class="page-sub">Platform-wide performance · ${S.webinars.length} webinars</p>
         </div>
-        ${st.total_attendees > 0 ? `
-        <button class="btn btn-ghost btn-sm" onclick="downloadAllAttendees()" style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Download Attendees
-        </button>` : ''}
       </div>
 
       <!-- KPI strip - 6 metrics -->
@@ -1351,10 +1336,10 @@ function renderAnalytics() {
           <div class="an-kpi-val" data-countup="${st.total_registrations}">${fmt(st.total_registrations)}</div>
           <div class="an-kpi-label">Total Registrations</div>
         </div>
-        <div class="an-kpi-card an-kpi-card-dl" ${st.total_attendees > 0 ? `onclick="downloadAllAttendees()" title="Download all attendees as CSV"` : ''}>
+        <div class="an-kpi-card">
           <div class="an-kpi-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
           <div class="an-kpi-val" data-countup="${st.total_attendees}">${fmt(st.total_attendees)}</div>
-          <div class="an-kpi-label">Total Attendees${st.total_attendees > 0 ? ` <span class="dl-hint" style="background:rgba(16,185,129,.15);color:#059669">↓ CSV</span>` : ''}</div>
+          <div class="an-kpi-label">Total Attendees</div>
         </div>
         <div class="an-kpi-card">
           <div class="an-kpi-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
@@ -1655,6 +1640,9 @@ function closeWebinarModal() {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
+  // Reset ICP to "Others"
+  const icpSel = document.getElementById('nw-icp');
+  if (icpSel) icpSel.value = 'Others';
   // Reset status pills to "upcoming"
   const upcomingRadio = document.querySelector('input[name="nw-status-radio"][value="upcoming"]');
   if (upcomingRadio) upcomingRadio.checked = true;
@@ -1693,6 +1681,7 @@ async function submitWebinarModal() {
     speaker_name: speaker,
     description: document.getElementById('nw-desc').value.trim() || null,
     status: (document.querySelector('input[name="nw-status-radio"]:checked') || {value:'upcoming'}).value,
+    icp: (document.getElementById('nw-icp') || {value:'Others'}).value,
   };
 
   try {
@@ -2698,7 +2687,7 @@ async function openAttendeeModal(email, name) {
         <div class="att-wb-card" onclick="closeAttendeeModal();nav('webinar',${w.webinar_id})" title="Open webinar">
           <div class="att-wb-card-hd">
             <div class="att-wb-card-title">${wbTitle}</div>
-            ${w.icp && w.icp !== 'Others' ? `<span class="icp-badge icp-${(w.icp||'').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}" style="font-size:9px;padding:2px 7px;flex-shrink:0">${esc(w.icp)}</span>` : ''}
+            <span class="icp-badge icp-${(w.icp||'others').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}" style="font-size:9px;padding:2px 7px;flex-shrink:0">${esc(w.icp || 'Others')}</span>
           </div>
           <div class="att-wb-card-meta">
             <span>${wbDate}</span>
