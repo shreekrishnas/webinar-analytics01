@@ -505,40 +505,7 @@ html.dark ::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.55); }
   gap: 6px;
   flex-wrap: nowrap;
 }
-.tb-chip {
-  padding: 5px 14px;
-  border-radius: var(--r-pill);
-  font-size: 12.5px;
-  font-weight: 600;
-  border: 1.5px solid rgba(79,70,229,0.20);
-  background: rgba(79,70,229,0.07);
-  color: var(--text-3);
-  cursor: pointer;
-  transition: all var(--transition);
-  white-space: nowrap;
-  font-family: var(--font);
-}
-.tb-chip:hover:not(.active) {
-  border-color: rgba(79,70,229,0.45);
-  color: var(--text-2);
-  background: rgba(79,70,229,0.13);
-}
-.tb-chip.active {
-  background: var(--grad-primary);
-  border-color: transparent;
-  color: #fff;
-  box-shadow: 0 2px 12px rgba(79,70,229,0.40);
-}
-.tb-chip {
-  border-color: var(--border);
-  background: var(--card);
-  color: var(--text-3);
-}
-.tb-chip:hover:not(.active) {
-  border-color: rgba(79,70,229,0.30);
-  color: var(--accent);
-  background: var(--accent-bg);
-}
+/* original tb-chip rules - all neutralized in favor of trilliant.css v3.2 */
 
 /* ── Notification bell ── */
 .tb-notif-btn {
@@ -5080,20 +5047,7 @@ html.dark .chatbot-send { background: #fafafa !important; color: #000 !important
 .spk-stat-lbl { font-family: var(--rh-sans) !important; text-transform: uppercase !important; letter-spacing: 0.08em !important; color: var(--rh-text-3) !important; }
 .spk-avatar { border-radius: 6px !important; font-family: var(--rh-sans) !important; font-weight: 700 !important; letter-spacing: 0 !important; }
 
-/* ════ FILTER CHIPS (navbar) ════ */
-.tb-chip {
-  font-family: var(--rh-sans) !important;
-  background: transparent !important;
-  border: 1px solid var(--rh-border) !important;
-  color: var(--rh-text-2) !important;
-  border-radius: 6px !important;
-  font-weight: 500 !important;
-  font-size: 11.5px !important;
-  padding: 5px 11px !important;
-}
-.tb-chip:hover { background: var(--rh-surface) !important; color: var(--rh-text-1) !important; }
-.tb-chip.active { background: var(--rh-ink) !important; color: var(--rh-bg) !important; border-color: var(--rh-ink) !important; }
-html.dark .tb-chip.active { background: #fafafa !important; color: #000 !important; border-color: #fafafa !important; }
+/* FILTER CHIPS - superseded by trilliant.css v3.2 */
 
 /* ════ TOAST ════ */
 .toast { background: var(--rh-ink) !important; color: var(--rh-bg) !important; border-radius: 8px !important; font-family: var(--rh-sans) !important; box-shadow: 0 8px 24px rgba(0,0,0,0.2) !important; }
@@ -5264,7 +5218,7 @@ html.dark .dash-hero-eyebrow { color: var(--rh-text-3) !important; border-bottom
 .an-stat-lbl, .stat-lbl { color: var(--rh-text-3) !important; }
 
 /* Filter chips visibility */
-.tb-chip { color: var(--rh-text-2) !important; }
+/* superseded */
 
 /* No-data states */
 .empty-state, .empty-title, .empty-state-title { color: var(--rh-text-1) !important; }
@@ -5438,8 +5392,8 @@ html:not(.dark) .notif-item-title { color: var(--rh-text-1) !important; }
 html:not(.dark) .notif-item-desc { color: var(--rh-text-2) !important; }
 
 /* === Filter chips === */
-html:not(.dark) .tb-chip { color: var(--rh-text-2) !important; }
-html:not(.dark) .tb-chip.active { color: var(--rh-bg) !important; }
+html:not(.dark) /* superseded */
+/* superseded */
 
 /* === Modal === */
 html:not(.dark) .modal-title { color: var(--rh-text-1) !important; }
