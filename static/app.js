@@ -2021,13 +2021,13 @@ function renderAIPanel(panel, data) {
     const w = Math.round(val / max * 100);
     const grad = isThis
       ? `linear-gradient(90deg,${gradeColor}cc,${gradeColor})`
-      : 'linear-gradient(90deg,rgba(255,255,255,0.12),rgba(255,255,255,0.18))';
+      : 'linear-gradient(90deg,#94a3b8,#cbd5e1)';
     return `<div class="aip-bench-row${isThis?' aip-bench-this':''}">
       <span class="aip-bench-lbl">${label}</span>
       <div class="aip-bench-track">
         <div class="aip-bench-fill" style="background:${grad}" data-w="${w}"></div>
       </div>
-      <span class="aip-bench-val" style="color:${isThis?gradeColor:'rgba(255,255,255,0.5)'}">${val.toFixed(1)}%</span>
+      <span class="aip-bench-val" style="color:${isThis?gradeColor:'#475569'}">${val.toFixed(1)}%</span>
     </div>`;
   }
 
