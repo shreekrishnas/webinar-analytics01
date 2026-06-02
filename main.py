@@ -232,9 +232,10 @@ def export_leaderboard(
     webinar_id: Optional[int] = Query(None),
     min_score: Optional[int] = Query(None),
     max_score: Optional[int] = Query(None),
+    limit: int = Query(1000, ge=1, le=10000),
     db: Session = Depends(get_db),
 ):
-    """Export full leaderboard data with attended webinar titles per attendee."""
+    """Export leaderboard data reflecting current filters (limit, speaker, webinar, score range)."""
     from sqlalchemy import text as _text
 
     # Get the same data the /api/leaderboard endpoint returns
@@ -285,6 +286,9 @@ def export_leaderboard(
             "avg_min": round(avg_dur, 1),
             "score": score,
         })
+
+    # Apply the same limit shown on the leaderboard UI
+    entries = entries[:limit]
 
     # For each entry, fetch the actual webinar titles attended
     emails = [e["email"] for e in entries]

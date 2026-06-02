@@ -2240,3 +2240,72 @@ html.dark .note-card { background: rgba(15,23,42,0.55); }
   font-family: var(--font-mono) !important;
   font-weight: 600 !important;
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   v3.5 Date Range chip refined styling
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Date Range chip - match other chips perfectly */
+html body .navbar .nav-chips button.tb-chip[data-filter="range"],
+html body button.tb-chip[data-filter="range"] {
+  background: rgba(255,255,255,0.85) !important;
+  border: 1.5px solid #cbd5e1 !important;
+  color: #475569 !important;
+  border-radius: 9999px !important;
+  font-family: var(--font-ui) !important;
+  font-weight: 600 !important;
+  font-size: 0.78rem !important;
+  padding: 7px 16px !important;
+  cursor: pointer !important;
+  transition: all 0.18s ease !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  white-space: nowrap !important;
+}
+html body button.tb-chip[data-filter="range"]:hover:not(.active) {
+  background: #fff !important;
+  color: #1E1B4B !important;
+  border-color: #6366F1 !important;
+  transform: translateY(-1px) !important;
+}
+html body button.tb-chip[data-filter="range"].active {
+  background: linear-gradient(135deg, #6366F1, #4F46E5) !important;
+  background-color: #6366F1 !important;
+  color: #ffffff !important;
+  border-color: #4F46E5 !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 14px rgba(99,102,241,0.50) !important;
+}
+html body button.tb-chip[data-filter="range"] svg {
+  flex-shrink: 0 !important;
+  opacity: 0.85 !important;
+}
+html body button.tb-chip[data-filter="range"].active svg {
+  opacity: 1 !important;
+  color: #fff !important;
+  stroke: #fff !important;
+}
+html body button.tb-chip[data-filter="range"] #date-range-label {
+  color: inherit !important;
+  font-family: inherit !important;
+  font-weight: inherit !important;
+}
+
+/* Dark mode for date range chip */
+html.dark body button.tb-chip[data-filter="range"] {
+  background: rgba(30,41,59,0.70) !important;
+  border-color: rgba(255,255,255,0.18) !important;
+  color: #CBD5E1 !important;
+}
+html.dark body button.tb-chip[data-filter="range"]:hover:not(.active) {
+  background: rgba(51,65,85,0.90) !important;
+  color: #F1F5F9 !important;
+  border-color: #818CF8 !important;
+}
+
+/* Refined popover positioning + presentation */
+.date-range-popover {
+  min-width: 320px !important;
+  max-width: 360px !important;
+}

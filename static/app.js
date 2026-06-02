@@ -3011,6 +3011,7 @@ function exportLeaderboardCSV() {
   if (S._lbWebinar)  params.set('webinar_id', S._lbWebinar);
   if (S._lbScoreMin) params.set('min_score', S._lbScoreMin);
   if (S._lbScoreMax) params.set('max_score', S._lbScoreMax);
+  params.set('limit', S._lbLimit || 50);
   showToast('Preparing CSV export…');
   fetch('/api/leaderboard/export?' + params.toString())
     .then(r => r.blob())
