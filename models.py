@@ -82,6 +82,18 @@ class UploadLog(Base):
     webinar = relationship("Webinar", back_populates="upload_logs")
 
 
+class WebinarNote(Base):
+    """Human knowledge/comments for a webinar — used by AI in analysis."""
+    __tablename__ = "webinar_notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    webinar_id = Column(Integer, ForeignKey("webinars.id", ondelete="CASCADE"), index=True)
+    author = Column(String, default="Team")
+    category = Column(String, default="observation")  # observation | speaker_feedback | tech_issue | content_quality | promotion
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class WebinarAd(Base):
     __tablename__ = "webinar_ads"
 

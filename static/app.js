@@ -332,11 +332,82 @@ function updateTopbarChips(page) {
 
 function setChipFilter(value) {
   S.filterStatus = value;
+  if (value !== 'range') { S._drpFrom = ''; S._drpTo = ''; updateDateRangeLabel(); }
   // Sync chip active state
   document.querySelectorAll('.tb-chip').forEach(c =>
     c.classList.toggle('active', c.dataset.filter === value)
   );
   if (S.page === 'home') renderHome();
+}
+
+/* ── Date range popover ────────────────────────────────────────────────── */
+function openDateRangePopover(btn) {
+  const pop = document.getElementById('date-range-popover');
+  if (!pop) return;
+  if (pop.style.display === 'block') { pop.style.display = 'none'; return; }
+  const r = btn.getBoundingClientRect();
+  pop.style.top  = (r.bottom + 8) + 'px';
+  pop.style.left = Math.max(12, r.left - 100) + 'px';
+  pop.style.display = 'block';
+  document.getElementById('drp-from').value = S._drpFrom || '';
+  document.getElementById('drp-to').value   = S._drpTo || '';
+  setTimeout(() => {
+    document.addEventListener('click', _drpOutsideClick, { once: true });
+  }, 50);
+}
+function _drpOutsideClick(e) {
+  const pop = document.getElementById('date-range-popover');
+  if (pop && !pop.contains(e.target) && !e.target.closest('[data-filter="range"]')) {
+    pop.style.display = 'none';
+  } else {
+    setTimeout(() => document.addEventListener('click', _drpOutsideClick, { once: true }), 50);
+  }
+}
+function applyQuickRange(kind) {
+  const today = new Date();
+  let from, to = today;
+  if (typeof kind === 'number') {
+    from = new Date(today);
+    from.setDate(today.getDate() - kind);
+  } else if (kind === 'thisMonth') {
+    from = new Date(today.getFullYear(), today.getMonth(), 1);
+  } else if (kind === 'thisYear') {
+    from = new Date(today.getFullYear(), 0, 1);
+  }
+  document.getElementById('drp-from').value = from.toISOString().slice(0,10);
+  document.getElementById('drp-to').value   = to.toISOString().slice(0,10);
+}
+function applyDateRange() {
+  S._drpFrom = document.getElementById('drp-from').value;
+  S._drpTo   = document.getElementById('drp-to').value;
+  S.filterStatus = 'range';
+  document.querySelectorAll('.tb-chip').forEach(c => c.classList.toggle('active', c.dataset.filter === 'range'));
+  updateDateRangeLabel();
+  document.getElementById('date-range-popover').style.display = 'none';
+  if (S.page === 'home') renderHome();
+}
+function clearDateRange() {
+  S._drpFrom = ''; S._drpTo = '';
+  document.getElementById('drp-from').value = '';
+  document.getElementById('drp-to').value = '';
+  updateDateRangeLabel();
+  setChipFilter('all');
+  document.getElementById('date-range-popover').style.display = 'none';
+}
+function updateDateRangeLabel() {
+  const lbl = document.getElementById('date-range-label');
+  if (!lbl) return;
+  if (S._drpFrom && S._drpTo) {
+    const f = new Date(S._drpFrom).toLocaleDateString('en', { month: 'short', day: 'numeric' });
+    const t = new Date(S._drpTo).toLocaleDateString('en', { month: 'short', day: 'numeric' });
+    lbl.textContent = `${f} → ${t}`;
+  } else if (S._drpFrom) {
+    lbl.textContent = `From ${new Date(S._drpFrom).toLocaleDateString('en', { month:'short', day:'numeric' })}`;
+  } else if (S._drpTo) {
+    lbl.textContent = `Until ${new Date(S._drpTo).toLocaleDateString('en', { month:'short', day:'numeric' })}`;
+  } else {
+    lbl.textContent = 'Date Range';
+  }
 }
 
 /* ── Navigation ─────────────────────────────────────────────────────────── */
@@ -630,13 +701,16 @@ function renderHome() {
   let list = S.webinars.filter(w =>
     !q || w.title.toLowerCase().includes(q) || w.speaker_name.toLowerCase().includes(q)
   );
-  if (S.filterStatus === 'month') {
-    const now = new Date();
+  if (S.filterStatus === 'range' && (S._drpFrom || S._drpTo)) {
+    const from = S._drpFrom ? new Date(S._drpFrom + 'T00:00:00') : null;
+    const to   = S._drpTo   ? new Date(S._drpTo   + 'T23:59:59') : null;
     list = list.filter(w => {
       const d = new Date(w.date + 'T00:00:00');
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
     });
-  } else if (S.filterStatus !== 'all') {
+  } else if (S.filterStatus !== 'all' && S.filterStatus !== 'range') {
     list = list.filter(w => w.status === S.filterStatus);
   }
   if (S.filterSpeaker !== 'all') list = list.filter(w => w.speaker_id == S.filterSpeaker);
@@ -876,6 +950,7 @@ async function renderWebinarDetail(id) {
     const w = await api(`/api/webinars/${id}`);
     detailCache[id] = w;
     _drawWebinarDetail(w);
+    loadNotes(id);
   } catch(e) {
     setContent('<div class="empty-state"><div class="empty-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><div class="empty-title">Failed to load</div></div>');
   }
@@ -1070,6 +1145,38 @@ function _drawWebinarDetail(w) {
       ` : ''}
 
       <!-- AI Analysis Panel -->
+      <!-- Human Notes -->
+      <div class="notes-section" id="notes-section-${w.id}">
+        <div class="notes-head">
+          <div>
+            <div class="notes-title">Human Knowledge</div>
+            <div class="notes-sub">Add observations that AI will use in analysis</div>
+          </div>
+          <button class="btn-add-note" onclick="toggleNoteForm(${w.id})">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Note
+          </button>
+        </div>
+        <div class="note-form" id="note-form-${w.id}" style="display:none">
+          <div class="note-form-row">
+            <input class="form-input" id="note-author-${w.id}" placeholder="Your name (e.g. Sarah)" maxlength="100" />
+            <select class="form-input" id="note-category-${w.id}">
+              <option value="observation">Observation</option>
+              <option value="speaker_feedback">Speaker Feedback</option>
+              <option value="tech_issue">Technical Issue</option>
+              <option value="content_quality">Content Quality</option>
+              <option value="promotion">Promotion / Marketing</option>
+            </select>
+          </div>
+          <textarea class="form-input note-content" id="note-content-${w.id}" rows="3" placeholder="What happened? What did the audience think? Anything the numbers don't show…"></textarea>
+          <div class="note-form-actions">
+            <button class="btn btn-ghost btn-sm" onclick="toggleNoteForm(${w.id})">Cancel</button>
+            <button class="btn btn-primary btn-sm" onclick="submitNote(${w.id})">Save Note</button>
+          </div>
+        </div>
+        <div class="notes-list" id="notes-list-${w.id}"></div>
+      </div>
+
       <div id="ai-analysis-panel"></div>
       <div id="ai-compare-panel"></div>
 
@@ -1543,8 +1650,10 @@ async function renderLeaderboard(speakerId, webinarId) {
   const params = new URLSearchParams();
   const selSpeaker = S._lbSpeaker || '';
   const selWebinar = S._lbWebinar || '';
+  const selLimit   = S._lbLimit ? +S._lbLimit : 50;
   if (selSpeaker) params.set('speaker_id', selSpeaker);
   if (selWebinar) params.set('webinar_id', selWebinar);
+  params.set('limit', selLimit);
 
   try {
     const lbAll = await api('/api/leaderboard?' + params.toString());
@@ -1612,8 +1721,12 @@ async function renderLeaderboard(speakerId, webinarId) {
         <div class="page-hd">
           <div>
             <h1 class="page-title">Attendee Leaderboard</h1>
-            <p class="page-sub">Top attendees ranked by score · ${lb.length} entries</p>
+            <p class="page-sub">Top attendees ranked by score · ${lb.length} entries shown</p>
           </div>
+          <button class="btn btn-primary" onclick="exportLeaderboardCSV()" style="display:inline-flex;align-items:center;gap:6px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export CSV
+          </button>
         </div>
 
         <div class="lb-filters">
@@ -1631,13 +1744,25 @@ async function renderLeaderboard(speakerId, webinarId) {
             <span class="lb-score-dash">to</span>
             <input type="number" class="filter-select lb-score-input" placeholder="max" value="${S._lbScoreMax||''}" onchange="S._lbScoreMax=this.value;renderLeaderboard()" />
           </div>
-          <button class="btn btn-ghost btn-sm" onclick="S._lbSpeaker='';S._lbWebinar='';S._lbScoreMin='';S._lbScoreMax='';renderLeaderboard()">Clear Filters</button>
-          <span style="font-size:12px;color:var(--text-muted);margin-left:6px">
-            Score = 10 pts per webinar attended + bonus for longer sessions
-          </span>
+          <button class="btn btn-ghost btn-sm" onclick="S._lbSpeaker='';S._lbWebinar='';S._lbScoreMin='';S._lbScoreMax='';S._lbLimit=50;renderLeaderboard()">Clear Filters</button>
         </div>
 
         ${tableHTML}
+
+        <div class="lb-bottom-controls">
+          <span class="lb-score-help">Score = 10 pts per webinar attended + bonus for longer sessions</span>
+          <div class="lb-show-control">
+            <span>Show top:</span>
+            <select class="filter-select" onchange="S._lbLimit=this.value;renderLeaderboard()">
+              <option value="20"  ${selLimit==20?'selected':''}>20</option>
+              <option value="50"  ${selLimit==50?'selected':''}>50</option>
+              <option value="70"  ${selLimit==70?'selected':''}>70</option>
+              <option value="100" ${selLimit==100?'selected':''}>100</option>
+              <option value="500" ${selLimit==500?'selected':''}>500</option>
+              <option value="1000" ${selLimit==1000?'selected':''}>All</option>
+            </select>
+          </div>
+        </div>
       </div>`);
   } catch(e) {
     setContent('<div class="empty-state"><div class="empty-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><div class="empty-title">Failed to load leaderboard</div></div>');
@@ -1898,6 +2023,105 @@ async function _triggerDownload(url) {
 }
 
 /* ── AI Analysis ─────────────────────────────────────────────────────────── */
+/* ── Human Notes ──────────────────────────────────────────────────────────── */
+async function loadNotes(webinarId) {
+  try {
+    const notes = await api(`/api/webinars/${webinarId}/notes`);
+    renderNotesList(webinarId, notes);
+  } catch(e) {
+    console.error('Failed to load notes', e);
+  }
+}
+
+const CATEGORY_LABELS = {
+  observation: 'Observation',
+  speaker_feedback: 'Speaker Feedback',
+  tech_issue: 'Tech Issue',
+  content_quality: 'Content Quality',
+  promotion: 'Promotion',
+};
+const CATEGORY_COLORS = {
+  observation: '#6366F1',
+  speaker_feedback: '#10B981',
+  tech_issue: '#DC2626',
+  content_quality: '#F59E0B',
+  promotion: '#7C3AED',
+};
+
+function renderNotesList(webinarId, notes) {
+  const el = document.getElementById(`notes-list-${webinarId}`);
+  if (!el) return;
+  if (!notes || !notes.length) {
+    el.innerHTML = `<div class="notes-empty">No notes yet. Add observations to help AI analyze better.</div>`;
+    return;
+  }
+  el.innerHTML = notes.map(n => {
+    const color = CATEGORY_COLORS[n.category] || '#6366F1';
+    const label = CATEGORY_LABELS[n.category] || n.category;
+    const dt = n.created_at ? new Date(n.created_at).toLocaleDateString('en', { month:'short', day:'numeric', year:'numeric' }) : '';
+    return `
+    <div class="note-card">
+      <div class="note-card-head">
+        <div class="note-meta">
+          <span class="note-cat" style="background:${color}1A;color:${color};border-color:${color}40">${esc(label)}</span>
+          <span class="note-author">${esc(n.author || 'Team')}</span>
+          <span class="note-time">${esc(dt)}</span>
+        </div>
+        <button class="note-delete" onclick="deleteNote(${webinarId}, ${n.id})" title="Delete note">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </button>
+      </div>
+      <div class="note-content-display">${esc(n.content)}</div>
+    </div>`;
+  }).join('');
+}
+
+function toggleNoteForm(webinarId) {
+  const f = document.getElementById(`note-form-${webinarId}`);
+  if (!f) return;
+  const showing = f.style.display === 'block';
+  f.style.display = showing ? 'none' : 'block';
+  if (!showing) {
+    setTimeout(() => document.getElementById(`note-author-${webinarId}`)?.focus(), 60);
+  }
+}
+
+async function submitNote(webinarId) {
+  const author   = document.getElementById(`note-author-${webinarId}`).value.trim() || 'Team';
+  const category = document.getElementById(`note-category-${webinarId}`).value;
+  const content  = document.getElementById(`note-content-${webinarId}`).value.trim();
+  if (!content) {
+    showToast('Please write a note before saving', 'error');
+    return;
+  }
+  try {
+    await fetch(`/api/webinars/${webinarId}/notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ author, category, content })
+    }).then(r => { if (!r.ok) throw new Error('Save failed'); return r.json(); });
+    document.getElementById(`note-content-${webinarId}`).value = '';
+    document.getElementById(`note-author-${webinarId}`).value = '';
+    toggleNoteForm(webinarId);
+    showToast('Note saved. AI will use it in the next analysis.');
+    loadNotes(webinarId);
+  } catch(e) {
+    showToast('Failed to save note. Please try again.', 'error');
+  }
+}
+
+async function deleteNote(webinarId, noteId) {
+  if (!confirm('Delete this note?')) return;
+  try {
+    const r = await fetch(`/api/webinars/${webinarId}/notes/${noteId}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error('Delete failed');
+    loadNotes(webinarId);
+    showToast('Note deleted');
+  } catch(e) {
+    showToast('Failed to delete', 'error');
+  }
+}
+
 async function runAIAnalysis(webinarId) {
   const btn   = document.getElementById('ai-analyze-btn');
   const panel = document.getElementById('ai-analysis-panel');
@@ -2781,6 +3005,27 @@ function showToast(msg, type='success') {
 /* ══════════════════════════════════════════════════════════════════════════
    ATTENDEE PROFILE DRAWER
 ══════════════════════════════════════════════════════════════════════════ */
+function exportLeaderboardCSV() {
+  const params = new URLSearchParams();
+  if (S._lbSpeaker)  params.set('speaker_id', S._lbSpeaker);
+  if (S._lbWebinar)  params.set('webinar_id', S._lbWebinar);
+  if (S._lbScoreMin) params.set('min_score', S._lbScoreMin);
+  if (S._lbScoreMax) params.set('max_score', S._lbScoreMax);
+  showToast('Preparing CSV export…');
+  fetch('/api/leaderboard/export?' + params.toString())
+    .then(r => r.blob())
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'leaderboard_export.csv';
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Downloaded leaderboard_export.csv', 'success');
+    })
+    .catch(() => showToast('Export failed. Please try again.', 'error'));
+}
+
 async function openAttendeeModal(email, name) {
   // Show the drawer immediately with a loading state
   const overlay = document.getElementById('att-overlay');

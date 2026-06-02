@@ -177,6 +177,154 @@ async def upload_attendees(
         raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
+# ── Webinar Notes (Human Knowledge) ──────────────────────────────────────────
+
+@app.get("/api/webinars/{webinar_id}/notes")
+def list_notes(webinar_id: int, db: Session = Depends(get_db)):
+    from sqlalchemy import text as _text
+    rows = db.execute(_text("""
+        SELECT id, author, category, content, created_at
+        FROM webinar_notes WHERE webinar_id = :w
+        ORDER BY created_at DESC
+    """), {"w": webinar_id}).fetchall()
+    return [{
+        "id": r.id, "author": r.author, "category": r.category,
+        "content": r.content, "created_at": str(r.created_at)
+    } for r in rows]
+
+
+@app.post("/api/webinars/{webinar_id}/notes", status_code=201)
+def add_note(webinar_id: int, payload: dict, db: Session = Depends(get_db)):
+    w = db.query(models.Webinar).filter(models.Webinar.id == webinar_id).first()
+    if not w:
+        raise HTTPException(status_code=404, detail="Webinar not found")
+    content = (payload.get("content") or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="content required")
+    note = models.WebinarNote(
+        webinar_id=webinar_id,
+        author=(payload.get("author") or "Team").strip()[:100],
+        category=(payload.get("category") or "observation"),
+        content=content,
+    )
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    return {
+        "id": note.id, "author": note.author, "category": note.category,
+        "content": note.content, "created_at": str(note.created_at)
+    }
+
+
+@app.delete("/api/webinars/{webinar_id}/notes/{note_id}", status_code=204)
+def delete_note(webinar_id: int, note_id: int, db: Session = Depends(get_db)):
+    from sqlalchemy import text as _text
+    db.execute(_text("DELETE FROM webinar_notes WHERE id = :nid AND webinar_id = :w"),
+               {"nid": note_id, "w": webinar_id})
+    db.commit()
+
+
+# ── Leaderboard CSV Export ───────────────────────────────────────────────────
+
+@app.get("/api/leaderboard/export")
+def export_leaderboard(
+    speaker_id: Optional[int] = Query(None),
+    webinar_id: Optional[int] = Query(None),
+    min_score: Optional[int] = Query(None),
+    max_score: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Export full leaderboard data with attended webinar titles per attendee."""
+    from sqlalchemy import text as _text
+
+    # Get the same data the /api/leaderboard endpoint returns
+    where = ["a.attended = TRUE"]
+    params: dict = {}
+    if speaker_id:
+        where.append("w.speaker_id = :spk")
+        params["spk"] = speaker_id
+    if webinar_id:
+        where.append("w.id = :wid")
+        params["wid"] = webinar_id
+
+    where_clause = " AND ".join(where)
+
+    sql = _text(f"""
+        SELECT
+            MIN(r.attendee_name) AS name,
+            r.email,
+            MIN(r.phone)         AS phone,
+            COUNT(DISTINCT a.webinar_id) AS webinars_attended,
+            COALESCE(SUM(a.duration_minutes), 0) AS total_duration_minutes,
+            AVG(a.duration_minutes) AS avg_duration
+        FROM registrations r
+        JOIN attendances a ON a.registration_id = r.id
+        JOIN webinars w    ON w.id = r.webinar_id
+        WHERE {where_clause}
+          AND r.email IS NOT NULL AND r.email <> ''
+        GROUP BY r.email
+        ORDER BY webinars_attended DESC, total_duration_minutes DESC
+    """)
+    rows = db.execute(sql, params).fetchall()
+
+    # Calculate scores
+    entries = []
+    for row in rows:
+        n = int(row.webinars_attended or 0)
+        avg_dur = float(row.avg_duration or 0)
+        bonus = 5 if avg_dur >= 60 else 3 if avg_dur >= 45 else 1 if avg_dur >= 30 else 0
+        score = n * (10 + bonus)
+        if min_score is not None and score < min_score: continue
+        if max_score is not None and score > max_score: continue
+        entries.append({
+            "name": row.name or "",
+            "email": row.email or "",
+            "phone": row.phone or "",
+            "webinars_attended": n,
+            "total_min": int(row.total_duration_minutes or 0),
+            "avg_min": round(avg_dur, 1),
+            "score": score,
+        })
+
+    # For each entry, fetch the actual webinar titles attended
+    emails = [e["email"] for e in entries]
+    webinar_titles_by_email: dict[str, list[str]] = {}
+    if emails:
+        # Chunk into batches for very large lists
+        for i in range(0, len(emails), 200):
+            batch = emails[i:i+200]
+            placeholders = {f"e{k}": v for k, v in enumerate(batch)}
+            ph_str = ",".join(f":e{k}" for k in range(len(batch)))
+            q = _text(f"""
+                SELECT r.email, w.title, w.date
+                FROM registrations r
+                JOIN attendances a ON a.registration_id = r.id
+                JOIN webinars w    ON w.id = r.webinar_id
+                WHERE a.attended = TRUE
+                  AND r.email IN ({ph_str})
+                ORDER BY w.date DESC
+            """)
+            for r in db.execute(q, placeholders).fetchall():
+                webinar_titles_by_email.setdefault(r.email, []).append(f"{r.title} ({r.date})")
+
+    # Build CSV
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["Rank", "Name", "Email", "Phone", "Webinars Attended", "Total Minutes",
+                     "Avg Minutes/Session", "Score", "Webinar List"])
+    for idx, e in enumerate(entries, 1):
+        titles = " | ".join(webinar_titles_by_email.get(e["email"], []))
+        writer.writerow([idx, e["name"], e["email"], e["phone"], e["webinars_attended"],
+                         e["total_min"], e["avg_min"], e["score"], titles])
+
+    data = buf.getvalue().encode("utf-8-sig")
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="leaderboard_export.csv"'},
+    )
+
+
 # ── AI helpers ────────────────────────────────────────────────────────────────
 
 def _strip_em_dashes(obj):
@@ -579,6 +727,23 @@ async def _do_analyze(webinar_id: int, db):
         "speaker_avg_registrations": spk_avg_regs,
     }
 
+    # ── Fetch human notes for this webinar (if any) ───────────────────────────
+    notes_rows = db.execute(text("""
+        SELECT author, category, content, created_at
+        FROM webinar_notes WHERE webinar_id = :w
+        ORDER BY created_at DESC
+    """), {"w": webinar_id}).fetchall()
+
+    if notes_rows:
+        notes_list = "\n".join(
+            f"  [{n.category}] {n.author}: {n.content}"
+            for n in notes_rows
+        )
+        human_notes_block = f"""HUMAN OBSERVATIONS (the team has added these notes about this webinar). Treat them as critical context. Reference at least one of them in your analysis if relevant:
+{notes_list}"""
+    else:
+        human_notes_block = "(No human notes have been logged for this webinar.)"
+
     prompt = f"""You are a sharp webinar performance analyst for Right Horizons, an Indian financial advisory firm.
 
 STRICT RULES:
@@ -619,6 +784,8 @@ NEVER use em dashes. Use commas, periods, colons, or parentheses instead. This r
 
 Webinar data:
 {json.dumps(metrics, indent=2, default=lambda o: float(o) if hasattr(o,'__float__') else str(o))}
+
+{human_notes_block}
 
 Return ONLY the JSON object, nothing before or after, no markdown fences."""
 
@@ -1011,7 +1178,7 @@ def get_leaderboard(
     response: Response,
     speaker_id: Optional[int] = Query(None),
     webinar_id: Optional[int] = Query(None),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(50, ge=1, le=1000),
     db: Session = Depends(get_db),
 ):
     response.headers["Cache-Control"] = "public, max-age=20, stale-while-revalidate=60"
