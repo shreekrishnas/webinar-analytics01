@@ -472,17 +472,146 @@ async def chat(payload: dict, db: Session = Depends(get_db)):
     for w in recent:
         ctx_parts.append(f"  [{w.date}] {w.title[:55]} | {w.speaker} | {w.icp} | {w.status}")
 
+    # All webinars index (compact list so AI can answer first/last/specific date questions)
+    all_webinars = db.execute(text("""
+        SELECT w.title, w.date, COALESCE(s.name,'Unknown') as speaker, COALESCE(w.icp,'Others') as icp, w.status
+        FROM webinars w LEFT JOIN speakers s ON s.id=w.speaker_id
+        ORDER BY w.date ASC
+    """)).fetchall()
+    ctx_parts.append(f"\nALL {len(all_webinars)} WEBINARS (chronological, earliest first):")
+    for i, w in enumerate(all_webinars, 1):
+        ctx_parts.append(f"  #{i} [{w.date}] {w.title} | {w.speaker} | {w.icp}")
+
+    # ── Person lookup: detect names/emails in the question and fetch their data
+    import re
+    q_lower = question.lower()
+    person_block = []
+
+    # Detect email addresses
+    emails_in_q = re.findall(r'\b[\w\.\-]+@[\w\.\-]+\.\w+\b', question)
+
+    # Detect capitalised name candidates (2+ capitalised words, or single name if context hints)
+    name_candidates = re.findall(r'\b([A-Z][a-z]{2,})(?:\s+([A-Z][a-z]{2,}))?(?:\s+([A-Z][a-z]{2,}))?', question)
+    # Flatten and remove empties + common false positives
+    STOPWORDS = {'What','When','Which','Who','How','Why','Where','The','This','That','First','Last','Top','Show','Tell','Give','List','Find','Webinar','Speaker','Attendance','Registration','Right','Horizons','Right Horizons','WebinarIQ','PMS','NRI','ICP','SIP','SWP','ESOPs'}
+    candidates = []
+    for tup in name_candidates:
+        parts = [p for p in tup if p and p not in STOPWORDS]
+        if parts:
+            full = ' '.join(parts)
+            if full not in STOPWORDS:
+                candidates.append(full)
+
+    # Build search patterns
+    search_terms = list(set(emails_in_q + candidates))
+
+    found_people = []
+    for term in search_terms[:5]:  # cap to 5 lookups
+        term_lower = term.lower().strip()
+        if len(term_lower) < 3: continue
+
+        # Lookup by email or name match in registrations
+        try:
+            rows = db.execute(text("""
+                SELECT
+                    MIN(r.attendee_name) AS name,
+                    r.email,
+                    MIN(r.phone) AS phone,
+                    COUNT(DISTINCT CASE WHEN a.attended=TRUE THEN a.webinar_id END) AS attended_count,
+                    COUNT(DISTINCT r.webinar_id) AS registered_count
+                FROM registrations r
+                LEFT JOIN attendances a ON a.registration_id=r.id
+                WHERE LOWER(COALESCE(r.attendee_name,'')) LIKE :pat
+                   OR LOWER(COALESCE(r.email,'')) LIKE :pat
+                GROUP BY r.email
+                HAVING COUNT(DISTINCT CASE WHEN a.attended=TRUE THEN a.webinar_id END) > 0
+                   OR COUNT(DISTINCT r.webinar_id) > 0
+                ORDER BY attended_count DESC, registered_count DESC
+                LIMIT 5
+            """), {"pat": f"%{term_lower}%"}).fetchall()
+
+            for row in rows:
+                if not row.email: continue
+                # Fetch attended webinars for this person
+                attended = db.execute(text("""
+                    SELECT w.title, w.date, COALESCE(s.name,'Unknown') as speaker,
+                           COALESCE(w.icp,'Others') as icp, a.duration_minutes
+                    FROM registrations r
+                    JOIN attendances a ON a.registration_id=r.id AND a.attended=TRUE
+                    JOIN webinars w ON w.id=r.webinar_id
+                    LEFT JOIN speakers s ON s.id=w.speaker_id
+                    WHERE LOWER(r.email) = :email
+                    ORDER BY w.date ASC
+                """), {"email": row.email.lower()}).fetchall()
+
+                if not attended: continue
+
+                first = attended[0]
+                last  = attended[-1]
+                total_min = sum(int(a.duration_minutes or 0) for a in attended)
+                # Score calculation matches leaderboard
+                avg_dur = total_min / len(attended) if attended else 0
+                bonus = 5 if avg_dur >= 60 else 3 if avg_dur >= 45 else 1 if avg_dur >= 30 else 0
+                score = len(attended) * (10 + bonus)
+
+                found_people.append({
+                    "name": row.name or "(no name)",
+                    "email": row.email,
+                    "phone": row.phone or "N/A",
+                    "attended_count": len(attended),
+                    "registered_count": int(row.registered_count or 0),
+                    "total_minutes": total_min,
+                    "avg_minutes": round(avg_dur, 1),
+                    "score": score,
+                    "first_webinar": {"title": first.title, "date": str(first.date), "speaker": first.speaker, "icp": first.icp, "duration_min": int(first.duration_minutes or 0)},
+                    "last_webinar":  {"title": last.title,  "date": str(last.date),  "speaker": last.speaker,  "icp": last.icp,  "duration_min": int(last.duration_minutes or 0)},
+                    "all_webinars": [{"title": a.title, "date": str(a.date), "speaker": a.speaker, "icp": a.icp, "duration_min": int(a.duration_minutes or 0)} for a in attended],
+                })
+        except Exception as e:
+            print(f"Person lookup failed for '{term}': {e}")
+
+    if found_people:
+        person_block.append("\nMATCHED PEOPLE (full attendance history from the database):")
+        # De-duplicate by email
+        seen = set()
+        unique = []
+        for p in found_people:
+            if p["email"].lower() in seen: continue
+            seen.add(p["email"].lower())
+            unique.append(p)
+
+        for p in unique[:5]:
+            person_block.append(f"\n  Person: {p['name']}")
+            person_block.append(f"    Email: {p['email']} | Phone: {p['phone']}")
+            person_block.append(f"    Attended: {p['attended_count']} of {p['registered_count']} registered webinars")
+            person_block.append(f"    Total time: {p['total_minutes']} min | Avg: {p['avg_minutes']} min/session | Score: {p['score']}")
+            person_block.append(f"    FIRST webinar attended: [{p['first_webinar']['date']}] {p['first_webinar']['title']} ({p['first_webinar']['speaker']}, ICP: {p['first_webinar']['icp']}, {p['first_webinar']['duration_min']} min)")
+            person_block.append(f"    LAST webinar attended:  [{p['last_webinar']['date']}] {p['last_webinar']['title']} ({p['last_webinar']['speaker']}, ICP: {p['last_webinar']['icp']}, {p['last_webinar']['duration_min']} min)")
+            person_block.append(f"    Full attendance list:")
+            for i, aw in enumerate(p['all_webinars'], 1):
+                person_block.append(f"      {i}. [{aw['date']}] {aw['title']} | {aw['speaker']} | {aw['icp']} | {aw['duration_min']} min")
+        ctx_parts.extend(person_block)
+    elif search_terms:
+        ctx_parts.append(f"\nPERSON LOOKUP: searched for {search_terms} but found no matching attendee in the database.")
+
     context = "\n".join(ctx_parts)
 
     system_prompt = f"""You are WebinarIQ Assistant, an AI analyst for Right Horizons Financial Services.
 
-STRICT RULES (these are absolute, no exceptions):
-1. You may ONLY use the LIVE DATA below to answer questions. Never invent numbers, never use external knowledge about markets, finance, world events, or anything not in the data.
-2. If the user asks about something NOT in the data (e.g. "What is PMS?", "Tell me about NIFTY", "current market trends"), respond: "I can only answer questions about the webinar data shown in WebinarIQ. Try asking about speakers, ICPs, attendance, or specific webinars."
-3. For COMPARISONS between webinars/speakers/ICPs in the data, that is allowed and encouraged - that's analysis of our data.
-4. NEVER make up names, emails, dates, numbers, percentages. Only use what is in LIVE DATA below.
-5. Be concise: under 180 words unless the user explicitly asks for more. Use bullets and bold for key numbers.
-6. NEVER use em dashes (the long dash character). Use commas, periods, colons, or parentheses instead. This is mandatory.
+STRICT RULES (absolute, no exceptions):
+1. You may ONLY use the LIVE DATA below. Never invent numbers, names, emails, dates, percentages, or facts.
+2. If the user asks about something NOT in the data (e.g. external market info, world events), respond: "I can only answer questions about the webinar data shown in WebinarIQ. Try asking about speakers, ICPs, attendance, specific webinars, or specific people."
+3. COMPARISONS between webinars/speakers/ICPs/people in the data are allowed and encouraged.
+4. PERSON QUESTIONS: If the user asks about a specific person by name or email and they appear in 'MATCHED PEOPLE', use that data fully:
+   - "First webinar" question → use the 'FIRST webinar attended' line
+   - "Last webinar" question → use the 'LAST webinar attended' line
+   - "Which webinars did X attend" → list them from 'Full attendance list'
+   - "How long did X spend" → use 'Total time' and 'Avg' from the person block
+   - "What is X's score" → use 'Score' from the person block
+   - Always include email and phone if asked for contact info
+5. If a person was searched but not found ('PERSON LOOKUP: ... no matching attendee'), tell the user the person is not in our attendance records.
+6. Be concise: under 200 words unless the user asks for a detailed list. Use bullets and bold key numbers.
+7. NEVER use em dashes. Use commas, periods, colons, or parentheses instead. Mandatory.
 
 LIVE DATA (the ONLY source of truth):
 {context}
@@ -498,8 +627,8 @@ Remember: nothing outside this data exists for you. You are a closed-book analys
         resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={"model": "anthropic/claude-haiku-4.5", "max_tokens": 600, "messages": messages},
-            timeout=20.0
+            json={"model": "anthropic/claude-haiku-4.5", "max_tokens": 900, "messages": messages},
+            timeout=30.0
         )
         resp.raise_for_status()
         answer = resp.json()["choices"][0]["message"]["content"].strip()
