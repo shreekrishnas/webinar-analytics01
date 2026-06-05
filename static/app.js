@@ -433,6 +433,7 @@ function nav(page, sub) {
     case 'speakers':    renderSpeakers();           break;
     case 'leaderboard': renderLeaderboard();        break;
     case 'topics':      renderTopics();             break;
+    case 'intelligence': renderIntelligence();      break;
     case 'webinar':     renderWebinarDetail(sub);   break;
     case 'speaker':     renderSpeakerDetail(sub);   break;
   }
@@ -2508,6 +2509,193 @@ function renderAIPanel(panel, data) {
 
 /* ── Topics Page ─────────────────────────────────────────────────────────── */
 let _topicsCache = null;
+
+/* ── Intelligence Module (Phase 2) ──────────────────────────────────────── */
+let _intelCache = null;
+
+async function renderIntelligence() {
+  setContent(`
+    <div class="intel-page">
+      <div class="page-hd">
+        <div>
+          <h1 class="page-title">Intelligence</h1>
+          <p class="page-sub">Topic performance, speaker pull, campaign efficiency, ICP signals</p>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="_intelCache=null;renderIntelligence()">Refresh</button>
+      </div>
+      <div class="intel-tabs">
+        <button class="intel-tab ${S._intelTab==='topics'?'active':''}"   onclick="S._intelTab='topics';renderIntelligence()">Topic Intelligence</button>
+        <button class="intel-tab ${S._intelTab==='speakers'?'active':''}" onclick="S._intelTab='speakers';renderIntelligence()">Speaker Performance</button>
+        <button class="intel-tab ${S._intelTab==='campaign'?'active':''}" onclick="S._intelTab='campaign';renderIntelligence()">Campaign Learning</button>
+        <button class="intel-tab ${S._intelTab==='icp'?'active':''}"      onclick="S._intelTab='icp';renderIntelligence()">ICP Refinement</button>
+      </div>
+      <div id="intel-body"><div class="pg-loading"><div class="spinner"></div><p>Loading intelligence…</p></div></div>
+    </div>`);
+  if (!S._intelTab) S._intelTab = 'topics';
+  try {
+    if (!_intelCache) _intelCache = await api('/api/intelligence');
+    _drawIntelTab(_intelCache, S._intelTab);
+  } catch(e) {
+    document.getElementById('intel-body').innerHTML = `<div class="empty-state"><div class="empty-title">Failed to load</div></div>`;
+  }
+}
+
+function _drawIntelTab(data, tab) {
+  const body = document.getElementById('intel-body');
+  if (!body) return;
+  if (tab === 'topics')        body.innerHTML = _renderTopicIntel(data);
+  else if (tab === 'speakers') body.innerHTML = _renderSpeakerIntel(data);
+  else if (tab === 'campaign') body.innerHTML = _renderCampaignIntel(data);
+  else if (tab === 'icp')      body.innerHTML = _renderICPIntel(data);
+}
+
+function _renderTopicIntel(data) {
+  const rows = (data.topic_intelligence || []).map(t => {
+    const grade = t.attendance_rate >= 40 ? 'A' : t.attendance_rate >= 30 ? 'B' : t.attendance_rate >= 20 ? 'C' : 'D';
+    const gColor = { A:'#10B981', B:'#6366F1', C:'#F59E0B', D:'#DC2626' }[grade];
+    return `
+    <tr>
+      <td>
+        <span class="icp-badge icp-${(t.icp||'others').toLowerCase().replace(/\s+/g,'-')}">${esc(t.icp)}</span>
+      </td>
+      <td style="text-align:center;font-family:var(--font-mono);font-weight:600">${t.webinar_count}</td>
+      <td style="text-align:right;font-family:var(--font-mono);font-weight:600">${fmt(t.total_regs)}</td>
+      <td style="text-align:right;font-family:var(--font-mono);font-weight:600">${fmt(t.total_att)}</td>
+      <td style="text-align:right">
+        <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end">
+          <span style="color:${gColor};font-weight:700;font-family:var(--font-mono)">${t.attendance_rate}%</span>
+          <span class="intel-grade" style="background:${gColor}1A;color:${gColor};border-color:${gColor}40">${grade}</span>
+        </div>
+      </td>
+      <td style="text-align:right;font-family:var(--font-mono);color:var(--text-secondary)">₹${fmt(Math.round(t.total_spend))}</td>
+      <td style="text-align:right;font-family:var(--font-mono);color:var(--text-secondary)">${t.cost_per_attendee>0?'₹'+fmt(Math.round(t.cost_per_attendee)):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="intel-section">
+      <div class="intel-kpis">
+        <div class="intel-kpi"><div class="intel-kpi-lbl">Total Webinars</div><div class="intel-kpi-val">${data.total_webinars||0}</div></div>
+        <div class="intel-kpi"><div class="intel-kpi-lbl">Total Spend</div><div class="intel-kpi-val">₹${fmt(Math.round(data.total_spend||0))}</div></div>
+        <div class="intel-kpi"><div class="intel-kpi-lbl">Total Leads</div><div class="intel-kpi-val">${fmt(data.total_leads||0)}</div></div>
+      </div>
+      <h3 class="intel-h3">ICP Performance Breakdown</h3>
+      <p class="intel-p">Which ICP themes are pulling the right audience?</p>
+      <div class="intel-table-wrap">
+        <table class="intel-table">
+          <thead><tr><th>ICP</th><th style="text-align:center">Webinars</th><th style="text-align:right">Regs</th><th style="text-align:right">Attendees</th><th style="text-align:right">Att Rate</th><th style="text-align:right">Spend</th><th style="text-align:right">Cost/Att</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function _renderSpeakerIntel(data) {
+  const rows = (data.speaker_performance || []).map(s => {
+    const grade = s.attendance_rate >= 40 ? 'A' : s.attendance_rate >= 30 ? 'B' : s.attendance_rate >= 20 ? 'C' : 'D';
+    const gColor = { A:'#10B981', B:'#6366F1', C:'#F59E0B', D:'#DC2626' }[grade];
+    const av = avColor(s.name); const ini = initials(s.name);
+    return `
+    <tr onclick="nav('speakers')">
+      <td>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="spk-avatar" style="width:32px;height:32px;background:${av};color:#fff;display:flex;align-items:center;justify-content:center;border-radius:8px;font-weight:700;font-size:11px">${ini}</div>
+          <span style="font-weight:600;color:var(--text-primary)">${esc(s.name)}</span>
+        </div>
+      </td>
+      <td style="text-align:center;font-family:var(--font-mono);font-weight:600">${s.webinars}</td>
+      <td style="text-align:right;font-family:var(--font-mono);font-weight:600">${fmt(s.total_regs)}</td>
+      <td style="text-align:right;font-family:var(--font-mono);color:var(--text-secondary)">${fmt(s.avg_regs_per_webinar)}</td>
+      <td style="text-align:right">
+        <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end">
+          <span style="color:${gColor};font-weight:700;font-family:var(--font-mono)">${s.attendance_rate}%</span>
+          <span class="intel-grade" style="background:${gColor}1A;color:${gColor};border-color:${gColor}40">${grade}</span>
+        </div>
+      </td>
+      <td style="text-align:right;font-family:var(--font-mono);color:var(--text-secondary)">₹${fmt(Math.round(s.spend||0))}</td>
+      <td style="text-align:right;font-family:var(--font-mono);color:var(--text-secondary)">${s.cost_per_attendee>0?'₹'+fmt(Math.round(s.cost_per_attendee)):'—'}</td>
+    </tr>`;
+  }).join('');
+  return `
+    <div class="intel-section">
+      <h3 class="intel-h3">Speaker Pull & Conversion</h3>
+      <p class="intel-p">Who's bringing in the right audience at what cost?</p>
+      <div class="intel-table-wrap">
+        <table class="intel-table">
+          <thead><tr><th>Speaker</th><th style="text-align:center">Webinars</th><th style="text-align:right">Total Regs</th><th style="text-align:right">Avg/Webinar</th><th style="text-align:right">Att Rate</th><th style="text-align:right">Total Spend</th><th style="text-align:right">Cost/Att</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function _renderCampaignIntel(data) {
+  // Best day chart
+  const maxRate = Math.max(...(data.day_performance||[]).map(d => d.attendance_rate), 1);
+  const dayBars = (data.day_performance || []).map(d => `
+    <div class="intel-day-row">
+      <div class="intel-day-lbl">${esc(d.day)}</div>
+      <div class="intel-day-track"><div class="intel-day-fill" style="width:${(d.attendance_rate/maxRate*100).toFixed(1)}%"></div></div>
+      <div class="intel-day-vals">
+        <span>${d.webinars} webinars</span>
+        <span style="color:var(--text-primary);font-weight:700">${d.attendance_rate}%</span>
+      </div>
+    </div>`).join('');
+
+  const sourceRows = (data.source_performance || []).map(s => `
+    <tr>
+      <td style="font-weight:600">${esc(s.source)}</td>
+      <td style="text-align:right;font-family:var(--font-mono)">${fmt(s.regs)}</td>
+      <td style="text-align:right;font-family:var(--font-mono)">${fmt(s.atts)}</td>
+      <td style="text-align:right;color:var(--text-secondary);font-family:var(--font-mono)">${s.rate}%</td>
+    </tr>`).join('');
+
+  return `
+    <div class="intel-section">
+      <h3 class="intel-h3">Best Day of Week</h3>
+      <p class="intel-p">Attendance rate by day, weighted by webinars run on each day.</p>
+      <div class="intel-card">${dayBars || '<div style="color:var(--text-muted)">No data</div>'}</div>
+
+      <h3 class="intel-h3" style="margin-top:32px">Source Performance</h3>
+      <p class="intel-p">Which channels drive registrations and convert?</p>
+      <div class="intel-table-wrap">
+        <table class="intel-table">
+          <thead><tr><th>Source</th><th style="text-align:right">Registrations</th><th style="text-align:right">Attendees</th><th style="text-align:right">Att Rate</th></tr></thead>
+          <tbody>${sourceRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function _renderICPIntel(data) {
+  const consumerCount = (data.domain_analysis||[]).filter(d => d.kind==='consumer').reduce((s,d)=>s+d.people,0);
+  const bizCount      = (data.domain_analysis||[]).filter(d => d.kind==='business').reduce((s,d)=>s+d.people,0);
+  const total = consumerCount + bizCount || 1;
+
+  const domainRows = (data.domain_analysis || []).slice(0, 20).map(d => `
+    <tr>
+      <td style="font-family:var(--font-mono);font-weight:600">${esc(d.domain)}</td>
+      <td><span class="intel-domain-kind kind-${d.kind}">${d.kind}</span></td>
+      <td style="text-align:right;font-family:var(--font-mono);font-weight:600">${fmt(d.people)}</td>
+      <td style="text-align:right;font-family:var(--font-mono);color:var(--text-secondary)">${d.webinars}</td>
+    </tr>`).join('');
+
+  return `
+    <div class="intel-section">
+      <div class="intel-kpis">
+        <div class="intel-kpi"><div class="intel-kpi-lbl">Consumer (Personal Email)</div><div class="intel-kpi-val">${fmt(consumerCount)} <span style="font-size:0.6em;color:var(--text-muted)">(${Math.round(consumerCount/total*100)}%)</span></div></div>
+        <div class="intel-kpi"><div class="intel-kpi-lbl">Business (Corporate Email)</div><div class="intel-kpi-val">${fmt(bizCount)} <span style="font-size:0.6em;color:var(--text-muted)">(${Math.round(bizCount/total*100)}%)</span></div></div>
+      </div>
+      <h3 class="intel-h3">Top Email Domains (signal for audience type)</h3>
+      <p class="intel-p">Corporate domains hint at HNI/professional audience. Government and education domains may indicate specific ICPs.</p>
+      <div class="intel-table-wrap">
+        <table class="intel-table">
+          <thead><tr><th>Domain</th><th>Type</th><th style="text-align:right">People</th><th style="text-align:right">Webinars Touched</th></tr></thead>
+          <tbody>${domainRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
 
 async function renderTopics() {
   setContent(`

@@ -224,6 +224,209 @@ def delete_note(webinar_id: int, note_id: int, db: Session = Depends(get_db)):
     db.commit()
 
 
+# ── Intelligence Dashboard (Phase 2) ─────────────────────────────────────────
+
+@app.get("/api/intelligence")
+def get_intelligence(db: Session = Depends(get_db)):
+    """Combined intelligence: topic performance, speaker deep-dive, campaign, ICP refinement."""
+    from sqlalchemy import text as _t
+
+    # ── 1. Topic / ICP performance ──
+    topic_perf = db.execute(_t("""
+        SELECT
+            COALESCE(w.icp, 'Others') AS icp,
+            COUNT(*) AS webinar_count,
+            COALESCE(SUM(reg.cnt), 0) AS total_regs,
+            COALESCE(SUM(att.cnt), 0) AS total_att,
+            COALESCE(SUM(w.spend), 0) AS total_spend,
+            COALESCE(SUM(w.leads), 0) AS total_leads,
+            AVG(w.cpl) AS avg_cpl,
+            COALESCE(SUM(w.impressions), 0) AS total_impressions
+        FROM webinars w
+        LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM registrations GROUP BY webinar_id) reg ON reg.webinar_id = w.id
+        LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM attendances WHERE attended=TRUE GROUP BY webinar_id) att ON att.webinar_id = w.id
+        WHERE w.status = 'completed'
+        GROUP BY w.icp
+        ORDER BY total_regs DESC
+    """)).fetchall()
+
+    icp_rows = []
+    for r in topic_perf:
+        regs = int(r.total_regs or 0)
+        att = int(r.total_att or 0)
+        rate = round(att / regs * 100, 1) if regs else 0
+        cost_per_att = round(float(r.total_spend or 0) / att, 1) if att else 0
+        icp_rows.append({
+            "icp": r.icp,
+            "webinar_count": int(r.webinar_count or 0),
+            "total_regs": regs,
+            "total_att": att,
+            "attendance_rate": rate,
+            "total_spend": round(float(r.total_spend or 0), 0),
+            "total_leads": int(r.total_leads or 0),
+            "avg_cpl": round(float(r.avg_cpl or 0), 1),
+            "cost_per_attendee": cost_per_att,
+        })
+
+    # ── 2. Speaker deep performance ──
+    speaker_perf = db.execute(_t("""
+        SELECT
+            s.id, s.name,
+            COUNT(DISTINCT w.id) AS webinars,
+            COALESCE(SUM(reg.cnt), 0) AS total_regs,
+            COALESCE(SUM(att.cnt), 0) AS total_att,
+            COALESCE(SUM(w.spend), 0) AS spend,
+            AVG(w.cpl) AS avg_cpl,
+            AVG(reg.cnt) AS avg_regs_per_webinar
+        FROM speakers s
+        JOIN webinars w ON w.speaker_id = s.id OR w.co_speaker_id = s.id
+        LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM registrations GROUP BY webinar_id) reg ON reg.webinar_id = w.id
+        LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM attendances WHERE attended=TRUE GROUP BY webinar_id) att ON att.webinar_id = w.id
+        WHERE w.status = 'completed'
+        GROUP BY s.id, s.name
+        HAVING COUNT(DISTINCT w.id) >= 2
+        ORDER BY total_regs DESC
+    """)).fetchall()
+
+    spk_rows = []
+    for r in speaker_perf:
+        regs = int(r.total_regs or 0)
+        att = int(r.total_att or 0)
+        rate = round(att / regs * 100, 1) if regs else 0
+        cost_per_att = round(float(r.spend or 0) / att, 1) if att else 0
+        spk_rows.append({
+            "id": r.id,
+            "name": r.name,
+            "webinars": int(r.webinars or 0),
+            "total_regs": regs,
+            "total_att": att,
+            "attendance_rate": rate,
+            "avg_regs_per_webinar": round(float(r.avg_regs_per_webinar or 0), 0),
+            "spend": round(float(r.spend or 0), 0),
+            "avg_cpl": round(float(r.avg_cpl or 0), 1),
+            "cost_per_attendee": cost_per_att,
+        })
+
+    # ── 3. Campaign learning: best day/time + budget tier ──
+    # Best day of week
+    day_rows = db.execute(_t("""
+        SELECT w.date, COALESCE(reg.cnt, 0) AS regs, COALESCE(att.cnt, 0) AS att, w.spend
+        FROM webinars w
+        LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM registrations GROUP BY webinar_id) reg ON reg.webinar_id = w.id
+        LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM attendances WHERE attended=TRUE GROUP BY webinar_id) att ON att.webinar_id = w.id
+        WHERE w.status = 'completed' AND w.date IS NOT NULL
+    """)).fetchall()
+
+    day_buckets: dict = {}  # day_of_week -> {regs, att, count}
+    from datetime import date as _date, datetime as _dt
+    for r in day_rows:
+        try:
+            d = r.date if hasattr(r.date, 'weekday') else _dt.fromisoformat(str(r.date).split(' ')[0]).date()
+            dow = d.strftime("%A")
+            if dow not in day_buckets:
+                day_buckets[dow] = {"regs": 0, "att": 0, "count": 0}
+            day_buckets[dow]["regs"] += int(r.regs or 0)
+            day_buckets[dow]["att"]  += int(r.att or 0)
+            day_buckets[dow]["count"] += 1
+        except Exception:
+            pass
+    day_perf = [
+        {
+            "day": d,
+            "webinars": v["count"],
+            "avg_regs": round(v["regs"] / v["count"], 0) if v["count"] else 0,
+            "avg_att": round(v["att"] / v["count"], 0) if v["count"] else 0,
+            "attendance_rate": round(v["att"] / v["regs"] * 100, 1) if v["regs"] else 0,
+        }
+        for d, v in day_buckets.items()
+    ]
+    day_order = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+    day_perf.sort(key=lambda x: day_order.index(x["day"]))
+
+    # Budget efficiency tiers
+    budget_eff = db.execute(_t("""
+        SELECT w.title, w.date, w.spend, COALESCE(reg.cnt,0) AS regs, COALESCE(att.cnt,0) AS att, w.cpl
+        FROM webinars w
+        LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM registrations GROUP BY webinar_id) reg ON reg.webinar_id = w.id
+        LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM attendances WHERE attended=TRUE GROUP BY webinar_id) att ON att.webinar_id = w.id
+        WHERE w.spend > 0 AND w.status='completed'
+        ORDER BY w.spend ASC
+    """)).fetchall()
+
+    # ── 4. ICP refinement: email-domain analysis ──
+    domain_perf = db.execute(_t("""
+        SELECT
+            LOWER(SUBSTR(r.email, INSTR(r.email,'@')+1)) AS domain,
+            COUNT(DISTINCT r.email) AS people,
+            COUNT(DISTINCT r.webinar_id) AS webinars_touched
+        FROM registrations r
+        WHERE r.email IS NOT NULL AND r.email LIKE '%@%'
+          AND r.email NOT LIKE '%@rhorizon.in'
+        GROUP BY domain
+        HAVING COUNT(DISTINCT r.email) >= 3
+        ORDER BY people DESC
+        LIMIT 25
+    """) if str(db.bind.dialect.name) == 'sqlite' else _t("""
+        SELECT
+            LOWER(SUBSTRING(r.email FROM POSITION('@' IN r.email) + 1)) AS domain,
+            COUNT(DISTINCT r.email) AS people,
+            COUNT(DISTINCT r.webinar_id) AS webinars_touched
+        FROM registrations r
+        WHERE r.email IS NOT NULL AND r.email LIKE '%@%'
+          AND r.email NOT LIKE '%@rhorizon.in'
+        GROUP BY LOWER(SUBSTRING(r.email FROM POSITION('@' IN r.email) + 1))
+        HAVING COUNT(DISTINCT r.email) >= 3
+        ORDER BY people DESC
+        LIMIT 25
+    """)).fetchall()
+
+    domains = []
+    for r in domain_perf:
+        d = r.domain
+        # Classify
+        if d in ('gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'rediffmail.com', 'yahoo.co.in', 'yahoo.in', 'icloud.com'):
+            kind = 'consumer'
+        elif any(x in d for x in ('.gov.', '.gov', 'gov.in')):
+            kind = 'government'
+        elif any(x in d for x in ('.edu', '.ac.in', 'university')):
+            kind = 'education'
+        else:
+            kind = 'business'
+        domains.append({"domain": d, "people": int(r.people), "webinars": int(r.webinars_touched), "kind": kind})
+
+    # Source breakdown (proxy for channel performance)
+    source_perf = db.execute(_t("""
+        SELECT
+            COALESCE(r.source, 'unknown') AS source,
+            COUNT(*) AS regs,
+            COUNT(DISTINCT a.id) AS atts
+        FROM registrations r
+        LEFT JOIN attendances a ON a.registration_id = r.id AND a.attended = TRUE
+        GROUP BY r.source
+        ORDER BY regs DESC
+    """)).fetchall()
+    sources = []
+    for r in source_perf:
+        rg = int(r.regs); at = int(r.atts)
+        sources.append({
+            "source": r.source,
+            "regs": rg,
+            "atts": at,
+            "rate": round(at/rg*100, 1) if rg else 0,
+        })
+
+    return {
+        "topic_intelligence": icp_rows,
+        "speaker_performance": spk_rows,
+        "day_performance": day_perf,
+        "domain_analysis": domains,
+        "source_performance": sources,
+        "total_webinars": sum(r["webinars"] for r in icp_rows),
+        "total_spend": sum(r["total_spend"] for r in icp_rows),
+        "total_leads": sum(r["total_leads"] for r in icp_rows),
+    }
+
+
 # ── Lead Tags (manual classification overrides) ──────────────────────────────
 
 @app.get("/api/lead-tags")
