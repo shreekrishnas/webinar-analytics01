@@ -432,6 +432,201 @@ def _get_intelligence_inner(db: Session):
     }
 
 
+# ── Competitor Intelligence (Phase 3) ────────────────────────────────────────
+
+@app.get("/api/competitors")
+def list_competitors(db: Session = Depends(get_db)):
+    from sqlalchemy import text as _t
+    rows = db.execute(_t("""
+        SELECT c.id, c.name, c.focus, c.website, c.color_hex,
+               (SELECT COUNT(*) FROM competitor_activity ca WHERE ca.competitor_id = c.id) AS activity_count,
+               (SELECT MAX(activity_date) FROM competitor_activity ca WHERE ca.competitor_id = c.id) AS last_activity
+        FROM competitors c
+        ORDER BY c.name
+    """)).fetchall()
+    return [{
+        "id": r.id, "name": r.name, "focus": r.focus, "website": r.website,
+        "color_hex": r.color_hex, "activity_count": int(r.activity_count or 0),
+        "last_activity": str(r.last_activity) if r.last_activity else None,
+    } for r in rows]
+
+
+@app.get("/api/competitor-activity")
+def list_competitor_activity(
+    competitor_id: Optional[int] = Query(None),
+    days: int = Query(90, ge=1, le=365),
+    db: Session = Depends(get_db),
+):
+    from sqlalchemy import text as _t
+    from datetime import date as _date, timedelta as _td
+    cutoff = _date.today() - _td(days=days)
+    where = "WHERE ca.activity_date >= :cutoff"
+    params = {"cutoff": cutoff}
+    if competitor_id:
+        where += " AND ca.competitor_id = :cid"
+        params["cid"] = competitor_id
+    rows = db.execute(_t(f"""
+        SELECT ca.id, ca.competitor_id, c.name AS competitor_name, c.color_hex,
+               ca.activity_date, ca.format, ca.topic, ca.speaker,
+               ca.audience_focus, ca.messaging_angle, ca.cta, ca.link, ca.notes
+        FROM competitor_activity ca
+        JOIN competitors c ON c.id = ca.competitor_id
+        {where}
+        ORDER BY ca.activity_date DESC, ca.id DESC
+    """), params).fetchall()
+    return [{
+        "id": r.id, "competitor_id": r.competitor_id, "competitor": r.competitor_name,
+        "color": r.color_hex, "date": str(r.activity_date), "format": r.format,
+        "topic": r.topic, "speaker": r.speaker, "audience_focus": r.audience_focus,
+        "messaging_angle": r.messaging_angle, "cta": r.cta, "link": r.link, "notes": r.notes,
+    } for r in rows]
+
+
+@app.post("/api/competitor-activity", status_code=201)
+def add_competitor_activity(payload: dict, db: Session = Depends(get_db)):
+    from sqlalchemy import text as _t
+    required = ("competitor_id", "activity_date", "topic")
+    for k in required:
+        if not payload.get(k):
+            raise HTTPException(status_code=400, detail=f"{k} required")
+    row = db.execute(_t("""
+        INSERT INTO competitor_activity
+        (competitor_id, activity_date, format, topic, speaker, audience_focus, messaging_angle, cta, link, notes)
+        VALUES (:c, :d, :f, :t, :s, :a, :m, :ct, :l, :n)
+        RETURNING id
+    """) if _is_pg(db) else _t("""
+        INSERT INTO competitor_activity
+        (competitor_id, activity_date, format, topic, speaker, audience_focus, messaging_angle, cta, link, notes)
+        VALUES (:c, :d, :f, :t, :s, :a, :m, :ct, :l, :n)
+    """), {
+        "c": int(payload["competitor_id"]),
+        "d": payload["activity_date"],
+        "f": payload.get("format") or "webinar",
+        "t": payload["topic"].strip(),
+        "s": (payload.get("speaker") or "").strip() or None,
+        "a": payload.get("audience_focus") or None,
+        "m": payload.get("messaging_angle") or None,
+        "ct": payload.get("cta") or None,
+        "l": (payload.get("link") or "").strip() or None,
+        "n": (payload.get("notes") or "").strip() or None,
+    })
+    db.commit()
+    return {"ok": True}
+
+
+@app.delete("/api/competitor-activity/{activity_id}", status_code=204)
+def delete_competitor_activity(activity_id: int, db: Session = Depends(get_db)):
+    from sqlalchemy import text as _t
+    db.execute(_t("DELETE FROM competitor_activity WHERE id = :id"), {"id": activity_id})
+    db.commit()
+
+
+def _is_pg(db: Session) -> bool:
+    try:
+        return 'postgres' in str(db.bind.url).lower()
+    except Exception:
+        return False
+
+
+@app.get("/api/competitor-gap-analysis")
+async def competitor_gap_analysis(db: Session = Depends(get_db)):
+    """AI-powered gap analysis: where Right Horizons can win vs competitor activity."""
+    import os, httpx, traceback
+    from sqlalchemy import text as _t
+    from datetime import date as _date, timedelta as _td
+
+    try:
+        cutoff = _date.today() - _td(days=90)
+        # Recent competitor activity
+        comp_rows = db.execute(_t("""
+            SELECT c.name AS competitor, ca.activity_date, ca.format, ca.topic,
+                   ca.audience_focus, ca.messaging_angle, ca.cta
+            FROM competitor_activity ca
+            JOIN competitors c ON c.id = ca.competitor_id
+            WHERE ca.activity_date >= :cutoff
+            ORDER BY ca.activity_date DESC
+        """), {"cutoff": cutoff}).fetchall()
+
+        # Recent RH webinars (last 90d)
+        rh_rows = db.execute(_t("""
+            SELECT w.title, w.date, COALESCE(s.name, 'Unknown') AS speaker, COALESCE(w.icp, 'Others') AS icp
+            FROM webinars w LEFT JOIN speakers s ON s.id = w.speaker_id
+            WHERE w.date >= :cutoff AND w.status = 'completed'
+            ORDER BY w.date DESC
+        """), {"cutoff": cutoff}).fetchall()
+
+        comp_block = "\n".join(
+            f"  [{r.activity_date}] {r.competitor} | {r.format} | {r.topic}"
+            f" | Audience: {r.audience_focus or '-'} | Angle: {r.messaging_angle or '-'} | CTA: {r.cta or '-'}"
+            for r in comp_rows
+        )
+        rh_block = "\n".join(
+            f"  [{r.date}] {r.title} | {r.speaker} | ICP: {r.icp}"
+            for r in rh_rows
+        )
+
+        if not comp_rows:
+            return {"insights": [], "message": "Add competitor activity to generate gap analysis."}
+
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=503, detail="OPENROUTER_API_KEY not configured")
+
+        prompt = f"""You are a competitive intelligence analyst for Right Horizons, an Indian wealth advisory firm.
+
+Compare what competitors did in the last 90 days versus what Right Horizons did. Identify SPECIFIC gaps and opportunities.
+
+COMPETITOR ACTIVITY (last 90 days):
+{comp_block}
+
+RIGHT HORIZONS WEBINARS (last 90 days):
+{rh_block}
+
+Return ONLY this JSON shape (no markdown):
+
+{{
+  "topic_gaps": [
+    {{ "theme": "specific theme name", "what_competitors_did": "1 sentence with examples cited from the data", "rh_did": "1 sentence on what RH did or 'nothing covered'", "recommendation": "1 specific action" }}
+  ],
+  "audience_gaps": [
+    {{ "audience": "audience segment", "competitors_targeting": "list which competitors", "rh_targeting": "did RH target them?", "recommendation": "1 specific move" }}
+  ],
+  "format_gaps": [
+    {{ "format": "format type", "observation": "what competitors used", "recommendation": "should RH adopt?" }}
+  ],
+  "speaker_positioning": "1 sentence: how should RH position its speakers vs competitor speakers, citing 1 competitor by name",
+  "headline_opportunity": "ONE crisp sentence: the single biggest gap RH should attack next quarter"
+}}
+
+Rules:
+- Cite competitor names from the data, never invent.
+- Be specific, no generic recommendations.
+- NEVER use em dashes. Use commas, periods, colons, parentheses instead.
+- Avoid filler words: consider, leverage, utilize, optimize, enhance.
+- Each recommendation must propose a SPECIFIC tactic with expected outcome."""
+
+        resp = httpx.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
+            json={"model": "anthropic/claude-sonnet-4.5", "max_tokens": 1500,
+                  "messages": [{"role": "user", "content": prompt}]},
+            timeout=45.0
+        )
+        resp.raise_for_status()
+        raw = resp.json()["choices"][0]["message"]["content"].strip()
+        analysis = _strip_em_dashes(_extract_json(raw))
+        return {
+            "analysis": analysis,
+            "competitor_activity_count": len(comp_rows),
+            "rh_activity_count": len(rh_rows),
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail=traceback.format_exc()[-1500:])
+
+
 # ── Lead Tags (manual classification overrides) ──────────────────────────────
 
 @app.get("/api/lead-tags")

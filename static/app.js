@@ -2528,6 +2528,7 @@ async function renderIntelligence() {
         <button class="intel-tab ${S._intelTab==='speakers'?'active':''}" onclick="S._intelTab='speakers';renderIntelligence()">Speaker Performance</button>
         <button class="intel-tab ${S._intelTab==='campaign'?'active':''}" onclick="S._intelTab='campaign';renderIntelligence()">Campaign Learning</button>
         <button class="intel-tab ${S._intelTab==='icp'?'active':''}"      onclick="S._intelTab='icp';renderIntelligence()">ICP Refinement</button>
+        <button class="intel-tab ${S._intelTab==='competitor'?'active':''}" onclick="S._intelTab='competitor';renderIntelligence()">Competitor Intel</button>
       </div>
       <div id="intel-body"><div class="pg-loading"><div class="spinner"></div><p>Loading intelligence…</p></div></div>
     </div>`);
@@ -2547,6 +2548,7 @@ function _drawIntelTab(data, tab) {
   else if (tab === 'speakers') body.innerHTML = _renderSpeakerIntel(data);
   else if (tab === 'campaign') body.innerHTML = _renderCampaignIntel(data);
   else if (tab === 'icp')      body.innerHTML = _renderICPIntel(data);
+  else if (tab === 'competitor') renderCompetitorIntel();
 }
 
 function _renderTopicIntel(data) {
@@ -2693,6 +2695,364 @@ function _renderICPIntel(data) {
           <thead><tr><th>Domain</th><th>Type</th><th style="text-align:right">People</th><th style="text-align:right">Webinars Touched</th></tr></thead>
           <tbody>${domainRows}</tbody>
         </table>
+      </div>
+    </div>`;
+}
+
+/* ── Competitor Intelligence (Phase 3) ──────────────────────────────────── */
+const FORMAT_ICONS = {
+  webinar:  '🎥',
+  linkedin: '💼',
+  report:   '📊',
+  guide:    '📘',
+  event:    '🎟️',
+  other:    '📌',
+};
+
+async function renderCompetitorIntel() {
+  const body = document.getElementById('intel-body');
+  if (!body) return;
+  body.innerHTML = `<div class="pg-loading"><div class="spinner"></div><p>Loading competitor intelligence…</p></div>`;
+  try {
+    const [competitors, activity] = await Promise.all([
+      api('/api/competitors'),
+      api('/api/competitor-activity?days=90'),
+    ]);
+    _drawCompetitorIntel(body, competitors, activity);
+  } catch(e) {
+    body.innerHTML = `<div class="empty-state"><div class="empty-title">Failed to load competitors</div></div>`;
+  }
+}
+
+function _drawCompetitorIntel(body, competitors, activity) {
+  // KPIs
+  const totalActivity = activity.length;
+  const competitorCount = competitors.length;
+  const formats = {};
+  activity.forEach(a => { formats[a.format||'other'] = (formats[a.format||'other']||0) + 1; });
+  const topFormat = Object.entries(formats).sort((a,b)=>b[1]-a[1])[0] || ['—', 0];
+
+  // Competitor cards
+  const compCards = competitors.map(c => `
+    <div class="comp-card" style="border-left-color:${c.color_hex}">
+      <div class="comp-card-head">
+        <div class="comp-name">${esc(c.name)}</div>
+        <div class="comp-count" style="background:${c.color_hex}20;color:${c.color_hex}">${c.activity_count} logged</div>
+      </div>
+      <div class="comp-focus">${esc(c.focus || '')}</div>
+      <div class="comp-meta">${c.last_activity ? 'Last seen ' + fmtDate(c.last_activity) : 'No activity logged'}</div>
+    </div>`).join('');
+
+  // Activity timeline (recent 90d)
+  const activityRows = activity.slice(0, 30).map(a => `
+    <tr>
+      <td style="font-family:var(--font-mono);font-size:0.78rem;color:var(--text-muted);white-space:nowrap">${fmtDate(a.date)}</td>
+      <td><span class="comp-dot" style="background:${a.color}"></span>${esc(a.competitor)}</td>
+      <td><span class="comp-format">${FORMAT_ICONS[a.format]||'📌'} ${esc(a.format||'-')}</span></td>
+      <td style="font-weight:600;color:var(--text-primary)">${esc(a.topic)}</td>
+      <td style="font-family:var(--font-mono);font-size:0.78rem">${a.speaker ? esc(a.speaker) : '—'}</td>
+      <td>${a.audience_focus ? `<span class="comp-aud">${esc(a.audience_focus)}</span>` : '—'}</td>
+      <td>${a.messaging_angle ? `<span class="comp-angle">${esc(a.messaging_angle)}</span>` : '—'}</td>
+      <td>
+        <button class="comp-act-del" title="Delete" onclick="deleteCompetitorActivity(${a.id})">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </button>
+      </td>
+    </tr>`).join('');
+
+  // Format breakdown chart
+  const fmtMax = Math.max(...Object.values(formats), 1);
+  const fmtBars = Object.entries(formats).sort((a,b)=>b[1]-a[1]).map(([f,c]) => `
+    <div class="comp-fmt-row">
+      <div class="comp-fmt-lbl">${FORMAT_ICONS[f]||'📌'} ${esc(f)}</div>
+      <div class="comp-fmt-track"><div class="comp-fmt-fill" style="width:${(c/fmtMax*100).toFixed(1)}%"></div></div>
+      <div class="comp-fmt-val">${c}</div>
+    </div>`).join('');
+
+  body.innerHTML = `
+    <div class="intel-section">
+      <div class="intel-kpis">
+        <div class="intel-kpi"><div class="intel-kpi-lbl">Competitors Tracked</div><div class="intel-kpi-val">${competitorCount}</div></div>
+        <div class="intel-kpi"><div class="intel-kpi-lbl">Activity Logged (90d)</div><div class="intel-kpi-val">${totalActivity}</div></div>
+        <div class="intel-kpi"><div class="intel-kpi-lbl">Most Used Format</div><div class="intel-kpi-val" style="font-size:1.4rem">${FORMAT_ICONS[topFormat[0]]||'📌'} ${esc(topFormat[0])}</div></div>
+      </div>
+
+      <div class="comp-actions-bar">
+        <button class="btn btn-primary" onclick="openCompetitorActivityModal()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Log Competitor Activity
+        </button>
+        <button class="btn btn-gradient" onclick="runCompetitorGapAnalysis()" id="comp-gap-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+          Generate Gap Analysis
+        </button>
+      </div>
+
+      <div id="comp-gap-panel"></div>
+
+      <h3 class="intel-h3">Tracked Competitors</h3>
+      <p class="intel-p">Right Horizons' competitive set in Indian wealth advisory.</p>
+      <div class="comp-grid">${compCards}</div>
+
+      <h3 class="intel-h3" style="margin-top:32px">Format Breakdown (last 90 days)</h3>
+      <p class="intel-p">What formats are competitors using most?</p>
+      <div class="intel-card">${fmtBars || '<div style="color:var(--text-muted)">No data</div>'}</div>
+
+      <h3 class="intel-h3" style="margin-top:32px">Recent Activity</h3>
+      <p class="intel-p">Latest competitor moves logged in the system. Click + to add more.</p>
+      <div class="intel-table-wrap">
+        <table class="intel-table comp-act-table">
+          <thead><tr><th>Date</th><th>Competitor</th><th>Format</th><th>Topic</th><th>Speaker</th><th>Audience</th><th>Angle</th><th></th></tr></thead>
+          <tbody>${activityRows || '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:24px">No activity logged yet</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  // Cache competitors for the modal
+  window._compList = competitors;
+}
+
+function openCompetitorActivityModal() {
+  const comps = (window._compList || []).map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  const today = new Date().toISOString().slice(0, 10);
+  if (document.getElementById('comp-activity-overlay')) document.getElementById('comp-activity-overlay').remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'comp-activity-overlay';
+  overlay.className = 'modal-overlay open';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:560px" onclick="event.stopPropagation()">
+      <div style="padding:24px 28px">
+        <div class="modal-title">Log Competitor Activity</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-top:4px">Track what competitors are doing so AI can identify gaps</div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:20px">
+          <div>
+            <label class="form-label">Competitor *</label>
+            <select class="form-input" id="cma-competitor">${comps}</select>
+          </div>
+          <div>
+            <label class="form-label">Date *</label>
+            <input type="date" class="form-input" id="cma-date" value="${today}" />
+          </div>
+        </div>
+
+        <div style="margin-top:14px">
+          <label class="form-label">Topic / Title *</label>
+          <input type="text" class="form-input" id="cma-topic" placeholder="e.g. Family Office Roundtable: Estate Planning in the New Tax Regime" />
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+          <div>
+            <label class="form-label">Format</label>
+            <select class="form-input" id="cma-format">
+              <option value="webinar">Webinar</option>
+              <option value="event">In-person Event</option>
+              <option value="linkedin">LinkedIn Post</option>
+              <option value="report">Report</option>
+              <option value="guide">Guide</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Speaker</label>
+            <input type="text" class="form-input" id="cma-speaker" placeholder="e.g. Karan Bhagat" />
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+          <div>
+            <label class="form-label">Audience</label>
+            <select class="form-input" id="cma-audience">
+              <option value="">—</option>
+              <option value="HNI">HNI</option>
+              <option value="UHNI">UHNI</option>
+              <option value="CXO">CXO</option>
+              <option value="Founder">Founder</option>
+              <option value="Retiree">Retiree</option>
+              <option value="Doctor">Doctor</option>
+              <option value="NRI">NRI</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Messaging Angle</label>
+            <select class="form-input" id="cma-angle">
+              <option value="">—</option>
+              <option value="Retirement">Retirement</option>
+              <option value="Wealth Preservation">Wealth Preservation</option>
+              <option value="Market Outlook">Market Outlook</option>
+              <option value="Tax">Tax</option>
+              <option value="Estate">Estate Planning</option>
+              <option value="PMS_AIF">PMS / AIF</option>
+              <option value="NRI">NRI Strategy</option>
+              <option value="Real Estate">Real Estate</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+          <div>
+            <label class="form-label">CTA</label>
+            <select class="form-input" id="cma-cta">
+              <option value="">—</option>
+              <option value="Consultation">Free Consultation</option>
+              <option value="Portfolio Review">Portfolio Review</option>
+              <option value="Report Download">Report Download</option>
+              <option value="Invite Event">Invite Event</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Link (optional)</label>
+            <input type="url" class="form-input" id="cma-link" placeholder="https://…" />
+          </div>
+        </div>
+
+        <div style="margin-top:14px">
+          <label class="form-label">Notes (optional)</label>
+          <textarea class="form-input" id="cma-notes" rows="2" placeholder="What stood out? Any takeaways?"></textarea>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:22px">
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('comp-activity-overlay').remove()">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="saveCompetitorActivity()">Save Activity</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('cma-topic')?.focus(), 80);
+}
+
+async function saveCompetitorActivity() {
+  const v = (id) => document.getElementById(id).value.trim();
+  const payload = {
+    competitor_id: +v('cma-competitor'),
+    activity_date: v('cma-date'),
+    topic: v('cma-topic'),
+    format: v('cma-format'),
+    speaker: v('cma-speaker'),
+    audience_focus: v('cma-audience'),
+    messaging_angle: v('cma-angle'),
+    cta: v('cma-cta'),
+    link: v('cma-link'),
+    notes: v('cma-notes'),
+  };
+  if (!payload.topic) {
+    showToast('Please enter a topic/title', 'error');
+    return;
+  }
+  try {
+    const r = await fetch('/api/competitor-activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) throw new Error('Save failed');
+    document.getElementById('comp-activity-overlay').remove();
+    showToast('Competitor activity logged');
+    renderCompetitorIntel();
+  } catch(e) {
+    showToast('Failed to save', 'error');
+  }
+}
+
+async function deleteCompetitorActivity(id) {
+  if (!confirm('Delete this competitor activity entry?')) return;
+  try {
+    const r = await fetch(`/api/competitor-activity/${id}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error('Delete failed');
+    showToast('Deleted');
+    renderCompetitorIntel();
+  } catch(e) {
+    showToast('Failed to delete', 'error');
+  }
+}
+
+async function runCompetitorGapAnalysis() {
+  const panel = document.getElementById('comp-gap-panel');
+  const btn = document.getElementById('comp-gap-btn');
+  if (!panel) return;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<svg class="spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg> Analyzing…`;
+  }
+  panel.innerHTML = `<div class="aip ai-loading" style="padding:20px;border:1px solid rgba(124,58,237,0.20);border-radius:1.5rem;background:rgba(255,255,255,0.85);margin:18px 0;color:var(--accent-primary);font-weight:600;display:flex;align-items:center;gap:10px">
+    <svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg>
+    <span>AI is comparing competitor moves against Right Horizons activity…</span>
+  </div>`;
+  try {
+    const data = await api('/api/competitor-gap-analysis');
+    _renderCompetitorGap(panel, data);
+    if (btn) {
+      btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Analysis Done`;
+      btn.classList.add('ai-done');
+    }
+    panel.scrollIntoView({ behavior:'smooth', block:'start' });
+  } catch(e) {
+    panel.innerHTML = `<div class="aip ai-error" style="padding:18px;border-radius:1.5rem;color:#991B1B;background:rgba(254,242,242,0.85);margin:18px 0">${esc(e.message || 'Gap analysis failed')}</div>`;
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg> Retry`;
+    }
+  }
+}
+
+function _renderCompetitorGap(panel, data) {
+  if (!data.analysis) {
+    panel.innerHTML = `<div class="comp-gap-empty">${esc(data.message || 'Not enough data for gap analysis. Log more competitor activity.')}</div>`;
+    return;
+  }
+  const a = data.analysis;
+  const topicGaps = (a.topic_gaps || []).map(g => `
+    <div class="gap-card">
+      <div class="gap-theme">${esc(g.theme)}</div>
+      <div class="gap-row"><span class="gap-lbl">Competitors:</span> <span class="gap-txt">${esc(g.what_competitors_did)}</span></div>
+      <div class="gap-row"><span class="gap-lbl">Right Horizons:</span> <span class="gap-txt">${esc(g.rh_did)}</span></div>
+      <div class="gap-rec">→ ${esc(g.recommendation)}</div>
+    </div>`).join('');
+
+  const audGaps = (a.audience_gaps || []).map(g => `
+    <div class="gap-card">
+      <div class="gap-theme">${esc(g.audience)}</div>
+      <div class="gap-row"><span class="gap-lbl">Targeted by:</span> <span class="gap-txt">${esc(g.competitors_targeting)}</span></div>
+      <div class="gap-row"><span class="gap-lbl">RH coverage:</span> <span class="gap-txt">${esc(g.rh_targeting)}</span></div>
+      <div class="gap-rec">→ ${esc(g.recommendation)}</div>
+    </div>`).join('');
+
+  const fmtGaps = (a.format_gaps || []).map(g => `
+    <div class="gap-card">
+      <div class="gap-theme">${esc(g.format)}</div>
+      <div class="gap-row"><span class="gap-lbl">Observation:</span> <span class="gap-txt">${esc(g.observation)}</span></div>
+      <div class="gap-rec">→ ${esc(g.recommendation)}</div>
+    </div>`).join('');
+
+  panel.innerHTML = `
+    <div class="comp-gap-panel">
+      <div class="comp-gap-header">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+        <span>Competitive Gap Analysis</span>
+        <span class="comp-gap-meta">${data.competitor_activity_count} competitor + ${data.rh_activity_count} RH activities analyzed</span>
+      </div>
+
+      <div class="comp-gap-headline">${esc(a.headline_opportunity || '')}</div>
+
+      <div class="comp-gap-section">
+        <div class="comp-gap-section-title">📚 Topic Gaps</div>
+        <div class="comp-gap-grid">${topicGaps || '<div class="gap-empty">No topic gaps identified</div>'}</div>
+      </div>
+
+      <div class="comp-gap-section">
+        <div class="comp-gap-section-title">🎯 Audience Gaps</div>
+        <div class="comp-gap-grid">${audGaps || '<div class="gap-empty">No audience gaps identified</div>'}</div>
+      </div>
+
+      <div class="comp-gap-section">
+        <div class="comp-gap-section-title">📐 Format Gaps</div>
+        <div class="comp-gap-grid">${fmtGaps || '<div class="gap-empty">No format gaps identified</div>'}</div>
+      </div>
+
+      <div class="comp-gap-section">
+        <div class="comp-gap-section-title">🎙️ Speaker Positioning</div>
+        <div class="gap-card gap-card-full">${esc(a.speaker_positioning || '')}</div>
       </div>
     </div>`;
 }
