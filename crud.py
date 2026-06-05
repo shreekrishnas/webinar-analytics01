@@ -609,6 +609,7 @@ def get_leaderboard(
     webinar_id: Optional[int] = None,
     limit: int = 50,
 ) -> List[schemas.LeaderboardEntry]:
+    from datetime import date as _date
     extra_where = ""
     params: dict = {"lim": limit}
 
@@ -619,8 +620,7 @@ def get_leaderboard(
         extra_where = "AND r.webinar_id IN (SELECT id FROM webinars WHERE speaker_id = :speaker_id)"
         params["speaker_id"] = speaker_id
 
-    # CTE normalises the email_key once so GROUP BY can reference it by name —
-    # required by PostgreSQL strict GROUP BY rules (SQLite allowed the alias).
+    # Pull all stats including last attended date and ICP diversity
     sql = text(f"""
         WITH norm AS (
             SELECT
@@ -629,6 +629,8 @@ def get_leaderboard(
                 r.phone,
                 r.webinar_id,
                 a.duration_minutes,
+                w.date AS webinar_date,
+                COALESCE(w.icp, 'Others') AS icp,
                 CASE
                     WHEN TRIM(COALESCE(r.email, '')) = ''
                     THEN 'noemail_' || CAST(r.id AS VARCHAR)
@@ -636,15 +638,18 @@ def get_leaderboard(
                 END AS email_key
             FROM registrations r
             JOIN attendances a ON a.registration_id = r.id
+            JOIN webinars w    ON w.id = r.webinar_id
             WHERE a.attended = TRUE {extra_where}
         )
         SELECT
             email_key,
-            MIN(email)            AS email,
-            MIN(attendee_name)    AS name,
-            MIN(phone)            AS phone,
-            COUNT(DISTINCT webinar_id)          AS webinars_attended,
-            COALESCE(SUM(duration_minutes), 0)  AS total_duration
+            MIN(email)                              AS email,
+            MIN(attendee_name)                      AS name,
+            MIN(phone)                              AS phone,
+            COUNT(DISTINCT webinar_id)              AS webinars_attended,
+            COALESCE(SUM(duration_minutes), 0)      AS total_duration,
+            MAX(webinar_date)                       AS last_date,
+            COUNT(DISTINCT icp)                     AS icp_diversity
         FROM norm
         GROUP BY email_key
         ORDER BY webinars_attended DESC, total_duration DESC
@@ -653,6 +658,16 @@ def get_leaderboard(
 
     rows = db.execute(sql, params).fetchall()
 
+    # Pull manual lead tags in one query for these emails
+    emails_lower = [(r.email or '').lower() for r in rows if r.email]
+    tag_map: dict = {}
+    if emails_lower:
+        placeholders = {f"e{i}": e for i, e in enumerate(emails_lower)}
+        ph_str = ",".join(f":e{i}" for i in range(len(emails_lower)))
+        for t in db.execute(text(f"SELECT email, tag FROM lead_tags WHERE email IN ({ph_str})"), placeholders).fetchall():
+            tag_map[t.email.lower()] = t.tag
+
+    today = _date.today()
     result = []
     for i, row in enumerate(rows):
         webinars_att = row.webinars_attended or 0
@@ -660,6 +675,48 @@ def get_leaderboard(
         avg_dur      = total_dur / webinars_att if webinars_att else 0
         bonus        = 5 if avg_dur >= 60 else 3 if avg_dur >= 45 else 1 if avg_dur >= 30 else 0
         score        = webinars_att * (10 + bonus)
+
+        # Days since last attended
+        last_dt = row.last_date
+        days_since = None
+        last_str = None
+        if last_dt:
+            try:
+                last_str = str(last_dt)
+                # last_dt may be datetime.date or string from PG
+                if hasattr(last_dt, 'year'):
+                    days_since = (today - last_dt).days
+                else:
+                    from datetime import datetime as _dt
+                    parsed = _dt.fromisoformat(str(last_dt).split(' ')[0]).date()
+                    days_since = (today - parsed).days
+            except Exception:
+                days_since = None
+
+        email_l = (row.email or '').lower()
+        icp_div = int(row.icp_diversity or 0)
+
+        # ── Compute READINESS ────────────────────────────────────────────────
+        # Manual override wins
+        manual_tag = tag_map.get(email_l)
+        if manual_tag in ('customer', 'internal', 'employee', 'partner'):
+            readiness = manual_tag
+        elif email_l.endswith('@righthorizons.com'):
+            readiness = "internal"
+        else:
+            # Heuristic scoring
+            # Hot: 3+ webinars, avg ≥30min, attended in last 120 days, 2+ ICPs touched
+            # Warm: 2+ webinars OR avg ≥45min OR attended in last 60 days
+            # Cold: everyone else
+            recent = days_since is not None and days_since <= 120
+            very_recent = days_since is not None and days_since <= 60
+            if webinars_att >= 3 and avg_dur >= 30 and recent and icp_div >= 1:
+                readiness = "hot"
+            elif (webinars_att >= 2 and avg_dur >= 20) or (avg_dur >= 45) or (very_recent and webinars_att >= 1):
+                readiness = "warm"
+            else:
+                readiness = "cold"
+
         result.append(schemas.LeaderboardEntry(
             rank=i + 1,
             name=row.name or "Unknown",
@@ -668,6 +725,12 @@ def get_leaderboard(
             webinars_attended=webinars_att,
             total_duration_minutes=total_dur,
             score=score,
+            avg_minutes=round(avg_dur, 1),
+            last_attended_date=last_str,
+            days_since_last=days_since,
+            icp_diversity=icp_div,
+            readiness=readiness,
+            tag=manual_tag,
         ))
 
     return result

@@ -1661,9 +1661,18 @@ async function renderLeaderboard(speakerId, webinarId) {
     // Score range filter (client-side)
     const minS = S._lbScoreMin !== undefined && S._lbScoreMin !== '' ? +S._lbScoreMin : null;
     const maxS = S._lbScoreMax !== undefined && S._lbScoreMax !== '' ? +S._lbScoreMax : null;
+    const readinessF = S._lbReadiness || 'all';
     const lb = lbAll.filter(e => {
       if (minS !== null && e.score < minS) return false;
       if (maxS !== null && e.score > maxS) return false;
+      if (readinessF !== 'all') {
+        const r = e.tag || e.readiness || 'cold';
+        if (readinessF === 'meeting_ready') {
+          if (r !== 'hot' && r !== 'meeting_ready') return false;
+        } else if (r !== readinessF) {
+          return false;
+        }
+      }
       return true;
     });
 
@@ -1687,29 +1696,44 @@ async function renderLeaderboard(speakerId, webinarId) {
               <th>Rank</th>
               <th>Name</th>
               <th>Email</th>
-              <th>Phone</th>
-              <th>Webinars Attended</th>
-              <th>Total Time (min)</th>
+              <th>Webinars</th>
+              <th>Avg Min</th>
+              <th>Last Seen</th>
+              <th>Status</th>
               <th>Score</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             ${lb.map(e => {
-              // Use single-quoted strings in onclick to avoid breaking the HTML attribute
               const safeEmail = (e.email||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
               const safeName  = (e.name ||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
               const nameCell = e.email
                 ? `<span class="lb-name-link" onclick="openAttendeeModal('${safeEmail}','${safeName}')" title="Click to view attended webinars">${esc(e.name)}</span>`
                 : `<span class="lb-name-link no-email" title="No email on file">${esc(e.name)}</span>`;
+              const readinessKey = e.tag || e.readiness || 'cold';
+              const lastSeen = e.days_since_last !== null && e.days_since_last !== undefined
+                ? (e.days_since_last === 0 ? 'Today' : `${e.days_since_last}d ago`)
+                : '—';
+              const lastSeenColor = e.days_since_last == null ? 'var(--text-muted)'
+                : e.days_since_last <= 30 ? '#10B981'
+                : e.days_since_last <= 90 ? '#F59E0B'
+                : '#9CA3AF';
               return `
-              <tr>
+              <tr data-readiness="${readinessKey}">
                 <td>${rankHTML(e.rank)}</td>
                 <td>${nameCell}</td>
                 <td><div class="lb-email">${esc(e.email||'N/A')}</div></td>
-                <td><div class="lb-email">${esc(e.phone||'N/A')}</div></td>
                 <td style="text-align:center;font-weight:600;color:#059669">${e.webinars_attended}</td>
-                <td style="text-align:center;color:var(--text-2)">${e.total_duration_minutes}</td>
-                <td><span class="lb-score">⭐ ${e.score}</span></td>
+                <td style="text-align:center;font-family:var(--font-mono);color:var(--text-secondary)">${e.avg_minutes||0}</td>
+                <td style="text-align:center;font-family:var(--font-mono);color:${lastSeenColor};font-weight:600">${lastSeen}</td>
+                <td>${renderReadinessBadge(readinessKey, e.tag)}</td>
+                <td><span class="lb-score">${e.score}</span></td>
+                <td>
+                  ${e.email ? `<button class="lb-tag-edit" onclick="openTagEditor('${safeEmail}','${safeName}', '${e.tag||''}')" title="Edit lead tag">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>` : ''}
+                </td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -1744,7 +1768,19 @@ async function renderLeaderboard(speakerId, webinarId) {
             <span class="lb-score-dash">to</span>
             <input type="number" class="filter-select lb-score-input" placeholder="max" value="${S._lbScoreMax||''}" onchange="S._lbScoreMax=this.value;renderLeaderboard()" />
           </div>
-          <button class="btn btn-ghost btn-sm" onclick="S._lbSpeaker='';S._lbWebinar='';S._lbScoreMin='';S._lbScoreMax='';S._lbLimit=50;renderLeaderboard()">Clear Filters</button>
+          <select class="filter-select" onchange="S._lbReadiness=this.value;renderLeaderboard()">
+            <option value="all" ${readinessF==='all'?'selected':''}>All Leads</option>
+            <option value="meeting_ready" ${readinessF==='meeting_ready'?'selected':''}>🔥 Meeting Ready</option>
+            <option value="hot"  ${readinessF==='hot'?'selected':''}>Hot</option>
+            <option value="warm" ${readinessF==='warm'?'selected':''}>Warm</option>
+            <option value="cold" ${readinessF==='cold'?'selected':''}>Cold</option>
+            <option value="customer" ${readinessF==='customer'?'selected':''}>Customer</option>
+            <option value="prospect" ${readinessF==='prospect'?'selected':''}>Prospect</option>
+            <option value="partner"  ${readinessF==='partner'?'selected':''}>Partner</option>
+            <option value="internal" ${readinessF==='internal'?'selected':''}>Internal</option>
+            <option value="employee" ${readinessF==='employee'?'selected':''}>Employee</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="S._lbSpeaker='';S._lbWebinar='';S._lbScoreMin='';S._lbScoreMax='';S._lbLimit=50;S._lbReadiness='all';renderLeaderboard()">Clear Filters</button>
         </div>
 
         ${tableHTML}
@@ -3005,6 +3041,86 @@ function showToast(msg, type='success') {
 /* ══════════════════════════════════════════════════════════════════════════
    ATTENDEE PROFILE DRAWER
 ══════════════════════════════════════════════════════════════════════════ */
+/* ── Readiness badge + tag editor ──────────────────────────────────────── */
+const READINESS_LABELS = {
+  hot: 'Hot',
+  warm: 'Warm',
+  cold: 'Cold',
+  customer: 'Customer',
+  prospect: 'Prospect',
+  partner: 'Partner',
+  internal: 'Internal',
+  employee: 'Employee',
+  meeting_ready: 'Meeting Ready',
+};
+
+function renderReadinessBadge(key, isManual) {
+  const label = READINESS_LABELS[key] || key;
+  return `<span class="readiness-badge readiness-${key}${isManual?' is-manual':''}" title="${isManual?'Manual tag':'Auto-classified'}">${esc(label)}</span>`;
+}
+
+function openTagEditor(email, name, currentTag) {
+  if (document.getElementById('tag-editor-overlay')) document.getElementById('tag-editor-overlay').remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'tag-editor-overlay';
+  overlay.className = 'modal-overlay open';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:420px" onclick="event.stopPropagation()">
+      <div style="padding:24px 28px">
+        <div class="modal-title">Tag Lead</div>
+        <div style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted);margin-top:4px">${esc(name)} · ${esc(email)}</div>
+
+        <div style="margin-top:20px">
+          <label class="form-label" style="margin-bottom:8px;display:block">Classification</label>
+          <div class="tag-pill-row" id="tag-pill-row">
+            ${['', 'customer', 'prospect', 'partner', 'employee', 'internal'].map(t => `
+              <button class="tag-pill ${currentTag === t ? 'active' : ''}" data-tag="${t}" onclick="selectTagPill(this,'${t}')">
+                ${t === '' ? 'Clear' : READINESS_LABELS[t] || t}
+              </button>`).join('')}
+          </div>
+        </div>
+
+        <div style="margin-top:18px">
+          <label class="form-label" style="margin-bottom:6px;display:block">Note (optional)</label>
+          <textarea class="form-input" id="tag-note" rows="2" placeholder="Why this tag?"></textarea>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px">
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('tag-editor-overlay').remove()">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="saveTag('${email.replace(/'/g, "\\'")}')">Save Tag</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay._currentTag = currentTag;
+}
+
+function selectTagPill(el, tag) {
+  el.parentElement.querySelectorAll('.tag-pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tag-editor-overlay')._currentTag = tag;
+}
+
+async function saveTag(email) {
+  const overlay = document.getElementById('tag-editor-overlay');
+  const tag = overlay._currentTag !== undefined ? overlay._currentTag : '';
+  const note = document.getElementById('tag-note').value.trim();
+  try {
+    const r = await fetch(`/api/lead-tags/${encodeURIComponent(email)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tag, note }),
+    });
+    if (!r.ok) throw new Error('Save failed');
+    overlay.remove();
+    showToast(tag ? `Tagged as ${READINESS_LABELS[tag] || tag}` : 'Tag cleared');
+    renderLeaderboard();
+  } catch(e) {
+    showToast('Failed to save tag', 'error');
+  }
+}
+
 function exportLeaderboardCSV() {
   const params = new URLSearchParams();
   if (S._lbSpeaker)  params.set('speaker_id', S._lbSpeaker);

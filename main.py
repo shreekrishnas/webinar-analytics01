@@ -224,6 +224,38 @@ def delete_note(webinar_id: int, note_id: int, db: Session = Depends(get_db)):
     db.commit()
 
 
+# ── Lead Tags (manual classification overrides) ──────────────────────────────
+
+@app.get("/api/lead-tags")
+def list_lead_tags(db: Session = Depends(get_db)):
+    from sqlalchemy import text as _text
+    rows = db.execute(_text("SELECT email, tag, note, updated_at FROM lead_tags ORDER BY updated_at DESC")).fetchall()
+    return [{"email": r.email, "tag": r.tag, "note": r.note, "updated_at": str(r.updated_at)} for r in rows]
+
+
+@app.put("/api/lead-tags/{email}")
+def upsert_lead_tag(email: str, payload: dict, db: Session = Depends(get_db)):
+    from sqlalchemy import text as _text
+    tag = (payload.get("tag") or "").strip().lower()
+    note = (payload.get("note") or "").strip()
+    if tag not in ("customer", "prospect", "partner", "employee", "internal", "meeting_ready", ""):
+        raise HTTPException(status_code=400, detail="Invalid tag")
+    email_l = email.lower().strip()
+    if tag == "":
+        db.execute(_text("DELETE FROM lead_tags WHERE email = :e"), {"e": email_l})
+    else:
+        # Upsert (works on both SQLite and Postgres)
+        existing = db.execute(_text("SELECT id FROM lead_tags WHERE email = :e"), {"e": email_l}).fetchone()
+        if existing:
+            db.execute(_text("UPDATE lead_tags SET tag=:t, note=:n, updated_at=CURRENT_TIMESTAMP WHERE email=:e"),
+                       {"t": tag, "n": note, "e": email_l})
+        else:
+            db.execute(_text("INSERT INTO lead_tags (email, tag, note) VALUES (:e, :t, :n)"),
+                       {"e": email_l, "t": tag, "n": note})
+    db.commit()
+    return {"email": email_l, "tag": tag or None, "note": note or None}
+
+
 # ── Leaderboard CSV Export ───────────────────────────────────────────────────
 
 @app.get("/api/leaderboard/export")
@@ -311,15 +343,42 @@ def export_leaderboard(
             for r in db.execute(q, placeholders).fetchall():
                 webinar_titles_by_email.setdefault(r.email, []).append(f"{r.title} ({r.date})")
 
+    # Fetch readiness + manual tags for these emails
+    emails_lower = [e["email"].lower() for e in entries if e["email"]]
+    tag_map: dict = {}
+    if emails_lower:
+        placeholders = {f"e{i}": e for i, e in enumerate(emails_lower)}
+        ph_str = ",".join(f":e{i}" for i in range(len(emails_lower)))
+        for t in db.execute(_text(f"SELECT email, tag FROM lead_tags WHERE email IN ({ph_str})"), placeholders).fetchall():
+            tag_map[t.email.lower()] = t.tag
+
+    from datetime import date as _date
+    today = _date.today()
+
+    def readiness_for(email_l, e):
+        manual = tag_map.get(email_l)
+        if manual in ('customer','internal','employee','partner'): return manual
+        if email_l.endswith('@righthorizons.com'): return "internal"
+        # Get last_date for this person
+        avg_dur = e["avg_min"]
+        att = e["webinars_attended"]
+        # Approximation: we'd need to re-query for last_date but skip for export speed
+        if att >= 3 and avg_dur >= 30: return "hot"
+        if att >= 2 or avg_dur >= 45: return "warm"
+        return "cold"
+
     # Build CSV
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(["Rank", "Name", "Email", "Phone", "Webinars Attended", "Total Minutes",
-                     "Avg Minutes/Session", "Score", "Webinar List"])
+                     "Avg Minutes/Session", "Score", "Readiness", "Manual Tag", "Webinar List"])
     for idx, e in enumerate(entries, 1):
+        email_l = (e["email"] or "").lower()
+        readiness = readiness_for(email_l, e)
+        manual_tag = tag_map.get(email_l, "")
         titles = " | ".join(webinar_titles_by_email.get(e["email"], []))
         writer.writerow([idx, e["name"], e["email"], e["phone"], e["webinars_attended"],
-                         e["total_min"], e["avg_min"], e["score"], titles])
+                         e["total_min"], e["avg_min"], e["score"], readiness, manual_tag, titles])
 
     data = buf.getvalue().encode("utf-8-sig")
     return StreamingResponse(
@@ -627,7 +686,7 @@ Remember: nothing outside this data exists for you. You are a closed-book analys
         resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={"model": "anthropic/claude-haiku-4.5", "max_tokens": 900, "messages": messages},
+            json={"model": "anthropic/claude-sonnet-4.5", "max_tokens": 900, "messages": messages},
             timeout=30.0
         )
         resp.raise_for_status()
@@ -684,28 +743,31 @@ Return a JSON array with this exact structure:
     "color": "#8b5cf6",
     "topics": [
       {{
-        "title": "exact webinar title",
-        "hook": "one sharp sentence on why this topic is urgent right now and the tension it creates",
-        "angle": "the unique Right Horizons angle that makes this different from generic content",
-        "expected": "High/Medium registration expected based on past patterns"
+        "title": "TIGHT webinar title - MUST be ≤80 characters including spaces",
+        "hook": "ONE short sentence, ≤120 chars. What's the urgency today?",
+        "angle": "ONE short sentence, ≤100 chars. Why Right Horizons over generic content?",
+        "expected": "High|Medium|Low"
       }}
     ]
   }}
 ]
 
-Rules:
-- NEVER use em dashes (long dash). Use commas, periods, colons, or parentheses instead. This rule is absolute.
-- Titles must feel like Rachna/Anil/Sunil/Preethi/Prabhat would say them, use ₹ figures, timeframes, specific scenarios
-- No generic titles like "How to Invest Wisely" or "Understanding Mutual Funds"
-- Hook must reference something happening TODAY in markets/news
-- Return ONLY valid JSON, no markdown"""
+HARD RULES (each is a deal-breaker):
+1. Title MUST be 80 characters or less. Count them. Cut if needed.
+2. Hook MUST be 120 characters or less. One sentence.
+3. Angle MUST be 100 characters or less. One sentence.
+4. NEVER use em dashes (long dash). Use commas, periods, colons, parentheses instead.
+5. Titles must sound like Rachna/Anil/Sunil/Preethi/Prabhat with ₹ figures, timeframes, specific scenarios.
+6. No generic titles like "How to Invest Wisely" or "Understanding Mutual Funds".
+7. Hook must reference something happening TODAY in markets/news.
+8. Return ONLY valid JSON, no markdown, no commentary."""
 
     try:
         resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
             json={
-                "model": "anthropic/claude-haiku-4.5",
+                "model": "anthropic/claude-sonnet-4.5",
                 "max_tokens": 4000,
                 "messages": [{"role": "user", "content": prompt}]
             },
@@ -932,7 +994,7 @@ Return ONLY the JSON object, nothing before or after, no markdown fences."""
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
             json={
-                "model": "anthropic/claude-haiku-4.5",
+                "model": "anthropic/claude-sonnet-4.5",
                 "max_tokens": 1200,
                 "messages": [{"role": "user", "content": prompt}]
             },
@@ -1074,7 +1136,7 @@ Return ONLY the JSON, no markdown, no preamble."""
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
                      "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={"model": "anthropic/claude-haiku-4.5", "max_tokens": 800,
+            json={"model": "anthropic/claude-sonnet-4.5", "max_tokens": 800,
                   "messages": [{"role": "user", "content": prompt}]},
             timeout=25.0
         )

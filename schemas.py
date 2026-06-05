@@ -209,6 +209,13 @@ class LeaderboardEntry(BaseModel):
     webinars_attended: int
     total_duration_minutes: int
     score: int
+    # Phase 1: Meeting Readiness + Lead Qualification
+    avg_minutes: float = 0
+    last_attended_date: Optional[str] = None
+    days_since_last: Optional[int] = None
+    icp_diversity: int = 0          # how many distinct ICPs this person attended
+    readiness: str = "cold"          # hot | warm | cold | customer | internal
+    tag: Optional[str] = None        # manual override: customer | prospect | partner | employee | meeting_ready
 
 
 # ── Attendee profile ──────────────────────────────────────────────────────────
