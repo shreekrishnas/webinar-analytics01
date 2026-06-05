@@ -426,7 +426,7 @@ def _get_intelligence_inner(db: Session):
         "day_performance": day_perf,
         "domain_analysis": domains,
         "source_performance": sources,
-        "total_webinars": sum(r["webinars"] for r in icp_rows),
+        "total_webinars": sum(r["webinar_count"] for r in icp_rows),
         "total_spend": sum(r["total_spend"] for r in icp_rows),
         "total_leads": sum(r["total_leads"] for r in icp_rows),
     }
