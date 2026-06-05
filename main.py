@@ -229,6 +229,14 @@ def delete_note(webinar_id: int, note_id: int, db: Session = Depends(get_db)):
 @app.get("/api/intelligence")
 def get_intelligence(db: Session = Depends(get_db)):
     """Combined intelligence: topic performance, speaker deep-dive, campaign, ICP refinement."""
+    import traceback
+    try:
+        return _get_intelligence_inner(db)
+    except Exception:
+        raise HTTPException(status_code=500, detail=traceback.format_exc()[-1500:])
+
+
+def _get_intelligence_inner(db: Session):
     from sqlalchemy import text as _t
 
     # ── 1. Topic / ICP performance ──
@@ -353,32 +361,29 @@ def get_intelligence(db: Session = Depends(get_db)):
         ORDER BY w.spend ASC
     """)).fetchall()
 
-    # ── 4. ICP refinement: email-domain analysis ──
-    domain_perf = db.execute(_t("""
-        SELECT
-            LOWER(SUBSTR(r.email, INSTR(r.email,'@')+1)) AS domain,
-            COUNT(DISTINCT r.email) AS people,
-            COUNT(DISTINCT r.webinar_id) AS webinars_touched
+    # ── 4. ICP refinement: email-domain analysis (Python-side aggregation) ──
+    all_emails = db.execute(_t("""
+        SELECT r.email, r.webinar_id
         FROM registrations r
         WHERE r.email IS NOT NULL AND r.email LIKE '%@%'
           AND r.email NOT LIKE '%@rhorizon.in'
-        GROUP BY domain
-        HAVING COUNT(DISTINCT r.email) >= 3
-        ORDER BY people DESC
-        LIMIT 25
-    """) if str(db.bind.dialect.name) == 'sqlite' else _t("""
-        SELECT
-            LOWER(SUBSTRING(r.email FROM POSITION('@' IN r.email) + 1)) AS domain,
-            COUNT(DISTINCT r.email) AS people,
-            COUNT(DISTINCT r.webinar_id) AS webinars_touched
-        FROM registrations r
-        WHERE r.email IS NOT NULL AND r.email LIKE '%@%'
-          AND r.email NOT LIKE '%@rhorizon.in'
-        GROUP BY LOWER(SUBSTRING(r.email FROM POSITION('@' IN r.email) + 1))
-        HAVING COUNT(DISTINCT r.email) >= 3
-        ORDER BY people DESC
-        LIMIT 25
     """)).fetchall()
+
+    domain_buckets: dict = {}
+    for row in all_emails:
+        em = row.email.lower().strip()
+        if '@' not in em: continue
+        dom = em.split('@', 1)[1]
+        if dom not in domain_buckets:
+            domain_buckets[dom] = {"emails": set(), "webinars": set()}
+        domain_buckets[dom]["emails"].add(em)
+        domain_buckets[dom]["webinars"].add(row.webinar_id)
+
+    domain_perf_list = sorted(
+        [(d, len(v["emails"]), len(v["webinars"])) for d, v in domain_buckets.items() if len(v["emails"]) >= 3],
+        key=lambda x: -x[1]
+    )[:25]
+    domain_perf = [type('R', (), {'domain': d, 'people': p, 'webinars_touched': w})() for d, p, w in domain_perf_list]
 
     domains = []
     for r in domain_perf:
