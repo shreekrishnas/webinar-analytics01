@@ -3135,20 +3135,17 @@ function _renderSpeakerIntel(data) {
       </div>
 
       <div class="spk-detail-insight">
-        ${s.attendance_rate >= 40 ? `<span style="color:#10b981">✓ Strong attendance — audience stays engaged throughout</span>`
-          : `<span style="color:#f43f5e">↙ High drop-off — consider topic-audience fit or promotion timing</span>`}
+        ${s.attendance_rate >= 40 ? `<span style="color:#10b981">✓ Strong attendance rate</span>` : ''}
       </div>
     </div>`;
   }).join('');
 
   return `
     <div class="intel-section">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:12px">
-        <div>
-          <h3 class="intel-h3" style="margin:0">Speaker Performance</h3>
-          <p class="intel-p" style="margin:4px 0 0">Registration and attendance metrics per speaker across all completed webinars.</p>
-        </div>
-        <div class="intel-kpis" style="margin:0">
+      <div style="margin-bottom:18px">
+        <h3 class="intel-h3" style="margin:0">Speaker Performance</h3>
+        <p class="intel-p" style="margin:4px 0 16px">Registration and attendance metrics per speaker across all completed webinars.</p>
+        <div class="intel-kpis" style="margin:0;justify-content:center">
           <div class="intel-kpi" style="min-width:80px"><div class="intel-kpi-lbl">Speakers</div><div class="intel-kpi-val">${sorted.length}</div></div>
           <div class="intel-kpi" style="min-width:80px"><div class="intel-kpi-lbl">Total Regs</div><div class="intel-kpi-val">${fmt(sorted.reduce((s,x)=>s+x.total_regs,0))}</div></div>
           <div class="intel-kpi" style="min-width:80px"><div class="intel-kpi-lbl">Avg Att Rate</div><div class="intel-kpi-val">${avgAttRate.toFixed(1)}%</div></div>
