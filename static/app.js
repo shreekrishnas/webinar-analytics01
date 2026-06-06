@@ -548,7 +548,7 @@ function renderKpiBanner() {
   ];
 
   return kpis.map(k => `
-    <div class="kpi-card ${k.cls}">
+    <div class="kpi-card ${k.cls}" ${k.label==='Follow-up Pending'?'onclick="showFollowupPendingModal()" style="cursor:pointer" title="Click to see pending follow-ups"':''}>
       <div class="kpi-card-head">
         <span class="kpi-card-label">${k.label}</span>
         <span class="kpi-card-icon">${k.icon}</span>
@@ -559,6 +559,72 @@ function renderKpiBanner() {
         <span>${k.trend}</span>
       </div>
     </div>`).join('');
+}
+
+async function showFollowupPendingModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:600px">
+      <div class="modal-header">
+        <h3 style="display:flex;align-items:center;gap:8px">
+          <span style="width:10px;height:10px;border-radius:50%;background:#f43f5e;display:inline-block"></span>
+          Follow-up Pending
+        </h3>
+        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" style="padding:20px 24px">
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Attendees who have not yet been contacted in the follow-up pipeline.</p>
+        <div id="followup-pending-list"><div class="pg-loading"><div class="spinner"></div></div></div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  try {
+    const [pipeline, lq] = await Promise.all([
+      api('/api/pipeline').catch(()=>[]),
+      api('/api/lead-quality').catch(()=>({ leads:[] })),
+    ]);
+    const pipelineEmails = new Set((pipeline||[]).map(c => c.email?.toLowerCase()));
+    const leads = (lq?.leads || []).filter(l => !pipelineEmails.has(l.email?.toLowerCase())).slice(0,50);
+    const el = document.getElementById('followup-pending-list');
+    if (!el) return;
+    if (!leads.length) {
+      el.innerHTML = '<div class="empty-state" style="padding:20px 0"><div class="empty-title">All caught up!</div><div class="empty-sub">No pending follow-ups found.</div></div>';
+      return;
+    }
+    el.innerHTML = `
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">${leads.length} contact${leads.length!==1?'s':''} need follow-up</div>
+      <div style="max-height:380px;overflow-y:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="border-bottom:1px solid var(--border)">
+            <th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase">Email</th>
+            <th style="text-align:center;padding:8px 12px;font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase">Webinars</th>
+            <th style="text-align:center;padding:8px 12px;font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase">Score</th>
+            <th style="padding:8px 12px"></th>
+          </tr></thead>
+          <tbody>
+            ${leads.map(l => `
+              <tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:10px 12px;font-size:13px">${esc(l.email)}</td>
+                <td style="padding:10px 12px;text-align:center;font-size:13px">${l.webinar_count||1}</td>
+                <td style="padding:10px 12px;text-align:center">
+                  <span style="background:#6366f1;color:#fff;border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700">${l.score}</span>
+                </td>
+                <td style="padding:10px 12px;text-align:right">
+                  <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="addLeaderboardToPipeline('${esc(l.email)}','');this.textContent='Added ✓';this.disabled=true">Add to Pipeline</button>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch(e) {
+    const el = document.getElementById('followup-pending-list');
+    if (el) el.innerHTML = '<div style="color:var(--text-muted)">Failed to load data.</div>';
+  }
 }
 
 /* ── Status breakdown donut ─────────────────────────────────────────────── */
@@ -1152,6 +1218,10 @@ function _drawWebinarDetail(w) {
               <button class="btn-ai-compare" id="ai-compare-btn" onclick="runAIComparison(${w.id})">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
                 Compare vs Previous
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick="exportWebinarReport(${w.id},'${safeTitle}')" style="font-size:12px;display:flex;align-items:center;gap:5px;border-radius:8px;height:32px;padding:0 12px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export Report
               </button>` : ''}
               <button class="wb-card-del" style="width:32px;height:32px" title="Delete webinar"
                 onclick="confirmDeleteWebinar(${w.id},'${safeTitle}')">
@@ -1430,11 +1500,13 @@ function renderAnalytics() {
   }
   const st = S.stats;
 
-  // Trend data - last 12 webinars with any registration/attendance data
-  const trendData = [...S.webinars]
-    .filter(w => w.total_registrations > 0 || w.total_attendees > 0)
-    .sort((a,b) => new Date(a.date+'T00:00:00') - new Date(b.date+'T00:00:00'))
-    .slice(-12);
+  // Completed webinars with data, sorted by date
+  const completed = [...S.webinars]
+    .filter(w => w.status === 'completed' && (w.total_registrations > 0 || w.total_attendees > 0))
+    .sort((a,b) => new Date(a.date+'T00:00:00') - new Date(b.date+'T00:00:00'));
+
+  const trendData = completed.slice(-12);
+  const recentWebinars = completed.slice(-6).reverse(); // last 6 for the new leads trend
 
   // Monthly aggregates
   const monthMap = {};
@@ -1450,124 +1522,179 @@ function renderAnalytics() {
   });
   const months = Object.values(monthMap).sort((a,b) => a.key.localeCompare(b.key)).slice(-8);
 
-  // Speaker performance
-  const spkStats = S.speakers.map(sp => {
-    const wbs  = S.webinars.filter(w => w.speaker_id === sp.id);
-    const done = wbs.filter(w => w.status==='completed' && w.attendance_rate > 0);
-    const avgR = done.length ? done.reduce((s,w) => s+w.attendance_rate, 0)/done.length : 0;
-    return { ...sp, avgR, done:done.length, info:gradeInfo(avgR), color:avColor(sp.name) };
-  }).sort((a,b) => b.avgR - a.avgR);
-  const maxSpkR = Math.max(...spkStats.map(s => s.avgR), 1);
-
-  // Top lists
-  const top10reg = [...S.webinars].sort((a,b) => b.total_registrations - a.total_registrations).slice(0,10);
-  const top10att = [...S.webinars].filter(w => w.status==='completed' && w.attendance_rate > 0)
-    .sort((a,b) => b.attendance_rate - a.attendance_rate).slice(0,10);
-  const maxReg = top10reg[0]?.total_registrations || 1;
-
-  // Funnel
   const totalReg = st.total_registrations;
   const totalAtt = st.total_attendees;
   const noShow   = Math.max(0, totalReg - totalAtt);
+  const convRate = totalReg > 0 ? Math.round(totalAtt/totalReg*100) : 0;
+
+  // Funnel stages for big visual
+  const funnelStages = [
+    { label:'Registered', count:totalReg, color:'#6366f1', pct:100 },
+    { label:'Attended', count:totalAtt, color:'#10b981', pct:totalReg>0?Math.round(totalAtt/totalReg*100):0 },
+    { label:'No-show', count:noShow, color:'#f43f5e', pct:totalReg>0?Math.round(noShow/totalReg*100):0 },
+  ];
+
+  // ICP breakdown
+  const icpMap = {};
+  completed.forEach(w => {
+    if (!w.icp) return;
+    if (!icpMap[w.icp]) icpMap[w.icp] = { reg:0, att:0, count:0 };
+    icpMap[w.icp].reg   += w.total_registrations||0;
+    icpMap[w.icp].att   += w.total_attendees||0;
+    icpMap[w.icp].count += 1;
+  });
+  const icpRows = Object.entries(icpMap).sort((a,b)=>b[1].att-a[1].att);
+  const maxIcpAtt = Math.max(...icpRows.map(r=>r[1].att),1);
+
+  // Top lists
+  const top10reg = [...S.webinars].filter(w=>w.total_registrations>0).sort((a,b)=>b.total_registrations-a.total_registrations).slice(0,8);
+  const top10att = completed.sort((a,b)=>b.attendance_rate-a.attendance_rate).slice(0,8);
+  const maxReg   = top10reg[0]?.total_registrations || 1;
+  const maxAtt   = Math.max(...top10att.map(w=>w.attendance_rate||0),1);
+
+  // New registrations per webinar (last 6) for sparkline
+  const sparkMax = Math.max(...recentWebinars.map(w=>w.total_registrations||0),1);
 
   setContent(`
     <div>
       <div class="page-hd">
         <div>
           <h1 class="page-title">Funnel Analytics</h1>
-          <p class="page-sub">Platform-wide performance · ${S.webinars.length} webinars</p>
+          <p class="page-sub">Platform-wide performance · ${S.webinars.length} webinars · ${completed.length} completed with data</p>
         </div>
       </div>
 
-      <!-- KPI strip - 6 metrics -->
-      <div class="an-kpi-strip">
-        <div class="an-kpi-card">
-          <div class="an-kpi-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
-          <div class="an-kpi-val" data-countup="${st.total_webinars}">${st.total_webinars}</div>
-          <div class="an-kpi-label">Total Webinars</div>
+      <!-- KPI strip -->
+      <div class="an-kpi-strip" style="grid-template-columns:repeat(6,1fr)">
+        ${[
+          { label:'Total Webinars', val:st.total_webinars, color:'#6366f1' },
+          { label:'Completed', val:st.completed_webinars||completed.length, color:'#10b981' },
+          { label:'Registrations', val:fmt(totalReg), color:'#6366f1' },
+          { label:'Attendees', val:fmt(totalAtt), color:'#10b981' },
+          { label:'Avg Attendance', val:st.overall_attendance_rate+'%', color:'#f59e0b' },
+          { label:'Conversion Rate', val:convRate+'%', color: convRate>=40?'#10b981':convRate>=25?'#f59e0b':'#f43f5e' },
+        ].map(k=>`
+          <div class="an-kpi-card" style="border-top:3px solid ${k.color}">
+            <div class="an-kpi-val" style="color:${k.color}">${k.val}</div>
+            <div class="an-kpi-label">${k.label}</div>
+          </div>`).join('')}
+      </div>
+
+      <!-- Big visual funnel -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px 32px;margin-bottom:24px">
+        <div style="font-weight:700;font-size:16px;margin-bottom:24px;color:var(--text-primary)">Programme Conversion Funnel</div>
+        <div style="display:flex;flex-direction:column;gap:0;max-width:680px;margin:0 auto">
+          ${funnelStages.map((s,i) => {
+            const width = Math.max(s.pct, 15);
+            const isNoShow = s.label === 'No-show';
+            return `
+              <div style="position:relative;margin-bottom:${isNoShow?0:2}px">
+                <div style="display:flex;align-items:center;gap:16px">
+                  <div style="width:${width}%;background:${s.color};border-radius:${i===0?'10px 10px 0 0':i===funnelStages.length-1?'0 0 10px 10px':'0'};padding:14px 20px;display:flex;align-items:center;justify-content:space-between;min-width:200px;transition:width .6s ease">
+                    <span style="color:#fff;font-weight:700;font-size:15px">${esc(s.label)}</span>
+                    <span style="color:#fff;font-size:13px;opacity:0.9">${s.pct}%</span>
+                  </div>
+                  <div style="flex:1">
+                    <div style="font-size:22px;font-weight:800;color:var(--text-primary)">${fmt(s.count)}</div>
+                    <div style="font-size:12px;color:var(--text-muted)">${s.label === 'Registered' ? 'total signups' : s.label==='Attended' ? `of registered · ${100-s.pct}% drop-off` : `missed · ${Math.round(noShow/(totalAtt||1)*100)}% no-show rate`}</div>
+                  </div>
+                </div>
+                ${i < funnelStages.length-1 && !isNoShow ? `<div style="width:${Math.max(funnelStages[i+1].pct,15)}%;height:4px;background:linear-gradient(${s.color},${funnelStages[i+1].color});margin-left:0;opacity:.4"></div>` : ''}
+              </div>`;
+          }).join('')}
         </div>
-        <div class="an-kpi-card">
-          <div class="an-kpi-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
-          <div class="an-kpi-val" data-countup="${st.total_speakers}">${st.total_speakers}</div>
-          <div class="an-kpi-label">Speakers</div>
-        </div>
-        <div class="an-kpi-card">
-          <div class="an-kpi-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
-          <div class="an-kpi-val" data-countup="${st.total_registrations}">${fmt(st.total_registrations)}</div>
-          <div class="an-kpi-label">Total Registrations</div>
-        </div>
-        <div class="an-kpi-card">
-          <div class="an-kpi-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
-          <div class="an-kpi-val" data-countup="${st.total_attendees}">${fmt(st.total_attendees)}</div>
-          <div class="an-kpi-label">Total Attendees</div>
-        </div>
-        <div class="an-kpi-card">
-          <div class="an-kpi-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
-          <div class="an-kpi-val" data-countup="${st.upcoming_webinars}" style="color:var(--gold)">${st.upcoming_webinars}</div>
-          <div class="an-kpi-label">Upcoming</div>
-        </div>
-        <div class="an-kpi-card">
-          <div class="an-kpi-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg></div>
-          <div class="an-kpi-val" data-countup="${st.overall_attendance_rate}" style="color:var(--accent)">${st.overall_attendance_rate}</div>
-          <div class="an-kpi-label">Avg. Attendance %</div>
+        <div style="display:flex;gap:24px;margin-top:24px;justify-content:center;flex-wrap:wrap">
+          <div style="text-align:center;padding:14px 24px;background:#6366f108;border:1px solid #6366f140;border-radius:10px">
+            <div style="font-size:20px;font-weight:800;color:#6366f1">${convRate}%</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Reg → Attendee</div>
+          </div>
+          <div style="text-align:center;padding:14px 24px;background:#10b98108;border:1px solid #10b98140;border-radius:10px">
+            <div style="font-size:20px;font-weight:800;color:#10b981">${completed.length > 0 ? Math.round(totalAtt/completed.length) : 0}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Avg Attendees/Webinar</div>
+          </div>
+          <div style="text-align:center;padding:14px 24px;background:#f59e0b08;border:1px solid #f59e0b40;border-radius:10px">
+            <div style="font-size:20px;font-weight:800;color:#f59e0b">${completed.length > 0 ? Math.round(totalReg/completed.length) : 0}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Avg Registrations/Webinar</div>
+          </div>
         </div>
       </div>
 
-      <!-- Charts: twin line + monthly bars -->
-      ${trendData.length >= 2 || months.length >= 2 ? `
-      <div class="an-charts-row">
-        ${renderTwinLineChart(trendData)}
-        ${renderMonthlyBars(months)}
+      <!-- New leads trend — last 6 webinars -->
+      ${recentWebinars.length >= 2 ? `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px 28px;margin-bottom:24px">
+        <div style="font-weight:700;font-size:15px;margin-bottom:20px;color:var(--text-primary)">New Registrations — Last ${recentWebinars.length} Webinars</div>
+        <div style="display:flex;align-items:flex-end;gap:12px;height:120px">
+          ${recentWebinars.map((w,i) => {
+            const h = sparkMax>0 ? Math.max(Math.round((w.total_registrations/sparkMax)*100),4) : 4;
+            const attH = w.total_registrations>0 ? Math.max(Math.round((w.total_attendees/sparkMax)*100),2) : 0;
+            const isLast = i===0;
+            return `
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0">
+                <div style="font-size:11px;font-weight:700;color:#6366f1">${fmt(w.total_registrations)}</div>
+                <div style="width:100%;position:relative;height:${h}px;border-radius:6px 6px 0 0;background:#6366f1${isLast?'':'88'};display:flex;align-items:flex-end">
+                  <div style="width:100%;height:${attH}px;background:#10b981${isLast?'':'88'};border-radius:6px 6px 0 0"></div>
+                </div>
+                <div style="font-size:10px;color:var(--text-muted);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%" title="${esc(w.title)}">${esc(w.title.slice(0,18)+(w.title.length>18?'…':''))}</div>
+                <div style="font-size:9px;color:var(--text-muted)">${fmtDate(w.date)}</div>
+              </div>`;
+          }).join('')}
+        </div>
+        <div style="display:flex;gap:16px;margin-top:12px;font-size:11px">
+          <div style="display:flex;align-items:center;gap:6px"><div style="width:12px;height:12px;border-radius:3px;background:#6366f1"></div>Registrations</div>
+          <div style="display:flex;align-items:center;gap:6px"><div style="width:12px;height:12px;border-radius:3px;background:#10b981"></div>Attendees</div>
+        </div>
       </div>` : ''}
 
-      <!-- Funnel + Speaker performance -->
-      <div class="an-mid-row">
-        <div class="an-funnel-card">
-          <div class="an-card-head">Engagement Funnel</div>
-          ${renderEngagementFunnel(totalReg, totalAtt, noShow)}
-        </div>
-        <div class="an-spk-card">
-          <div class="an-card-head">Speaker Performance</div>
-          ${spkStats.length ? spkStats.map(sp => `
-            <div class="an-spk-row">
-              <div class="an-spk-av" style="background:${sp.color}">${initials(sp.name)}</div>
-              <div class="an-spk-info">
-                <div class="an-spk-name">${esc(sp.name)} <span style="font-size:10.5px;color:var(--text-3);font-weight:400">${sp.total_webinars} webinar${sp.total_webinars!==1?'s':''}</span></div>
-                <div class="an-spk-bar-wrap">
-                  <div class="an-spk-bar-fill" style="width:${sp.avgR > 0 ? (sp.avgR/maxSpkR*100).toFixed(1) : 0}%;background:${sp.color}"></div>
-                </div>
+      <!-- Monthly trend + ICP breakdown -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
+        ${months.length >= 2 ? `
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px 28px">
+          <div style="font-weight:700;font-size:15px;margin-bottom:20px">Monthly Trend</div>
+          ${renderMonthlyBars(months)}
+        </div>` : ''}
+        ${icpRows.length ? `
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px 28px">
+          <div style="font-weight:700;font-size:15px;margin-bottom:16px">Attendees by ICP</div>
+          ${icpRows.map(([icp,d]) => `
+            <div style="margin-bottom:12px">
+              <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                <span style="font-size:13px;font-weight:600">${esc(icp)}</span>
+                <span style="font-size:12px;color:var(--text-muted)">${fmt(d.att)} attended · ${d.att>0&&d.reg>0?Math.round(d.att/d.reg*100)+'%':'-'}</span>
               </div>
-              <div class="an-spk-grade grade-${sp.info.grade === 'N/A' ? 'none' : sp.info.grade}">${sp.info.grade}</div>
-              <div class="an-spk-rate">${sp.avgR > 0 ? fmtPct(sp.avgR) : 'N/A'}</div>
-            </div>`).join('') : `
-          <div class="empty-state" style="padding:24px 0;border:none">
-            <div class="empty-icon" style="font-size:24px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
-            <div class="empty-title" style="font-size:13px">No speaker data yet</div>
-          </div>`}
-        </div>
+              <div style="height:8px;background:var(--border);border-radius:4px">
+                <div style="height:100%;width:${Math.round(d.att/maxIcpAtt*100)}%;background:#6366f1;border-radius:4px"></div>
+              </div>
+            </div>`).join('')}
+        </div>` : ''}
       </div>
 
-      <!-- Top 10 lists -->
+      <!-- Top lists -->
       <div class="an-grid">
         <div class="an-card">
-          <div class="an-title">Top 10 by Registrations</div>
+          <div class="an-title">Top 8 by Registrations</div>
           ${top10reg.map(w => `
-            <div class="an-row">
+            <div class="an-row" onclick="nav('webinar',${w.id})" style="cursor:pointer">
               <span class="an-row-lbl" title="${esc(w.title)}">${esc(w.title)}</span>
               <div class="an-bar-wrap"><div class="an-bar-fill" style="width:${Math.round(w.total_registrations/maxReg*100)}%;background:#6366f1"></div></div>
               <span class="an-row-val">${fmt(w.total_registrations)}</span>
             </div>`).join('')}
         </div>
         <div class="an-card">
-          <div class="an-title">Top 10 by Attendance Rate</div>
+          <div class="an-title">Top 8 by Attendance Rate</div>
           ${top10att.length ? top10att.map(w => `
-            <div class="an-row">
+            <div class="an-row" onclick="nav('webinar',${w.id})" style="cursor:pointer">
               <span class="an-row-lbl" title="${esc(w.title)}">${esc(w.title)}</span>
-              <div class="an-bar-wrap"><div class="an-bar-fill" style="width:${Math.min(w.attendance_rate,100)}%;background:#22c55e"></div></div>
+              <div class="an-bar-wrap"><div class="an-bar-fill" style="width:${Math.min((w.attendance_rate||0)/maxAtt*100,100)}%;background:#10b981"></div></div>
               <span class="an-row-val">${fmtPct(w.attendance_rate)}</span>
             </div>`).join('') : '<div style="color:var(--text-3);font-size:12px;padding:8px 0">No completed webinars with attendance data yet.</div>'}
         </div>
       </div>
+
+      <!-- Charts -->
+      ${trendData.length >= 2 ? `
+      <div class="an-charts-row" style="margin-top:24px">
+        ${renderTwinLineChart(trendData)}
+      </div>` : ''}
     </div>`);
 }
 
@@ -2936,7 +3063,7 @@ function _renderTopicIntel(data) {
         <div class="intel-kpi"><div class="intel-kpi-lbl">Total Webinars</div><div class="intel-kpi-val">${data.total_webinars||0}</div></div>
       </div>
       <h3 class="intel-h3">ICP Performance Breakdown</h3>
-      <p class="intel-p">Which ICP themes are pulling the right audience? Spend, CPL, leads, impressions and clicks were imported from your <em>RH_Reporting_FY26-27 - Webinar Highlights.csv</em>.</p>
+      <p class="intel-p">ICP performance based on actual registrations and attendance data from your webinars.</p>
       <div class="intel-table-wrap">
         <table class="intel-table">
           <thead><tr><th>ICP</th><th style="text-align:center">Webinars</th><th style="text-align:right">Regs</th><th style="text-align:right">Attendees</th><th style="text-align:right">Att Rate</th><th style="text-align:right">Spend</th><th style="text-align:right">Cost/Att</th></tr></thead>
@@ -3111,8 +3238,9 @@ async function renderCompetitorIntel() {
   try {
     const [competitors, activity] = await Promise.all([
       api('/api/competitors'),
-      api('/api/competitor-activity?days=90'),
+      api('/api/competitor-activity?days=365'),
     ]);
+    window._compActivityAll = activity;
     _drawCompetitorIntel(body, competitors, activity);
   } catch(e) {
     body.innerHTML = `<div class="empty-state"><div class="empty-title">Failed to load competitors</div></div>`;
@@ -3127,15 +3255,19 @@ function _drawCompetitorIntel(body, competitors, activity) {
   activity.forEach(a => { formats[a.format||'other'] = (formats[a.format||'other']||0) + 1; });
   const topFormat = Object.entries(formats).sort((a,b)=>b[1]-a[1])[0] || ['—', 0];
 
-  // Competitor cards
+  // Competitor cards — clickable, trigger AI deep-dive on click
   const compCards = competitors.map(c => `
-    <div class="comp-card" style="border-left-color:${c.color_hex}">
+    <div class="comp-card" style="border-left-color:${c.color_hex};cursor:pointer" onclick="openCompetitorDetail(${c.id},'${esc(c.name).replace(/'/g,"\\'")}')">
       <div class="comp-card-head">
         <div class="comp-name">${esc(c.name)}</div>
         <div class="comp-count" style="background:${c.color_hex}20;color:${c.color_hex}">${c.activity_count} logged</div>
       </div>
       <div class="comp-focus">${esc(c.focus || '')}</div>
-      <div class="comp-meta">${c.last_activity ? 'Last seen ' + fmtDate(c.last_activity) : 'No activity logged'}</div>
+      <div class="comp-meta">${c.last_activity ? 'Last seen ' + fmtDate(c.last_activity) : 'No activity — click for AI research'}</div>
+      <div style="margin-top:10px;font-size:11px;color:${c.color_hex};font-weight:600;display:flex;align-items:center;gap:4px">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+        Click for deep intelligence
+      </div>
     </div>`).join('');
 
   // Activity timeline (recent 90d)
@@ -3205,6 +3337,97 @@ function _drawCompetitorIntel(body, competitors, activity) {
 
   // Cache competitors for the modal
   window._compList = competitors;
+}
+
+async function openCompetitorDetail(compId, compName) {
+  const overlay = document.createElement('div');
+  overlay.id = 'comp-detail-overlay';
+  overlay.className = 'modal-overlay open';
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:700px;max-height:88vh;overflow-y:auto">
+      <div class="modal-header" style="position:sticky;top:0;background:var(--surface);z-index:2">
+        <h3>${esc(compName)} — Intelligence Report</h3>
+        <button class="modal-close" onclick="document.getElementById('comp-detail-overlay').remove()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" id="comp-detail-body" style="padding:24px">
+        <div class="pg-loading"><div class="spinner"></div><p>Running AI research on ${esc(compName)}…</p></div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  try {
+    const data = await api('/api/competitor-research', 'POST', { competitor_id: compId });
+    const body = document.getElementById('comp-detail-body');
+    if (!body) return;
+
+    // Fetch their activity log
+    const activity = (window._compActivityAll || []).filter(a => a.competitor === compName);
+    const actRows = activity.slice(0,10).map(a => `
+      <tr>
+        <td style="font-size:12px;color:var(--text-muted)">${fmtDate(a.date)}</td>
+        <td style="font-weight:600">${FORMAT_ICONS[a.format]||'📌'} ${esc(a.format||'')}</td>
+        <td>${esc(a.topic)}</td>
+        <td style="font-size:12px">${esc(a.audience_focus||'—')}</td>
+      </tr>`).join('');
+
+    body.innerHTML = `
+      <div style="margin-bottom:20px">
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px">AI-generated intelligence · Updated now</div>
+
+        ${data.summary ? `
+        <div style="background:var(--surface-alt,#f8fafc);border-left:4px solid #6366f1;padding:14px 18px;border-radius:0 10px 10px 0;margin-bottom:20px;font-size:14px;line-height:1.7;color:var(--text-primary)">${esc(data.summary)}</div>` : ''}
+
+        ${data.recent_activities?.length ? `
+        <div style="margin-bottom:20px">
+          <div style="font-weight:700;font-size:13px;margin-bottom:10px;color:var(--text-secondary)">Recent Activities Found</div>
+          ${data.recent_activities.map(a => `
+            <div style="padding:10px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px">
+              <div style="font-weight:600;font-size:13px">${esc(a.topic||a.title||'')}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px">${esc(a.date||'')} · ${esc(a.format||'webinar')} · ${esc(a.audience_focus||'')}</div>
+            </div>`).join('')}
+        </div>` : ''}
+
+        ${data.gaps?.length ? `
+        <div style="margin-bottom:20px">
+          <div style="font-weight:700;font-size:13px;margin-bottom:10px;color:var(--text-secondary)">Opportunities vs Right Horizons</div>
+          ${data.gaps.map(g => `
+            <div style="display:flex;gap:10px;padding:10px 14px;border:1px solid #10b98140;border-radius:10px;margin-bottom:8px;background:#f0fdf4">
+              <span style="color:#10b981;font-size:16px;flex-shrink:0">✓</span>
+              <span style="font-size:13px;color:var(--text-primary)">${esc(g)}</span>
+            </div>`).join('')}
+        </div>` : ''}
+
+        ${data.threats?.length ? `
+        <div style="margin-bottom:20px">
+          <div style="font-weight:700;font-size:13px;margin-bottom:10px;color:var(--text-secondary)">Competitive Threats to Watch</div>
+          ${data.threats.map(t => `
+            <div style="display:flex;gap:10px;padding:10px 14px;border:1px solid #f43f5e40;border-radius:10px;margin-bottom:8px;background:#fff1f2">
+              <span style="color:#f43f5e;font-size:16px;flex-shrink:0">⚠</span>
+              <span style="font-size:13px;color:var(--text-primary)">${esc(t)}</span>
+            </div>`).join('')}
+        </div>` : ''}
+
+        ${actRows ? `
+        <div>
+          <div style="font-weight:700;font-size:13px;margin-bottom:10px;color:var(--text-secondary)">Logged Activity History</div>
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr style="border-bottom:2px solid var(--border)">
+              <th style="text-align:left;padding:8px;font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase">Date</th>
+              <th style="text-align:left;padding:8px;font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase">Format</th>
+              <th style="text-align:left;padding:8px;font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase">Topic</th>
+              <th style="text-align:left;padding:8px;font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase">Audience</th>
+            </tr></thead>
+            <tbody>${actRows}</tbody>
+          </table>
+        </div>` : '<div style="color:var(--text-muted);font-size:13px">No activity logged for this competitor yet.</div>'}
+      </div>`;
+  } catch(e) {
+    const body = document.getElementById('comp-detail-body');
+    if (body) body.innerHTML = `<div style="color:var(--text-muted);padding:20px 0">Failed to load intelligence: ${esc(e.message)}</div>`;
+  }
 }
 
 function openCompetitorActivityModal() {
@@ -3821,7 +4044,7 @@ function _drawPipeline(contacts) {
 
 async function updatePipelineStatus(email, status) {
   try {
-    await api(`/api/pipeline/${encodeURIComponent(email)}`, { method:'PUT', body: JSON.stringify({ status }) });
+    await api(`/api/pipeline/${encodeURIComponent(email)}`, 'PUT', { status });
     const contact = (_pipelineCache||[]).find(c => c.email === email);
     if (contact) { contact.status = status; _drawPipeline(_pipelineCache); }
   } catch(e) {
@@ -3832,7 +4055,7 @@ async function updatePipelineStatus(email, status) {
 async function removePipelineLead(email) {
   if (!confirm(`Remove ${email} from pipeline?`)) return;
   try {
-    await api(`/api/pipeline/${encodeURIComponent(email)}`, { method:'DELETE' });
+    await api(`/api/pipeline/${encodeURIComponent(email)}`, 'DELETE');
     _pipelineCache = (_pipelineCache||[]).filter(c => c.email !== email);
     _drawPipeline(_pipelineCache);
   } catch(e) {
@@ -3913,10 +4136,7 @@ async function savePipelineLead() {
   try {
     const btn = document.querySelector('#pipeline-modal-overlay .btn-primary');
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-    await api(`/api/pipeline/${encodeURIComponent(email)}`, {
-      method: 'PUT',
-      body: JSON.stringify({ status, assigned_to: assigned||null, follow_up_date: followup||null, notes: notes||null }),
-    });
+    await api(`/api/pipeline/${encodeURIComponent(email)}`, 'PUT', { status, assigned_to: assigned||null, follow_up_date: followup||null, notes: notes||null });
     closePipelineModal();
     _pipelineCache = null;
     if (S.page === 'pipeline') {
@@ -3933,10 +4153,7 @@ async function savePipelineLead() {
 /* Add to pipeline from leaderboard row */
 async function addLeaderboardToPipeline(email, name) {
   try {
-    await api(`/api/pipeline/${encodeURIComponent(email)}`, {
-      method: 'PUT',
-      body: JSON.stringify({ status: 'new' }),
-    });
+    await api(`/api/pipeline/${encodeURIComponent(email)}`, 'PUT', { status: 'new' });
     _pipelineCache = null;
     _pipelineToast(`${name} added to pipeline`);
   } catch(e) {
@@ -4352,98 +4569,177 @@ function showToast(msg, type='success') {
    UPLOAD PAGE
 ══════════════════════════════════════════════════════════════════════════ */
 function renderUpload() {
+  const today = new Date().toISOString().slice(0,10);
+  const ninetyDaysAgo = new Date(Date.now() - 90*24*60*60*1000).toISOString().slice(0,10);
   setContent(`
     <div>
       <div class="page-hd">
         <div>
-          <h1 class="page-title">Upload Data</h1>
-          <p class="page-sub">Import registrations, attendance, and ads data via CSV or Excel.</p>
+          <h1 class="page-title">Export Analysis Reports</h1>
+          <p class="page-sub">Download detailed webinar analysis reports as PDF.</p>
         </div>
       </div>
-      <div class="upload-grid">
-        <div class="upload-card">
-          <div class="upload-card-icon" style="background:#6366f118;color:#6366f1">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-          </div>
-          <div class="upload-card-title">Registration Report</div>
-          <div class="upload-card-desc">Upload the registration CSV exported from your webinar platform. Columns needed: Name, Email, Webinar, Date.</div>
-          <div class="upload-dropzone" id="upload-reg-zone" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleUploadDrop(event,'registrations')">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            <span>Drop CSV here or <button class="btn-link" onclick="document.getElementById('reg-file-input-upload').click()">browse</button></span>
-          </div>
-          <input type="file" id="reg-file-input-upload" accept=".csv,.xlsx" style="display:none" onchange="handleUploadFile(event,'registrations')" />
-          <div id="upload-reg-result" style="margin-top:10px"></div>
-        </div>
-        <div class="upload-card">
-          <div class="upload-card-icon" style="background:#10b98118;color:#10b981">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-          </div>
-          <div class="upload-card-title">Attendance Report</div>
-          <div class="upload-card-desc">Upload the attendance CSV from your platform. Columns needed: Name, Email, Duration (minutes), Webinar.</div>
-          <div class="upload-dropzone" id="upload-att-zone" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleUploadDrop(event,'attendees')">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            <span>Drop CSV here or <button class="btn-link" onclick="document.getElementById('att-file-input-upload').click()">browse</button></span>
-          </div>
-          <input type="file" id="att-file-input-upload" accept=".csv,.xlsx" style="display:none" onchange="handleUploadFile(event,'attendees')" />
-          <div id="upload-att-result" style="margin-top:10px"></div>
-        </div>
-        <div class="upload-card">
-          <div class="upload-card-icon" style="background:#f59e0b18;color:#f59e0b">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-          </div>
-          <div class="upload-card-title">Ads / Campaign Data</div>
-          <div class="upload-card-desc">Upload ad performance data. Columns: Platform, Creative, Spend, Impressions, Clicks, Conversions, Webinar.</div>
-          <div class="upload-dropzone" id="upload-ads-zone" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleUploadDrop(event,'ads')">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            <span>Drop CSV here or <button class="btn-link" onclick="document.getElementById('ads-file-input-upload').click()">browse</button></span>
-          </div>
-          <input type="file" id="ads-file-input-upload" accept=".csv,.xlsx" style="display:none" onchange="handleUploadFile(event,'ads')" />
-          <div id="upload-ads-result" style="margin-top:10px"></div>
-        </div>
-        <div class="upload-card upload-card-wide">
-          <div class="upload-card-title">Recent Uploads</div>
-          <div id="upload-log-list"><div class="pg-loading"><div class="spinner"></div></div></div>
-        </div>
+
+      <!-- Date range filter -->
+      <div class="export-filter-bar" style="display:flex;align-items:center;gap:12px;margin-bottom:28px;flex-wrap:wrap">
+        <label style="font-size:13px;font-weight:600;color:var(--text-secondary)">Date Range:</label>
+        <input type="date" id="export-from" value="${ninetyDaysAgo}" class="form-input" style="width:160px" onchange="filterExportWebinars()" />
+        <span style="color:var(--text-muted)">to</span>
+        <input type="date" id="export-to" value="${today}" class="form-input" style="width:160px" onchange="filterExportWebinars()" />
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('export-from').value='';document.getElementById('export-to').value='${today}';filterExportWebinars()">Show All</button>
+        <span id="export-count" style="margin-left:auto;font-size:12px;color:var(--text-muted)"></span>
       </div>
+
+      <!-- Webinar list -->
+      <div id="export-webinar-list"></div>
     </div>`);
 
-  api('/api/upload-logs').then(data => {
-    const el = document.getElementById('upload-log-list');
-    if (!el) return;
-    if (!data || !data.length) { el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No uploads yet.</div>'; return; }
-    el.innerHTML = data.slice(0,10).map(u => `
-      <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
-        <span style="color:var(--text-muted);font-family:var(--font-mono);font-size:11px">${fmtDateTime(u.uploaded_at)}</span>
-        <span style="font-weight:600">${esc(u.file_type)}</span>
-        <span style="color:var(--text-muted)">${esc(u.filename||'')}</span>
-        <span style="margin-left:auto;color:#10b981;font-weight:600">${u.final_count} rows</span>
-      </div>`).join('');
-  }).catch(() => { const el = document.getElementById('upload-log-list'); if (el) el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No uploads yet.</div>'; });
+  filterExportWebinars();
 }
 
-function handleUploadDrop(event, type) {
-  event.preventDefault();
-  const zoneId = type === 'registrations' ? 'upload-reg-zone' : type === 'attendees' ? 'upload-att-zone' : 'upload-ads-zone';
-  const zone = document.getElementById(zoneId);
-  if (zone) zone.classList.remove('dragover');
-  const file = event.dataTransfer.files[0];
-  if (file) processUploadFile(file, type);
-}
+function filterExportWebinars() {
+  const from = document.getElementById('export-from')?.value;
+  const to   = document.getElementById('export-to')?.value;
+  const list = document.getElementById('export-webinar-list');
+  const countEl = document.getElementById('export-count');
+  if (!list) return;
 
-function handleUploadFile(event, type) {
-  const file = event.target.files[0];
-  if (file) processUploadFile(file, type);
-}
+  let webinars = [...(S.webinars || [])].sort((a,b) => new Date(b.date) - new Date(a.date));
+  if (from) webinars = webinars.filter(w => w.date >= from);
+  if (to)   webinars = webinars.filter(w => w.date <= to);
 
-async function processUploadFile(file, type) {
-  const resultId = type === 'registrations' ? 'upload-reg-result' : type === 'attendees' ? 'upload-att-result' : 'upload-ads-result';
-  const resultEl = document.getElementById(resultId);
-  if (resultEl) resultEl.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">Uploading…</div>';
-  if (resultEl) resultEl.innerHTML = `
-    <div style="background:#6366f118;border:1px solid #6366f140;border-radius:8px;padding:12px;font-size:12px">
-      <strong>File selected:</strong> ${esc(file.name)}<br>
-      To upload ${esc(type)}, go to the individual webinar page and use the Upload button there to link the data to the correct webinar.
+  if (countEl) countEl.textContent = `${webinars.length} webinar${webinars.length !== 1 ? 's' : ''}`;
+
+  if (!webinars.length) {
+    list.innerHTML = '<div class="empty-state"><div class="empty-title">No webinars in this range</div><div class="empty-sub">Try adjusting the date range above.</div></div>';
+    return;
+  }
+
+  list.innerHTML = `
+    <div style="display:grid;gap:12px">
+      ${webinars.map(w => {
+        const statusColor = w.status === 'completed' ? '#10b981' : w.status === 'upcoming' ? '#6366f1' : '#94a3b8';
+        const hasData = w.total_registrations > 0 || w.total_attendees > 0;
+        return `
+          <div class="export-webinar-row" style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:700;font-size:15px;color:var(--text-primary);margin-bottom:4px">${esc(w.title)}</div>
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--text-muted)">
+                <span>${fmtDate(w.date)}</span>
+                <span>·</span>
+                <span style="color:${statusColor};font-weight:600">${w.status?.replace(/_/g,' ')}</span>
+                ${hasData ? `<span>·</span><span>${fmt(w.total_registrations)} registrations · ${fmt(w.total_attendees)} attended</span>` : '<span>· No data uploaded yet</span>'}
+                ${w.speaker_name ? `<span>·</span><span>${esc(w.speaker_name)}</span>` : ''}
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-shrink:0">
+              <button class="btn btn-ghost btn-sm" onclick="nav('webinar',${w.id})" style="font-size:12px">View Details</button>
+              <button class="btn btn-primary btn-sm" onclick="exportWebinarReport(${w.id},'${esc(w.title).replace(/'/g,"\\'")}')" style="font-size:12px;display:flex;align-items:center;gap:6px" ${!hasData?'title="No data available yet"':''}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export Report
+              </button>
+            </div>
+          </div>`;
+      }).join('')}
     </div>`;
+}
+
+async function exportWebinarReport(webinarId, title) {
+  const btn = event?.target?.closest('button');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="spin"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg> Generating…'; }
+  try {
+    const [webinar, funnel, lq] = await Promise.all([
+      api(`/api/webinars/${webinarId}`).catch(()=>null),
+      api(`/api/webinar-funnel/${webinarId}`).catch(()=>null),
+      api(`/api/lead-quality`).catch(()=>null),
+    ]);
+
+    const w = webinar || S.webinars.find(x => x.id === webinarId) || {};
+    const funnelStages = funnel?.stages || [];
+    const topLeads = (lq?.leads || []).filter(l => l.webinar_id === webinarId || !l.webinar_id).slice(0,10);
+
+    const reportHtml = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/>
+<title>Webinar Analysis Report - ${esc(w.title||title)}</title>
+<style>
+  body{font-family:Georgia,serif;max-width:900px;margin:40px auto;padding:0 30px;color:#1a1a2e;line-height:1.6}
+  h1{font-size:28px;color:#6366f1;border-bottom:3px solid #6366f1;padding-bottom:12px;margin-bottom:8px}
+  h2{font-size:18px;color:#374151;margin-top:32px;margin-bottom:10px;border-left:4px solid #6366f1;padding-left:12px}
+  .meta{color:#6b7280;font-size:14px;margin-bottom:28px}
+  .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:20px 0}
+  .kpi-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;text-align:center}
+  .kpi-val{font-size:28px;font-weight:800;color:#6366f1}
+  .kpi-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-top:4px}
+  table{width:100%;border-collapse:collapse;margin:12px 0}
+  th{background:#6366f1;color:#fff;padding:10px 12px;text-align:left;font-size:12px;font-weight:700;text-transform:uppercase}
+  td{padding:9px 12px;border-bottom:1px solid #e2e8f0;font-size:13px}
+  tr:nth-child(even) td{background:#f8fafc}
+  .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700}
+  .badge-green{background:#d1fae5;color:#059669}
+  .badge-orange{background:#fef3c7;color:#d97706}
+  .badge-red{background:#fee2e2;color:#dc2626}
+  .funnel-bar{height:24px;border-radius:6px;background:#6366f1;margin:4px 0;display:flex;align-items:center;padding:0 10px;color:#fff;font-size:12px;font-weight:700;min-width:60px}
+  .print-footer{margin-top:48px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:11px;color:#9ca3af;text-align:center}
+  @media print{body{margin:20px}.kpi-row{grid-template-columns:repeat(4,1fr)}}
+</style></head><body>
+<h1>Webinar Analysis Report</h1>
+<div class="meta">
+  <strong>${esc(w.title||title)}</strong> &nbsp;·&nbsp; ${fmtDate(w.date||'')} &nbsp;·&nbsp;
+  Speaker: ${esc(w.speaker_name||'—')} &nbsp;·&nbsp; ICP: ${esc(w.icp||'—')} &nbsp;·&nbsp;
+  Status: <strong>${(w.status||'').replace(/_/g,' ')}</strong> &nbsp;·&nbsp;
+  Generated: ${new Date().toLocaleString('en-IN')}
+</div>
+
+<h2>Key Performance Indicators</h2>
+<div class="kpi-row">
+  <div class="kpi-box"><div class="kpi-val">${fmt(w.total_registrations||0)}</div><div class="kpi-lbl">Registrations</div></div>
+  <div class="kpi-box"><div class="kpi-val">${fmt(w.total_attendees||0)}</div><div class="kpi-lbl">Attendees</div></div>
+  <div class="kpi-box"><div class="kpi-val">${w.attendance_rate ? w.attendance_rate.toFixed(1)+'%' : '—'}</div><div class="kpi-lbl">Attendance Rate</div></div>
+  <div class="kpi-box"><div class="kpi-val">${w.performance_score ?? '—'}</div><div class="kpi-lbl">Performance Score</div></div>
+</div>
+
+${funnelStages.length ? `
+<h2>Conversion Funnel</h2>
+<table><thead><tr><th>Stage</th><th>Count</th><th>Conversion</th><th>Drop-off</th></tr></thead><tbody>
+${funnelStages.map((s,i) => `<tr>
+  <td><strong>${esc(s.label)}</strong></td>
+  <td>${fmt(s.count)}</td>
+  <td>${s.pct}%</td>
+  <td>${i===0?'—':`<span class="badge badge-${s.drop>30?'red':s.drop>15?'orange':'green'}">${s.drop}% drop</span>`}</td>
+</tr>`).join('')}
+</tbody></table>` : ''}
+
+<h2>Webinar Overview</h2>
+<table><tbody>
+  <tr><td><strong>Topic / Title</strong></td><td>${esc(w.title||'')}</td></tr>
+  <tr><td><strong>Date</strong></td><td>${fmtDate(w.date||'')}</td></tr>
+  <tr><td><strong>Speaker</strong></td><td>${esc(w.speaker_name||'—')}</td></tr>
+  <tr><td><strong>ICP Target</strong></td><td>${esc(w.icp||'—')}</td></tr>
+  <tr><td><strong>Status</strong></td><td>${(w.status||'').replace(/_/g,' ')}</td></tr>
+  <tr><td><strong>Score Label</strong></td><td>${esc(w.score_label||'—')}</td></tr>
+  <tr><td><strong>Description</strong></td><td>${esc(w.description||'—')}</td></tr>
+</tbody></table>
+
+${w.ai_summary ? `<h2>AI Analysis</h2><p style="background:#f8fafc;border-left:4px solid #6366f1;padding:14px 18px;border-radius:0 10px 10px 0;font-size:14px">${esc(w.ai_summary)}</p>` : ''}
+
+<div class="print-footer">WebinarIQ · Right Horizons Financial Services · Confidential · Generated ${new Date().toLocaleDateString('en-IN')}</div>
+</body></html>`;
+
+    const blob = new Blob([reportHtml], { type: 'text/html' });
+    const url  = URL.createObjectURL(blob);
+    const win  = window.open(url, '_blank');
+    if (win) {
+      win.addEventListener('load', () => {
+        setTimeout(() => { try { win.print(); } catch(e) {} }, 500);
+      });
+    }
+    URL.revokeObjectURL(url);
+    showToast('Report opened — use browser Print → Save as PDF', 'success');
+  } catch(e) {
+    showToast('Failed to generate report: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export Report'; }
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
