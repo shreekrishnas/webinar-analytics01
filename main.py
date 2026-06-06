@@ -564,25 +564,24 @@ async def auto_research_competitor(payload: dict, db: Session = Depends(get_db))
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
                      "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
             json={
-                "model": "perplexity/sonar",
+                "model": "anthropic/claude-sonnet-4-5",
                 "max_tokens": 1500,
                 "messages": [{"role": "user", "content":
-                    f"""Today is {today}. Research the Indian financial advisory company "{comp.name}" ({comp.website or 'search online'}).
+                    f"""Today is {today}. Based on your knowledge, describe the Indian financial advisory company "{comp.name}" ({comp.website or ''}).
 
-Find their last 3-5 webinars, events, or content pieces published in the last 60 days.
+What do you know about their recent webinars, events, content, or thought leadership from the past 6 months?
 
-For each item find:
-- Date
+For each item describe:
+- Approximate date or timeframe
 - Topic/title
-- Speaker name (if any)
+- Speaker name (if known)
 - Target audience (HNI, NRI, retail, women, etc.)
-- Key messaging angle or hook they used
-- CTA (register, watch, download, etc.)
-- Link if available
+- Key messaging angle or hook
+- CTA or format (register, watch, download, webinar, LinkedIn post, etc.)
 
-Also note: What topics are they pushing hardest? What audience segments? What is their differentiation vs generic financial advice?
+Also note: What topics are they pushing hardest? What audience segments? What differentiates them?
 
-Be specific and factual — only report what you actually find, not assumptions."""}]
+Be honest about what you know vs don't know. Only report what you are reasonably confident about."""}]
             },
             timeout=40.0
         )
@@ -598,7 +597,7 @@ Be specific and factual — only report what you actually find, not assumptions.
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
                      "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
             json={
-                "model": "anthropic/claude-sonnet-4.5",
+                "model": "anthropic/claude-sonnet-4-5",
                 "max_tokens": 2000,
                 "messages": [{"role": "user", "content":
                     f"""Extract structured activity records from this research about "{comp.name}":
@@ -742,7 +741,7 @@ Return ONLY valid JSON array."""
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
                      "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={"model": "anthropic/claude-sonnet-4.5", "max_tokens": 1500,
+            json={"model": "anthropic/claude-sonnet-4-5", "max_tokens": 1500,
                   "messages": [{"role": "user", "content": prompt}]},
             timeout=30.0
         )
@@ -864,7 +863,7 @@ STRICT RULES (absolute, no exceptions):
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
                      "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={"model": "anthropic/claude-sonnet-4.5", "max_tokens": 2500,
+            json={"model": "anthropic/claude-sonnet-4-5", "max_tokens": 2500,
                   "messages": [{"role": "user", "content": prompt}]},
             timeout=60.0
         )
@@ -1354,7 +1353,7 @@ Remember: nothing outside this data exists for you. You are a closed-book analys
         resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={"model": "anthropic/claude-sonnet-4.5", "max_tokens": 900, "messages": messages},
+            json={"model": "anthropic/claude-sonnet-4-5", "max_tokens": 900, "messages": messages},
             timeout=30.0
         )
         resp.raise_for_status()
@@ -1379,28 +1378,9 @@ async def get_topic_suggestions():
 
     today = date.today().strftime("%B %d, %Y")
 
-    # Step 1: Use Perplexity (live web search) to fetch current Indian financial market news
+    # Use Claude Sonnet to generate speaker topics based on its training knowledge
     news_context = ""
-    try:
-        news_resp = httpx.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
-                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={
-                "model": "perplexity/sonar",
-                "max_tokens": 800,
-                "messages": [{"role": "user", "content":
-                    f"Today is {today}. List the 10 most important Indian financial markets and personal finance news stories from the last 7 days. Focus on: Nifty/Sensex moves, RBI decisions, SEBI regulations, Budget updates, mutual funds, NRI investing, rupee, gold, real estate, ESOPs, tariffs, geopolitics affecting Indian markets. Be specific with numbers, dates, policy names. Format as a numbered list, one line each."}]
-            },
-            timeout=30.0
-        )
-        if news_resp.status_code == 200:
-            news_context = news_resp.json()["choices"][0]["message"]["content"].strip()
-    except Exception:
-        pass
-
-    # Step 2: Use Claude Sonnet with live news to generate speaker topics
-    context_block = f"LIVE MARKET NEWS (last 7 days as of {today}):\n{news_context}" if news_context else f"Today is {today}. Use your knowledge of current Indian financial markets."
+    context_block = f"Today is {today}. Use your knowledge of Indian financial markets, recent regulatory changes, budget developments, RBI decisions, SEBI updates, and macroeconomic trends."
 
     prompt = f"""You are a webinar content strategist for Right Horizons, a premium Indian financial advisory firm.
 
@@ -1446,7 +1426,7 @@ HARD RULES:
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
                      "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={"model": "anthropic/claude-sonnet-4.5", "max_tokens": 4000,
+            json={"model": "anthropic/claude-sonnet-4-5", "max_tokens": 4000,
                   "messages": [{"role": "user", "content": prompt}]},
             timeout=45.0
         )
@@ -1671,7 +1651,7 @@ Return ONLY the JSON object, nothing before or after, no markdown fences."""
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
             json={
-                "model": "anthropic/claude-sonnet-4.5",
+                "model": "anthropic/claude-sonnet-4-5",
                 "max_tokens": 1200,
                 "messages": [{"role": "user", "content": prompt}]
             },
@@ -1813,7 +1793,7 @@ Return ONLY the JSON, no markdown, no preamble."""
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
                      "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={"model": "anthropic/claude-sonnet-4.5", "max_tokens": 800,
+            json={"model": "anthropic/claude-sonnet-4-5", "max_tokens": 800,
                   "messages": [{"role": "user", "content": prompt}]},
             timeout=25.0
         )

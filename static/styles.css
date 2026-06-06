@@ -5616,28 +5616,37 @@ html:not(.dark) .card-body span:not([class]) { color: var(--rh-text-1) !importan
 }
 .insights-grid-v2 {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
 }
 .insight-card-v2 {
-  background: var(--ic-bg, rgba(255,255,255,0.04));
-  border: 1.5px solid var(--ic, rgba(255,255,255,0.12));
-  border-radius: 16px;
-  padding: 22px 24px;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border, rgba(0,0,0,0.08));
+  border-radius: 14px;
+  overflow: hidden;
   opacity: 0;
-  animation: insightFadeIn 0.4s ease forwards;
-  transition: transform 0.18s, box-shadow 0.18s;
+  animation: insightFadeIn 0.35s ease forwards;
+  transition: box-shadow 0.18s, transform 0.18s;
 }
 .insight-card-v2:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.14);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.10);
+  transform: translateY(-1px);
 }
 @keyframes insightFadeIn {
-  from { opacity:0; transform:translateY(10px); }
+  from { opacity:0; transform:translateY(8px); }
   to   { opacity:1; transform:translateY(0); }
+}
+.insight-v2-stripe {
+  width: 4px;
+  flex-shrink: 0;
+}
+.insight-v2-body {
+  flex: 1;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
 }
 .insight-v2-top {
   display: flex;
@@ -5645,31 +5654,29 @@ html:not(.dark) .card-body span:not([class]) { color: var(--rh-text-1) !importan
   justify-content: space-between;
   gap: 8px;
 }
-.insight-v2-type {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.insight-v2-badge {
   font-size: 11px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 4px 10px 4px 8px;
+  padding: 3px 9px;
   border-radius: 20px;
   border: 1px solid;
+  letter-spacing: 0.01em;
+  line-height: 1.6;
 }
-.insight-v2-metric {
-  font-size: 14px;
+.insight-v2-kpi {
+  font-size: 13px;
   font-weight: 800;
   font-family: var(--font-mono);
+  letter-spacing: -0.01em;
 }
 .insight-v2-headline {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1.35;
 }
 .insight-v2-detail {
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.6;
   flex: 1;
@@ -5677,15 +5684,15 @@ html:not(.dark) .card-body span:not([class]) { color: var(--rh-text-1) !importan
 .insight-v2-action {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  font-size: 12.5px;
+  gap: 7px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
   padding-top: 10px;
-  border-top: 1px solid var(--border, rgba(255,255,255,0.07));
-  margin-top: 4px;
+  border-top: 1px solid;
+  margin-top: 2px;
+  line-height: 1.5;
 }
-.insight-v2-action span { flex: 1; line-height: 1.45; }
 
 /* ── Speaker Detail Cards ───────────────────────────────────────────────── */
 .spk-detail-grid {

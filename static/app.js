@@ -2525,7 +2525,7 @@ async function renderIntelligence() {
       <div class="page-hd">
         <div>
           <h1 class="page-title">Intelligence</h1>
-          <p class="page-sub">All metrics computed from your registration, attendance, webinar and campaign data only. No assumptions.</p>
+          <p class="page-sub">Your webinar programme analytics and intelligence hub.</p>
         </div>
         <button class="btn btn-ghost btn-sm" onclick="_intelCache=null;renderIntelligence()">Refresh</button>
       </div>
@@ -2590,40 +2590,41 @@ async function _renderAIInsights(body) {
     }
 
     const TYPE_CFG = {
-      win:         { icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>`, color:'#10b981', bg:'#10b98110', label:'Win' },
-      risk:        { icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`, color:'#f43f5e', bg:'#f43f5e10', label:'Risk' },
-      opportunity: { icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>`, color:'#6366f1', bg:'#6366f110', label:'Opportunity' },
-      trend:       { icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`, color:'#f59e0b', bg:'#f59e0b10', label:'Trend' },
-      action:      { icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`, color:'#22d3ee', bg:'#22d3ee10', label:'Action' },
+      win:         { emoji:'🏆', color:'#10b981', bg:'rgba(16,185,129,0.08)', border:'rgba(16,185,129,0.20)', label:'Win' },
+      risk:        { emoji:'⚠️', color:'#f43f5e', bg:'rgba(244,63,94,0.08)',  border:'rgba(244,63,94,0.22)',  label:'Risk' },
+      opportunity: { emoji:'🚀', color:'#6366f1', bg:'rgba(99,102,241,0.08)', border:'rgba(99,102,241,0.22)', label:'Opportunity' },
+      trend:       { emoji:'📈', color:'#f59e0b', bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.22)', label:'Trend' },
+      action:      { emoji:'⚡', color:'#0ea5e9', bg:'rgba(14,165,233,0.08)', border:'rgba(14,165,233,0.22)', label:'Action' },
     };
 
     const cards = insights.map((ins, i) => {
       const cfg = TYPE_CFG[ins.type] || TYPE_CFG.trend;
       return `
-      <div class="insight-card-v2" style="--ic:${cfg.color};--ic-bg:${cfg.bg};animation-delay:${i*80}ms">
-        <div class="insight-v2-top">
-          <div class="insight-v2-type" style="color:${cfg.color};background:${cfg.bg};border-color:${cfg.color}30">
-            <span style="display:flex">${cfg.icon}</span>
-            <span>${cfg.label}</span>
+      <div class="insight-card-v2" style="animation-delay:${i*70}ms">
+        <div class="insight-v2-stripe" style="background:${cfg.color}"></div>
+        <div class="insight-v2-body">
+          <div class="insight-v2-top">
+            <span class="insight-v2-badge" style="color:${cfg.color};background:${cfg.bg};border-color:${cfg.border}">
+              ${cfg.emoji}&nbsp;${cfg.label}
+            </span>
+            ${ins.metric ? `<span class="insight-v2-kpi" style="color:${cfg.color}">${esc(ins.metric)}</span>` : ''}
           </div>
-          ${ins.metric ? `<div class="insight-v2-metric" style="color:${cfg.color}">${esc(ins.metric)}</div>` : ''}
-        </div>
-        <div class="insight-v2-headline">${esc(ins.headline)}</div>
-        <div class="insight-v2-detail">${esc(ins.detail)}</div>
-        <div class="insight-v2-action">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${cfg.color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-          <span>${esc(ins.action)}</span>
+          <div class="insight-v2-headline">${esc(ins.headline)}</div>
+          <div class="insight-v2-detail">${esc(ins.detail)}</div>
+          <div class="insight-v2-action" style="border-color:${cfg.border}">
+            <span style="color:${cfg.color};font-size:13px">→</span>
+            <span>${esc(ins.action)}</span>
+          </div>
         </div>
       </div>`;
     }).join('');
 
-    const ts = _intelInsightsCache.generated_at ? new Date(_intelInsightsCache.generated_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
     body.innerHTML = `
       <div class="intel-section">
         <div class="insights-header-row">
           <div>
             <h3 class="intel-h3" style="margin:0">AI Intelligence Report</h3>
-            <p class="intel-p" style="margin:4px 0 0">Derived entirely from real registration, attendance and webinar data in your database.${ts?` Last generated ${ts}.`:''}</p>
+            <p class="intel-p" style="margin:4px 0 0">Generated from your actual registration, attendance and webinar data.</p>
           </div>
           <button class="btn btn-ghost btn-sm" onclick="_intelInsightsCache=null;_renderAIInsights(document.getElementById('intel-body'))">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
@@ -2690,9 +2691,6 @@ function _renderSpeakerIntel(data) {
     const grade = s.attendance_rate >= 40 ? 'A' : s.attendance_rate >= 30 ? 'B' : s.attendance_rate >= 20 ? 'C' : 'D';
     const gColor = { A:'#10b981', B:'#6366f1', C:'#f59e0b', D:'#f43f5e' }[grade];
     const av = avColor(s.name); const ini = initials(s.name);
-    const attVsAvg = s.attendance_rate - avgAttRate;
-    const attVsAvgStr = attVsAvg >= 0 ? `+${attVsAvg.toFixed(1)}%` : `${attVsAvg.toFixed(1)}%`;
-    const attVsAvgColor = attVsAvg >= 0 ? '#10b981' : '#f43f5e';
     const regsBarPct = sorted[0].total_regs > 0 ? Math.round(s.total_regs / sorted[0].total_regs * 100) : 0;
     const attBarPct = Math.min(100, s.attendance_rate);
     const badge = idx === 0 ? `<span style="background:#f59e0b22;color:#f59e0b;border:1px solid #f59e0b40;border-radius:6px;font-size:10px;font-weight:700;padding:2px 7px;margin-left:8px">TOP</span>` : '';
@@ -2730,22 +2728,13 @@ function _renderSpeakerIntel(data) {
           <div class="spk-metric-bar"><div style="width:${attBarPct}%;background:${gColor};height:100%;border-radius:4px;transition:width 0.8s"></div></div>
         </div>
         <div class="spk-metric-box">
-          <div class="spk-metric-val" style="color:${attVsAvgColor};font-size:15px">${attVsAvgStr}</div>
-          <div class="spk-metric-lbl">vs. Programme Avg</div>
-        </div>
-        <div class="spk-metric-box">
           <div class="spk-metric-val">${fmt(s.total_att)}</div>
           <div class="spk-metric-lbl">Total Attendees</div>
-        </div>
-        <div class="spk-metric-box">
-          <div class="spk-metric-val">${s.cost_per_attendee>0?'₹'+fmt(Math.round(s.cost_per_attendee)):'—'}</div>
-          <div class="spk-metric-lbl">Cost / Attendee</div>
         </div>
       </div>
 
       <div class="spk-detail-insight">
-        ${s.attendance_rate >= 40 ? `<span style="color:#10b981">✓ Exceptional retention — audience stays engaged throughout</span>`
-          : s.attendance_rate >= 30 ? `<span style="color:#6366f1">↗ Above-average attendance rate for the programme</span>`
+        ${s.attendance_rate >= 40 ? `<span style="color:#10b981">✓ Strong attendance — audience stays engaged throughout</span>`
           : s.attendance_rate >= 20 ? `<span style="color:#f59e0b">~ Room to improve attendance conversion from registrations</span>`
           : `<span style="color:#f43f5e">↙ High drop-off — consider topic-audience fit or promotion timing</span>`}
       </div>
@@ -2756,8 +2745,8 @@ function _renderSpeakerIntel(data) {
     <div class="intel-section">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:12px">
         <div>
-          <h3 class="intel-h3" style="margin:0">Speaker Performance Deep-Dive</h3>
-          <p class="intel-p" style="margin:4px 0 0">Programme avg attendance rate: <strong>${avgAttRate.toFixed(1)}%</strong>. Grade A = 40%+, B = 30–40%, C = 20–30%, D below 20%.</p>
+          <h3 class="intel-h3" style="margin:0">Speaker Performance</h3>
+          <p class="intel-p" style="margin:4px 0 0">Registration and attendance metrics per speaker across all completed webinars.</p>
         </div>
         <div class="intel-kpis" style="margin:0">
           <div class="intel-kpi" style="min-width:80px"><div class="intel-kpi-lbl">Speakers</div><div class="intel-kpi-val">${sorted.length}</div></div>
@@ -3122,7 +3111,7 @@ function openAutoResearchModal() {
       <div style="padding:24px 28px">
         <div class="modal-title">Research Competitor with AI</div>
         <p style="color:var(--text-secondary);font-size:13px;margin:8px 0 20px">
-          Uses live web search (Perplexity) to find recent webinars, events, and content for the selected competitor. Automatically adds findings to the activity log.
+          AI searches for recent webinars, events, and content from the selected competitor and adds findings to the activity log.
         </p>
         <div class="form-group" style="margin-bottom:16px">
           <label class="form-label">Select Competitor</label>
