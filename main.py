@@ -2734,6 +2734,36 @@ def fix_sequences(db: Session = Depends(get_db)):
     return results
 
 
+@app.get("/api/new-registrants-per-webinar")
+def get_new_registrants_per_webinar(db: Session = Depends(get_db)):
+    """For each webinar (sorted by date), count how many registrant emails appear for the FIRST time."""
+    from sqlalchemy import text as _t
+
+    rows = db.execute(_t("""
+        SELECT w.id AS webinar_id, w.title, w.date, r.email
+        FROM webinars w
+        JOIN registrations r ON r.webinar_id = w.id
+        WHERE r.email IS NOT NULL AND r.email != ''
+        ORDER BY w.date ASC, w.id ASC
+    """)).fetchall()
+
+    seen = set()
+    webinar_map = {}
+    for row in rows:
+        wid = row.webinar_id
+        if wid not in webinar_map:
+            webinar_map[wid] = {"webinar_id": wid, "title": row.title, "date": str(row.date)[:10] if row.date else None, "new_count": 0, "repeat_count": 0}
+        email = (row.email or "").lower().strip()
+        if email in seen:
+            webinar_map[wid]["repeat_count"] += 1
+        else:
+            seen.add(email)
+            webinar_map[wid]["new_count"] += 1
+
+    result = sorted(webinar_map.values(), key=lambda x: x["date"] or "")
+    return {"webinars": result}
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

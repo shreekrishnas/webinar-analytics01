@@ -1619,31 +1619,12 @@ function renderAnalytics() {
         </div>
       </div>
 
-      <!-- New leads trend — last 6 webinars -->
-      ${recentWebinars.length >= 2 ? `
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px 28px;margin-bottom:24px">
-        <div style="font-weight:700;font-size:15px;margin-bottom:20px;color:var(--text-primary)">New Registrations — Last ${recentWebinars.length} Webinars</div>
-        <div style="display:flex;align-items:flex-end;gap:12px;height:120px">
-          ${recentWebinars.map((w,i) => {
-            const h = sparkMax>0 ? Math.max(Math.round((w.total_registrations/sparkMax)*100),4) : 4;
-            const attH = w.total_registrations>0 ? Math.max(Math.round((w.total_attendees/sparkMax)*100),2) : 0;
-            const isLast = i===0;
-            return `
-              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0">
-                <div style="font-size:11px;font-weight:700;color:#6366f1">${fmt(w.total_registrations)}</div>
-                <div style="width:100%;position:relative;height:${h}px;border-radius:6px 6px 0 0;background:#6366f1${isLast?'':'88'};display:flex;align-items:flex-end">
-                  <div style="width:100%;height:${attH}px;background:#10b981${isLast?'':'88'};border-radius:6px 6px 0 0"></div>
-                </div>
-                <div style="font-size:10px;color:var(--text-muted);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%" title="${esc(w.title)}">${esc(w.title.slice(0,18)+(w.title.length>18?'…':''))}</div>
-                <div style="font-size:9px;color:var(--text-muted)">${fmtDate(w.date)}</div>
-              </div>`;
-          }).join('')}
-        </div>
-        <div style="display:flex;gap:16px;margin-top:12px;font-size:11px">
-          <div style="display:flex;align-items:center;gap:6px"><div style="width:12px;height:12px;border-radius:3px;background:#6366f1"></div>Registrations</div>
-          <div style="display:flex;align-items:center;gap:6px"><div style="width:12px;height:12px;border-radius:3px;background:#10b981"></div>Attendees</div>
-        </div>
-      </div>` : ''}
+      <!-- New leads per webinar — loaded async -->
+      <div id="new-leads-chart-section" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px 28px;margin-bottom:24px">
+        <div style="font-weight:700;font-size:15px;margin-bottom:4px;color:var(--text-primary)">New Leads per Webinar</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">First-time email addresses seen in each webinar vs returning registrants</div>
+        <div id="new-leads-chart-body"><div class="pg-loading" style="padding:20px 0"><div class="spinner"></div></div></div>
+      </div>
 
       <!-- Monthly trend + ICP breakdown -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
@@ -1696,6 +1677,49 @@ function renderAnalytics() {
         ${renderTwinLineChart(trendData)}
       </div>` : ''}
     </div>`);
+
+  _loadNewLeadsChart();
+}
+
+async function _loadNewLeadsChart() {
+  const body = document.getElementById('new-leads-chart-body');
+  if (!body) return;
+  try {
+    const data = await api('/api/new-registrants-per-webinar');
+    const webinars = (data?.webinars || []).filter(w => w.new_count + w.repeat_count > 0).slice(-10);
+    if (!webinars.length) {
+      body.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No registration data available.</div>';
+      return;
+    }
+    const maxNew = Math.max(...webinars.map(w => w.new_count), 1);
+    const maxTotal = Math.max(...webinars.map(w => w.new_count + w.repeat_count), 1);
+
+    body.innerHTML = `
+      <div style="display:flex;align-items:flex-end;gap:10px;height:140px;margin-bottom:8px">
+        ${webinars.map(w => {
+          const total = w.new_count + w.repeat_count;
+          const newH  = Math.max(Math.round((w.new_count/maxTotal)*120), 4);
+          const repH  = Math.max(Math.round((w.repeat_count/maxTotal)*120), w.repeat_count>0?4:0);
+          return `
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0">
+              <div style="font-size:10px;font-weight:700;color:#6366f1">+${w.new_count}</div>
+              <div style="width:100%;display:flex;flex-direction:column;justify-content:flex-end;height:120px;gap:1px">
+                ${repH>0?`<div style="width:100%;height:${repH}px;background:#a5b4fc;border-radius:4px 4px 0 0" title="${w.repeat_count} returning"></div>`:''}
+                <div style="width:100%;height:${newH}px;background:#6366f1;border-radius:${repH>0?'0':'4px 4px'} 0 0" title="${w.new_count} new"></div>
+              </div>
+              <div style="font-size:9px;color:var(--text-muted);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;max-width:80px" title="${esc(w.title)}">${esc((w.title||'').slice(0,14)+(w.title&&w.title.length>14?'…':''))}</div>
+              <div style="font-size:8px;color:var(--text-muted)">${w.date?w.date.slice(5):''}</div>
+            </div>`;
+        }).join('')}
+      </div>
+      <div style="display:flex;gap:16px;font-size:11px;color:var(--text-muted)">
+        <div style="display:flex;align-items:center;gap:6px"><div style="width:12px;height:12px;border-radius:3px;background:#6366f1"></div>New registrants (first time)</div>
+        <div style="display:flex;align-items:center;gap:6px"><div style="width:12px;height:12px;border-radius:3px;background:#a5b4fc"></div>Returning registrants</div>
+      </div>`;
+  } catch(e) {
+    const body2 = document.getElementById('new-leads-chart-body');
+    if (body2) body2.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Could not load new leads data.</div>';
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1732,36 +1756,17 @@ async function renderSpeakers() {
     const gColor = grade ? { A:'#10b981', B:'#6366f1', C:'#f59e0b', D:'#f43f5e' }[grade] : null;
 
     const si = speakerInsights[sp.id];
+    const webinarCount = sp.total_webinars || (S.webinars.filter(w => w.speaker_id === sp.id).length);
     return `
       <div class="spk-card" onclick="nav('speaker',${sp.id})">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
-          <div class="spk-av" style="background:${color};margin:0">${ini}</div>
-          ${grade ? `<div style="width:34px;height:34px;border-radius:50%;border:2px solid ${gColor};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:${gColor};flex-shrink:0">${grade}</div>` : ''}
+        <div style="display:flex;align-items:center;justify-content:center;margin-bottom:14px">
+          <div class="spk-av" style="background:${color};margin:0;width:56px;height:56px;font-size:20px">${ini}</div>
         </div>
-        <div class="spk-name">${esc(sp.name)}</div>
-        ${si && si.best_icp ? `<div style="margin-bottom:4px"><span class="icp-badge icp-${(si.best_icp||'others').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}" style="font-size:10px">Best ICP: ${esc(si.best_icp)}</span></div>` : ''}
-        <div class="spk-bio">${esc(sp.bio || '')}</div>
-        <div class="spk-stats" style="margin-top:12px">
-          <div>
-            <div class="spk-stat-val" style="color:${color}">${sp.total_webinars}</div>
-            <div class="spk-stat-lbl">Webinars</div>
-          </div>
-          ${perf ? `
-          <div>
-            <div class="spk-stat-val">${fmt(perf.total_regs)}</div>
-            <div class="spk-stat-lbl">Registrations</div>
-          </div>
-          <div>
-            <div class="spk-stat-val" style="color:${gColor}">${perf.attendance_rate}%</div>
-            <div class="spk-stat-lbl">Att. Rate</div>
-          </div>` : ''}
+        <div class="spk-name" style="text-align:center">${esc(sp.name)}</div>
+        <div style="text-align:center;margin-top:8px">
+          <span style="font-size:22px;font-weight:800;color:${color}">${webinarCount}</span>
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Webinars</div>
         </div>
-        ${perf ? `
-        <div style="margin-top:10px">
-          <div style="height:4px;background:var(--border,rgba(0,0,0,0.08));border-radius:4px;overflow:hidden">
-            <div style="width:${Math.min(100,perf.attendance_rate)}%;height:100%;background:${gColor};border-radius:4px;transition:width 0.8s"></div>
-          </div>
-        </div>` : ''}
       </div>`;
   }).join('');
 
@@ -4570,7 +4575,6 @@ function showToast(msg, type='success') {
 ══════════════════════════════════════════════════════════════════════════ */
 function renderUpload() {
   const today = new Date().toISOString().slice(0,10);
-  const ninetyDaysAgo = new Date(Date.now() - 90*24*60*60*1000).toISOString().slice(0,10);
   setContent(`
     <div>
       <div class="page-hd">
@@ -4583,10 +4587,12 @@ function renderUpload() {
       <!-- Date range filter -->
       <div class="export-filter-bar" style="display:flex;align-items:center;gap:12px;margin-bottom:28px;flex-wrap:wrap">
         <label style="font-size:13px;font-weight:600;color:var(--text-secondary)">Date Range:</label>
-        <input type="date" id="export-from" value="${ninetyDaysAgo}" class="form-input" style="width:160px" onchange="filterExportWebinars()" />
+        <input type="date" id="export-from" class="form-input" style="width:160px" onchange="filterExportWebinars()" placeholder="From" />
         <span style="color:var(--text-muted)">to</span>
         <input type="date" id="export-to" value="${today}" class="form-input" style="width:160px" onchange="filterExportWebinars()" />
-        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('export-from').value='';document.getElementById('export-to').value='${today}';filterExportWebinars()">Show All</button>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('export-from').value='';document.getElementById('export-to').value='';filterExportWebinars()">Show All</button>
+        <button class="btn btn-ghost btn-sm" onclick="(()=>{const d=new Date();d.setDate(d.getDate()-30);document.getElementById('export-from').value=d.toISOString().slice(0,10);document.getElementById('export-to').value='${today}';filterExportWebinars()})()">Last 30 days</button>
+        <button class="btn btn-ghost btn-sm" onclick="(()=>{const d=new Date();d.setDate(d.getDate()-90);document.getElementById('export-from').value=d.toISOString().slice(0,10);document.getElementById('export-to').value='${today}';filterExportWebinars()})()">Last 90 days</button>
         <span id="export-count" style="margin-left:auto;font-size:12px;color:var(--text-muted)"></span>
       </div>
 
