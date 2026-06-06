@@ -2519,7 +2519,7 @@ async function renderIntelligence() {
       <div class="page-hd">
         <div>
           <h1 class="page-title">Intelligence</h1>
-          <p class="page-sub">Topic performance, speaker pull, campaign efficiency, ICP signals</p>
+          <p class="page-sub">All metrics computed from your registration, attendance, webinar and campaign data only. No assumptions.</p>
         </div>
         <button class="btn btn-ghost btn-sm" onclick="_intelCache=null;renderIntelligence()">Refresh</button>
       </div>
@@ -2582,7 +2582,7 @@ function _renderTopicIntel(data) {
         <div class="intel-kpi"><div class="intel-kpi-lbl">Total Leads</div><div class="intel-kpi-val">${fmt(data.total_leads||0)}</div></div>
       </div>
       <h3 class="intel-h3">ICP Performance Breakdown</h3>
-      <p class="intel-p">Which ICP themes are pulling the right audience?</p>
+      <p class="intel-p">Which ICP themes are pulling the right audience? Spend, CPL, leads, impressions and clicks were imported from your <em>RH_Reporting_FY26-27 - Webinar Highlights.csv</em>.</p>
       <div class="intel-table-wrap">
         <table class="intel-table">
           <thead><tr><th>ICP</th><th style="text-align:center">Webinars</th><th style="text-align:right">Regs</th><th style="text-align:right">Attendees</th><th style="text-align:right">Att Rate</th><th style="text-align:right">Spend</th><th style="text-align:right">Cost/Att</th></tr></thead>
@@ -2799,11 +2799,11 @@ function _drawCompetitorIntel(body, competitors, activity) {
       <div class="intel-card">${fmtBars || '<div style="color:var(--text-muted)">No data</div>'}</div>
 
       <h3 class="intel-h3" style="margin-top:32px">Recent Activity</h3>
-      <p class="intel-p">Latest competitor moves logged in the system. Click + to add more.</p>
+      <p class="intel-p">Only entries logged by your team appear here. AI gap analysis runs strictly on this data with no assumptions about competitors. Needs at least 5 entries to generate insights.</p>
       <div class="intel-table-wrap">
         <table class="intel-table comp-act-table">
           <thead><tr><th>Date</th><th>Competitor</th><th>Format</th><th>Topic</th><th>Speaker</th><th>Audience</th><th>Angle</th><th></th></tr></thead>
-          <tbody>${activityRows || '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:24px">No activity logged yet</td></tr>'}</tbody>
+          <tbody>${activityRows || '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:24px">No competitor activity logged yet. Click <strong>Log Competitor Activity</strong> above to add real observations.</td></tr>'}</tbody>
         </table>
       </div>
     </div>`;

@@ -566,7 +566,19 @@ async def competitor_gap_analysis(db: Session = Depends(get_db)):
         )
 
         if not comp_rows:
-            return {"insights": [], "message": "Add competitor activity to generate gap analysis."}
+            return {
+                "analysis": None,
+                "message": "No competitor activity logged yet. Use 'Log Competitor Activity' to add real observations. AI gap analysis requires at least 5 entries to produce useful insights.",
+                "competitor_activity_count": 0,
+                "rh_activity_count": len(rh_rows),
+            }
+        if len(comp_rows) < 5:
+            return {
+                "analysis": None,
+                "message": f"Only {len(comp_rows)} competitor entries logged. Need at least 5 to generate meaningful gap analysis. Add more real observations.",
+                "competitor_activity_count": len(comp_rows),
+                "rh_activity_count": len(rh_rows),
+            }
 
         api_key = os.environ.get("OPENROUTER_API_KEY")
         if not api_key:
@@ -598,12 +610,15 @@ Return ONLY this JSON shape (no markdown):
   "headline_opportunity": "ONE crisp sentence: the single biggest gap RH should attack next quarter"
 }}
 
-Rules:
-- Cite competitor names from the data, never invent.
-- Be specific, no generic recommendations.
+STRICT RULES (absolute, no exceptions):
+- Use ONLY what is in the COMPETITOR ACTIVITY and RIGHT HORIZONS WEBINARS data above. NEVER assume what competitors might do, never reference public information about these firms beyond what is logged, never extrapolate to broader patterns.
+- If a topic/audience/format is not represented in the logged competitor data, you MUST NOT mention it. Only analyze what is literally present in the data above.
+- Every claim must cite a specific row from the data (e.g. "Nuvama Wealth ran 'AIF Cat-3 vs PMS' on 2026-05-18").
+- If there are fewer than 2 examples of a pattern in the data, do NOT call it a gap. Say "insufficient data to identify a gap" instead.
+- Be specific, no generic recommendations. No suggestions that aren't grounded in the data shown.
 - NEVER use em dashes. Use commas, periods, colons, parentheses instead.
 - Avoid filler words: consider, leverage, utilize, optimize, enhance.
-- Each recommendation must propose a SPECIFIC tactic with expected outcome."""
+- Each recommendation must propose a SPECIFIC tactic tied to a specific competitor activity row, not a generic best practice."""
 
         resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
