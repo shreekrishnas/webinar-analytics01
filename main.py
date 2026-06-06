@@ -14,6 +14,29 @@ import models, crud, schemas
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
+def _compute_perf_score(regs: int, att_rate: float, icp: str, has_ads: bool = False) -> int:
+    """Compute 0-100 performance score. No ads: reg vol 25%, att rate 35%, ICP 20%, speaker-topic fit 15%, follow-up 5%."""
+    # Registration volume score (25 pts): benchmark 150 regs = full score
+    reg_score = min(25, round(regs / 150 * 25))
+    # Attendance rate score (35 pts): 60%+ = full
+    att_score = min(35, round(att_rate / 60 * 35))
+    # ICP relevance score (20 pts): premium ICPs score higher
+    icp_scores = {'Family Office': 20, 'PMS': 18, 'NRI': 16, 'ESOPs': 15, 'Retirement Planning': 14, 'Others': 8}
+    icp_score = icp_scores.get(icp or 'Others', 8)
+    # Speaker-topic fit (15 pts): give 10 pts baseline (no data to distinguish)
+    fit_score = 10
+    # Follow-up completion (5 pts): give 3 pts baseline
+    followup_score = 3
+    return min(100, reg_score + att_score + icp_score + fit_score + followup_score)
+
+
+def _score_label(score: int) -> str:
+    if score >= 80: return "High Performing"
+    if score >= 60: return "Good"
+    if score >= 40: return "Average"
+    return "Low Performing"
+
+
 # Static files with long-lived cache headers so browsers cache CSS/JS for 1 year.
 # The ?v=XX query string in index.html handles cache-busting on deploy.
 class CachedStaticFiles(StaticFiles):
@@ -68,7 +91,7 @@ def platform_stats(response: Response, db: Session = Depends(get_db)):
 
 # ── Webinars ──────────────────────────────────────────────────────────────────
 
-@app.get("/api/webinars", response_model=List[schemas.WebinarSummary])
+@app.get("/api/webinars")
 def list_webinars(
     response: Response,
     date: Optional[str] = Query(None),
@@ -78,13 +101,25 @@ def list_webinars(
 ):
     response.headers["Cache-Control"] = "no-store"
     if date:
-        return crud.get_webinars_by_date(db, date)
-    if name:
-        return crud.get_webinars_by_name(db, name)
-    webinars = crud.get_all_webinars(db)
-    if speaker_id:
-        webinars = [w for w in webinars if w.speaker_id == speaker_id]
-    return webinars
+        webinars = crud.get_webinars_by_date(db, date)
+    elif name:
+        webinars = crud.get_webinars_by_name(db, name)
+    else:
+        webinars = crud.get_all_webinars(db)
+        if speaker_id:
+            webinars = [w for w in webinars if w.speaker_id == speaker_id]
+    result = []
+    for w in webinars:
+        d = w.dict() if hasattr(w, 'dict') else dict(w)
+        if d.get('status') == 'completed':
+            regs = d.get('total_registrations') or 0
+            att_rate = d.get('attendance_rate') or 0
+            icp = d.get('icp') or 'Others'
+            score = _compute_perf_score(regs, att_rate, icp)
+            d['performance_score'] = score
+            d['score_label'] = _score_label(score)
+        result.append(d)
+    return result
 
 
 @app.post("/api/webinars", response_model=schemas.WebinarSummary, status_code=201)
@@ -814,30 +849,75 @@ async def get_intelligence_insights(db: Session = Depends(get_db)):
         for r in recent
     )
 
-    prompt = f"""You are a senior marketing analyst for Right Horizons, an Indian financial advisory firm. Analyze this webinar performance data and generate sharp, actionable insights.
+    # Pull all data needed for comprehensive insights
+    # Top webinars by score
+    all_webinars = db.execute(_t("""
+        SELECT w.id, w.title, w.icp, w.date, s.name as speaker_name,
+               (SELECT COUNT(*) FROM registrations r WHERE r.webinar_id=w.id) AS regs,
+               (SELECT COUNT(*) FROM attendances a WHERE a.webinar_id=w.id AND a.attended=TRUE) AS att
+        FROM webinars w LEFT JOIN speakers s ON s.id=w.speaker_id
+        WHERE w.status='completed'
+        ORDER BY w.date DESC
+    """)).fetchall()
+
+    webinar_lines = []
+    for r in all_webinars:
+        regs = int(r.regs or 0); att = int(r.att or 0)
+        rate = round(att/regs*100,1) if regs else 0
+        score = _compute_perf_score(regs, rate, r.icp or 'Others')
+        webinar_lines.append(f"  [{r.date}] \"{r.title}\" | ICP:{r.icp or 'Others'} | Speaker:{r.speaker_name or 'Unknown'} | Regs:{regs} | Att:{att} | Rate:{rate}% | Score:{score}/100")
+
+    # Check ads data
+    has_ads = db.execute(_t("SELECT COUNT(*) FROM webinar_ads")).fetchone()[0] > 0
+    ads_summary = ""
+    if has_ads:
+        ads_rows = db.execute(_t("""
+            SELECT platform, SUM(spend::numeric) as spend, SUM(impressions) as impr,
+                   SUM(clicks) as clicks, SUM(conversions) as conv
+            FROM webinar_ads WHERE spend IS NOT NULL AND spend != ''
+            GROUP BY platform ORDER BY spend DESC
+        """)).fetchall()
+        if ads_rows:
+            ads_summary = "ADS DATA:\n" + "\n".join(
+                f"  {r.platform}: spend={r.spend}, impressions={r.impr}, clicks={r.clicks}, conversions={r.conv}"
+                for r in ads_rows
+            )
+
+    prompt = f"""You are a senior marketing analyst for Right Horizons, an Indian financial advisory firm that runs webinars for HNI/NRI clients.
+
+WEBINAR DATA (all completed webinars, newest first):
+{chr(10).join(webinar_lines) if webinar_lines else 'No completed webinars yet.'}
 
 ICP PERFORMANCE: {icp_summary}
 SPEAKER PERFORMANCE: {spk_summary}
-RECENT WEBINARS: {recent_summary}
+{ads_summary}
 
-Generate exactly 5 insights. Each insight must:
-- Name a specific number or % from the data
-- State what it means for the business
-- Suggest ONE concrete next action
+Analyze this data and generate 6 sharp, prescriptive insights that directly answer:
+1. What is working and why?
+2. What is not working and why?
+3. Which topics / ICPs / speakers should be prioritized next?
+4. Which webinars need follow-up urgently?
+5. What specific action should the team take this week?
 
-Format as JSON array:
+Rules:
+- Every insight MUST cite a specific number from the data
+- Be direct and prescriptive, not generic
+- If a webinar has high regs but low attendance rate (<25%), flag it as a risk
+- If attendance rate >45%, flag it as a win
+- Recommend the next webinar topic based on best-performing ICP/speaker combinations
+- If ads data exists, include one insight about platform/spend efficiency
+{f'- Ads data is available, include platform performance insight' if has_ads else '- No ads data available, do not mention ads cost or CPL'}
+
+Return ONLY a JSON array of exactly 6 insights:
 [
   {{
     "type": "win|risk|opportunity|trend|action",
-    "headline": "short bold claim ≤60 chars",
-    "detail": "1-2 sentences with specific numbers. What it means.",
-    "action": "One specific next step ≤80 chars",
-    "metric": "the key number that supports this insight"
+    "headline": "Bold specific claim ≤65 chars",
+    "detail": "2 sentences with specific numbers and clear business implication.",
+    "action": "One specific, actionable next step ≤90 chars",
+    "metric": "The key stat supporting this (e.g. '47% attendance rate')"
   }}
-]
-
-Types: win=something working well, risk=something declining/concerning, opportunity=untapped potential, trend=pattern over time, action=immediate thing to do.
-Return ONLY valid JSON array."""
+]"""
 
     try:
         resp = httpx.post(
