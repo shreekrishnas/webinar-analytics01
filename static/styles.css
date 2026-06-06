@@ -5793,3 +5793,29 @@ html:not(.dark) .card-body span:not([class]) { color: var(--rh-text-1) !importan
   max-height: 300px;
   overflow-y: auto;
 }
+
+/* ── Leaderboard view tabs ── */
+.lb-view-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.lb-vtab {
+  padding: 7px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--border, rgba(0,0,0,0.1));
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.lb-vtab:hover { background: var(--surface-2, rgba(0,0,0,0.04)); }
+.lb-vtab.active {
+  background: #6366f1;
+  color: #fff;
+  border-color: #6366f1;
+  font-weight: 600;
+}

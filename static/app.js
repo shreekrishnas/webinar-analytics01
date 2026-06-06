@@ -479,6 +479,20 @@ function renderKpiBanner() {
   const trendArrowUp   = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg>`;
   const trendArrowDown = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>`;
 
+  // Best webinar by attendance_rate among completed
+  const completedW = S.webinars.filter(w => w.status === 'completed' && w.attendance_rate > 0);
+  const bestW = completedW.sort((a,b) => b.attendance_rate - a.attendance_rate)[0];
+
+  // Best ICP by avg attendance rate
+  const icpMap = {};
+  S.webinars.filter(w=>w.status==='completed').forEach(w => {
+    const icp = w.icp || 'Others';
+    if (!icpMap[icp]) icpMap[icp] = {total:0,count:0};
+    icpMap[icp].total += (w.attendance_rate||0);
+    icpMap[icp].count++;
+  });
+  const bestICP = Object.entries(icpMap).sort((a,b) => (b[1].total/b[1].count)-(a[1].total/a[1].count))[0];
+
   const kpis = [
     {
       icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>', cls: 'kc-indigo',
@@ -505,6 +519,20 @@ function renderKpiBanner() {
       label: 'Top Speaker',
       value: topSpeakerDisplay,
       trendUp: null, trend: topSpeakerFull ? 'By total attendance' : 'No data yet',
+      arrow: null,
+    },
+    {
+      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 2h4"/><path d="m9 9 3 3 3-3"/></svg>', cls: 'kc-gold',
+      label: 'Best Webinar',
+      value: bestW ? (bestW.title.length > 16 ? bestW.title.slice(0,16)+'…' : bestW.title) : 'N/A',
+      trendUp: null, trend: bestW ? `${bestW.attendance_rate.toFixed(1)}% attendance` : 'No completed webinars',
+      arrow: null,
+    },
+    {
+      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>', cls: 'kc-emerald',
+      label: 'Best ICP',
+      value: bestICP ? bestICP[0] : 'N/A',
+      trendUp: null, trend: bestICP ? `${(bestICP[1].total/bestICP[1].count).toFixed(1)}% avg att rate` : 'No data',
       arrow: null,
     },
   ];
@@ -779,6 +807,7 @@ function renderHome() {
             <span style="font-size:11px;color:${info.color};font-weight:600;min-width:34px">${rate > 0 ? fmtPct(rate) : 'N/A'}</span>
           </div>
         </td>
+        <td style="text-align:right">${w.status==='completed' ? (() => { const score = w.performance_score || 0; const scoreColor = score >= 80 ? '#10b981' : score >= 60 ? '#6366f1' : score >= 40 ? '#f59e0b' : '#f43f5e'; return `<span style="font-size:12px;font-weight:700;color:${scoreColor}">${score}</span>`; })() : ''}</td>
       </tr>`;
     }).join('');
 
@@ -813,6 +842,7 @@ function renderHome() {
                 <th>Status</th>
                 <th style="text-align:right">Reg.</th>
                 <th>Attendance</th>
+                <th style="text-align:right">Score</th>
               </tr>
             </thead>
             <tbody>${tableRows}</tbody>
@@ -1430,7 +1460,7 @@ function renderAnalytics() {
     <div>
       <div class="page-hd">
         <div>
-          <h1 class="page-title">Analytics</h1>
+          <h1 class="page-title">Funnel Analytics</h1>
           <p class="page-sub">Platform-wide performance · ${S.webinars.length} webinars</p>
         </div>
       </div>
@@ -1782,6 +1812,48 @@ async function renderLeaderboard(speakerId, webinarId) {
         </table>
       </div>` : `<div class="lb-empty">No attendance data yet.<br>Upload attendee files to populate the leaderboard.</div>`;
 
+    // Alternate leaderboard views (client-side computed from S.webinars)
+    S._lbView = S._lbView || 'attendees';
+    const lbViewTabs = `
+      <div class="lb-view-tabs">
+        <button class="lb-vtab ${S._lbView==='attendees'?'active':''}" onclick="S._lbView='attendees';renderLeaderboard()">Top Attendees</button>
+        <button class="lb-vtab ${S._lbView==='webinars'?'active':''}" onclick="S._lbView='webinars';renderLeaderboard()">Best Webinars</button>
+        <button class="lb-vtab ${S._lbView==='speakers'?'active':''}" onclick="S._lbView='speakers';renderLeaderboard()">Best Speakers</button>
+        <button class="lb-vtab ${S._lbView==='icp'?'active':''}" onclick="S._lbView='icp';renderLeaderboard()">Best ICP</button>
+      </div>`;
+
+    let altViewHTML = '';
+    if (S._lbView === 'webinars') {
+      const sortedW = S.webinars.filter(w=>w.status==='completed').sort((a,b)=>(b.attendance_rate||0)-(a.attendance_rate||0));
+      altViewHTML = sortedW.length ? `<div class="lb-table-wrap"><table class="lb-table"><thead><tr><th>Rank</th><th>Webinar</th><th>Speaker</th><th>ICP</th><th style="text-align:right">Regs</th><th style="text-align:right">Att Rate</th><th style="text-align:right">Score</th></tr></thead><tbody>${sortedW.map((w,i)=>{
+        const score = w.performance_score || 0;
+        const sc = score>=80?'#10b981':score>=60?'#6366f1':score>=40?'#f59e0b':'#f43f5e';
+        return `<tr><td>${rankHTML(i+1)}</td><td><div class="wb-list-name" title="${esc(w.title)}">${esc(w.title)}</div></td><td style="font-size:12px;color:var(--text-2)">${esc(w.speaker_name||'—')}</td><td><span class="icp-badge icp-${(w.icp||'others').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}">${esc(w.icp||'Others')}</span></td><td style="text-align:right;font-weight:600;color:var(--c-reg)">${fmt(w.total_registrations)}</td><td style="text-align:right;font-weight:600;color:#059669">${(w.attendance_rate||0).toFixed(1)}%</td><td style="text-align:right"><span style="font-size:12px;font-weight:700;color:${sc}">${score}</span></td></tr>`;
+      }).join('')}</tbody></table></div>` : `<div class="lb-empty">No completed webinars yet.</div>`;
+    } else if (S._lbView === 'speakers') {
+      const spkData = {};
+      S.webinars.filter(w=>w.status==='completed').forEach(w => {
+        const sp = w.speaker_name || 'Unknown';
+        if (!spkData[sp]) spkData[sp] = {totalRate:0, regs:0, count:0};
+        spkData[sp].totalRate += (w.attendance_rate||0);
+        spkData[sp].regs += (w.total_registrations||0);
+        spkData[sp].count++;
+      });
+      const sortedSp = Object.entries(spkData).sort((a,b)=>(b[1].totalRate/b[1].count)-(a[1].totalRate/a[1].count));
+      altViewHTML = sortedSp.length ? `<div class="lb-table-wrap"><table class="lb-table"><thead><tr><th>Rank</th><th>Speaker</th><th style="text-align:right">Webinars</th><th style="text-align:right">Total Regs</th><th style="text-align:right">Avg Att Rate</th></tr></thead><tbody>${sortedSp.map(([name,d],i)=>`<tr><td>${rankHTML(i+1)}</td><td><div style="font-weight:600;font-size:13px">${esc(name)}</div></td><td style="text-align:right;font-weight:600;color:var(--c-reg)">${d.count}</td><td style="text-align:right;color:var(--text-2)">${fmt(d.regs)}</td><td style="text-align:right;font-weight:700;color:#059669">${(d.totalRate/d.count).toFixed(1)}%</td></tr>`).join('')}</tbody></table></div>` : `<div class="lb-empty">No completed webinars yet.</div>`;
+    } else if (S._lbView === 'icp') {
+      const icpData = {};
+      S.webinars.filter(w=>w.status==='completed').forEach(w => {
+        const icp = w.icp || 'Others';
+        if (!icpData[icp]) icpData[icp] = {totalRate:0, regs:0, count:0};
+        icpData[icp].totalRate += (w.attendance_rate||0);
+        icpData[icp].regs += (w.total_registrations||0);
+        icpData[icp].count++;
+      });
+      const sortedIcp = Object.entries(icpData).sort((a,b)=>(b[1].totalRate/b[1].count)-(a[1].totalRate/a[1].count));
+      altViewHTML = sortedIcp.length ? `<div class="lb-table-wrap"><table class="lb-table"><thead><tr><th>Rank</th><th>ICP</th><th style="text-align:right">Webinars</th><th style="text-align:right">Total Regs</th><th style="text-align:right">Avg Att Rate</th></tr></thead><tbody>${sortedIcp.map(([icp,d],i)=>`<tr><td>${rankHTML(i+1)}</td><td><span class="icp-badge icp-${icp.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}">${esc(icp)}</span></td><td style="text-align:right;font-weight:600;color:var(--c-reg)">${d.count}</td><td style="text-align:right;color:var(--text-2)">${fmt(d.regs)}</td><td style="text-align:right;font-weight:700;color:#059669">${(d.totalRate/d.count).toFixed(1)}%</td></tr>`).join('')}</tbody></table></div>` : `<div class="lb-empty">No completed webinars yet.</div>`;
+    }
+
     setContent(`
       <div>
         <div class="page-hd">
@@ -1795,6 +1867,9 @@ async function renderLeaderboard(speakerId, webinarId) {
           </button>
         </div>
 
+        ${lbViewTabs}
+
+        ${S._lbView !== 'attendees' ? altViewHTML : `
         <div class="lb-filters">
           <select class="filter-select" onchange="S._lbSpeaker=this.value;S._lbWebinar='';renderLeaderboard()">
             <option value="" ${!selSpeaker?'selected':''}>All Speakers</option>
@@ -1840,7 +1915,7 @@ async function renderLeaderboard(speakerId, webinarId) {
               <option value="1000" ${selLimit==1000?'selected':''}>All</option>
             </select>
           </div>
-        </div>
+        </div>`}
       </div>`);
   } catch(e) {
     setContent('<div class="empty-state"><div class="empty-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><div class="empty-title">Failed to load leaderboard</div></div>');
@@ -2559,7 +2634,7 @@ async function renderIntelligence() {
     <div class="intel-page">
       <div class="page-hd">
         <div>
-          <h1 class="page-title">Intelligence</h1>
+          <h1 class="page-title">Smart Recommendations</h1>
           <p class="page-sub">Your webinar programme analytics and intelligence hub.</p>
         </div>
         <button class="btn btn-ghost btn-sm" onclick="_intelCache=null;renderIntelligence()">Refresh</button>
@@ -3283,7 +3358,7 @@ async function renderTopics() {
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
             AI-Generated · Updated Weekly
           </div>
-          <h1 class="topics-title">Upcoming Topic Suggestions</h1>
+          <h1 class="topics-title">Topic Planner</h1>
           <p class="topics-sub">Fresh topics crafted for each speaker, timed to market news, framed in their voice.</p>
         </div>
         <button class="btn-topics-refresh" id="topics-refresh-btn" onclick="refreshTopics()">
@@ -3426,7 +3501,7 @@ async function renderPipeline() {
     <div class="pipeline-page">
       <div class="page-hd">
         <div>
-          <h1 class="page-title">Meeting Pipeline</h1>
+          <h1 class="page-title">Follow-up Pipeline</h1>
           <p class="page-sub">Track hot leads from webinar attendance through to booked meetings and conversions.</p>
         </div>
         <div style="display:flex;gap:8px;align-items:center">

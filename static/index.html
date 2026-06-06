@@ -11,11 +11,11 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800;9..144,900&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
 
   <!-- Preload critical assets so they start downloading immediately -->
-  <link rel="preload" href="/static/styles.css?v=110" as="style" />
-  <link rel="preload" href="/static/trilliant.css?v=110" as="style" />
-  <link rel="preload" href="/static/app.js?v=110" as="script" />
-  <link rel="stylesheet" href="/static/styles.css?v=110" />
-  <link rel="stylesheet" href="/static/trilliant.css?v=110" />
+  <link rel="preload" href="/static/styles.css?v=111" as="style" />
+  <link rel="preload" href="/static/trilliant.css?v=111" as="style" />
+  <link rel="preload" href="/static/app.js?v=111" as="script" />
+  <link rel="stylesheet" href="/static/styles.css?v=111" />
+  <link rel="stylesheet" href="/static/trilliant.css?v=111" />
   <!-- Inline loader: visible instantly, removed by JS once data loads -->
   <style>
     #page-loader{position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:99999;transition:opacity .35s ease}
@@ -71,7 +71,7 @@
       </button>
       <button class="nav-link" data-page="analytics" onclick="nav('analytics')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
-        Analytics
+        Funnel Analytics
       </button>
       <button class="nav-link" data-page="speakers" onclick="nav('speakers')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
@@ -83,15 +83,15 @@
       </button>
       <button class="nav-link" data-page="topics" onclick="nav('topics')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
-        Topics
+        Topic Planner
       </button>
       <button class="nav-link" data-page="intelligence" onclick="nav('intelligence')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        Intelligence
+        Smart Recs
       </button>
       <button class="nav-link" data-page="pipeline" onclick="nav('pipeline')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-        Pipeline
+        Follow-up
       </button>
     </nav>
 
@@ -176,7 +176,7 @@
     </button>
     <button class="nav-link" data-page="analytics"   onclick="nav('analytics');toggleMobileNav()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
-      Analytics
+      Funnel Analytics
     </button>
     <button class="nav-link" data-page="speakers"    onclick="nav('speakers');toggleMobileNav()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
@@ -188,15 +188,15 @@
     </button>
     <button class="nav-link" data-page="topics" onclick="nav('topics');toggleMobileNav()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
-      Topics
+      Topic Planner
     </button>
     <button class="nav-link" data-page="intelligence" onclick="nav('intelligence');toggleMobileNav()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/></svg>
-      Intelligence
+      Smart Recs
     </button>
     <button class="nav-link" data-page="pipeline" onclick="nav('pipeline');toggleMobileNav()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-      Pipeline
+      Follow-up
     </button>
     <div style="padding-top:8px;border-top:1px solid rgba(102,126,234,0.12);margin-top:4px">
       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="openWebinarModal();toggleMobileNav()">
@@ -492,6 +492,6 @@
 <!-- ── TOAST ──────────────────────────────────────────────── -->
 <div class="toast" id="toast"></div>
 
-<script src="/static/app.js?v=110"></script>
+<script src="/static/app.js?v=111"></script>
 </body>
 </html>
