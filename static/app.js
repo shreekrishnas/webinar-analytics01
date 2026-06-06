@@ -2514,10 +2514,10 @@ function renderAIPanel(panel, data) {
 }
 
 /* ── Topics Page ─────────────────────────────────────────────────────────── */
-let _topicsCache = null;
+let _topicsCache = null; // no client-side caching — always fetch fresh
 
 /* ── Intelligence Module (Phase 2) ──────────────────────────────────────── */
-let _intelCache = null;
+let _intelCache = null; // always fetch fresh — no client-side caching
 
 async function renderIntelligence() {
   setContent(`
@@ -2542,7 +2542,7 @@ async function renderIntelligence() {
     </div>`);
   if (!S._intelTab) S._intelTab = 'insights';
   try {
-    if (!_intelCache) _intelCache = await api('/api/intelligence');
+    _intelCache = await api('/api/intelligence');
     _drawIntelTab(_intelCache, S._intelTab);
   } catch(e) {
     document.getElementById('intel-body').innerHTML = `<div class="empty-state"><div class="empty-title">Failed to load</div></div>`;
@@ -2582,7 +2582,7 @@ async function _renderAIInsights(body) {
       </div>
     </div>`;
   try {
-    if (!_intelInsightsCache) _intelInsightsCache = await api('/api/intelligence/insights');
+    _intelInsightsCache = await api('/api/intelligence/insights');
     const insights = _intelInsightsCache.insights || [];
     if (!insights.length) {
       body.innerHTML = `<div class="intel-section"><div class="empty-state"><div class="empty-title">Not enough data for insights yet</div><div class="empty-sub">Upload registration and attendance data for completed webinars first.</div></div></div>`;
@@ -3282,10 +3282,6 @@ async function renderTopics() {
       </div>
     </div>`);
 
-  if (_topicsCache) {
-    renderTopicCards(_topicsCache);
-    return;
-  }
   await loadTopics();
 }
 
