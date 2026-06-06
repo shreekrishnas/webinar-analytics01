@@ -609,13 +609,23 @@ Rules:
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
                      "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={"model": "anthropic/claude-sonnet-4.5", "max_tokens": 1500,
+            json={"model": "anthropic/claude-sonnet-4.5", "max_tokens": 2500,
                   "messages": [{"role": "user", "content": prompt}]},
-            timeout=45.0
+            timeout=60.0
         )
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"].strip()
-        analysis = _strip_em_dashes(_extract_json(raw))
+        try:
+            analysis = _strip_em_dashes(_extract_json(raw))
+        except ValueError:
+            # Return raw preview so we can debug
+            return {
+                "analysis": None,
+                "raw_preview": raw[:600],
+                "competitor_activity_count": len(comp_rows),
+                "rh_activity_count": len(rh_rows),
+                "message": "AI response could not be parsed. Showing raw preview for debug.",
+            }
         return {
             "analysis": analysis,
             "competitor_activity_count": len(comp_rows),
