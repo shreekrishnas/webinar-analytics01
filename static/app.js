@@ -1530,7 +1530,7 @@ function renderAnalytics() {
 /* ══════════════════════════════════════════════════════════════════════════
    SPEAKERS
 ══════════════════════════════════════════════════════════════════════════ */
-function renderSpeakers() {
+async function renderSpeakers() {
   setContent(`
     <div>
       <div class="page-hd">
@@ -1539,25 +1539,60 @@ function renderSpeakers() {
           <p class="page-sub">${S.speakers.length} speakers</p>
         </div>
       </div>
-      <div class="spk-grid">
-        ${S.speakers.map(sp => {
-          const color = avColor(sp.name);
-          const ini   = initials(sp.name);
-          return `
-            <div class="spk-card" onclick="nav('speaker',${sp.id})">
-              <div class="spk-av" style="background:${color}">${ini}</div>
-              <div class="spk-name">${esc(sp.name)}</div>
-              <div class="spk-bio">${esc(sp.bio || 'No bio available')}</div>
-              <div class="spk-stats">
-                <div>
-                  <div class="spk-stat-val" style="color:${color}">${sp.total_webinars}</div>
-                  <div class="spk-stat-lbl">Webinars</div>
-                </div>
-              </div>
-            </div>`;
-        }).join('')}
-      </div>
+      <div id="spk-perf-section"><div class="pg-loading"><div class="spinner"></div><p>Loading performance data…</p></div></div>
     </div>`);
+
+  let perfMap = {};
+  try {
+    const intel = await api('/api/intelligence');
+    for (const s of (intel.speaker_performance || [])) perfMap[s.id] = s;
+  } catch(e) { /* show basic cards if fails */ }
+
+  const cards = S.speakers.map(sp => {
+    const color = avColor(sp.name);
+    const ini   = initials(sp.name);
+    const perf  = perfMap[sp.id];
+    const grade = perf ? (perf.attendance_rate >= 40 ? 'A' : perf.attendance_rate >= 30 ? 'B' : perf.attendance_rate >= 20 ? 'C' : 'D') : null;
+    const gColor = grade ? { A:'#10b981', B:'#6366f1', C:'#f59e0b', D:'#f43f5e' }[grade] : null;
+
+    return `
+      <div class="spk-card" onclick="nav('speaker',${sp.id})">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+          <div class="spk-av" style="background:${color};margin:0">${ini}</div>
+          ${grade ? `<div style="width:34px;height:34px;border-radius:50%;border:2px solid ${gColor};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:${gColor};flex-shrink:0">${grade}</div>` : ''}
+        </div>
+        <div class="spk-name">${esc(sp.name)}</div>
+        <div class="spk-bio">${esc(sp.bio || '')}</div>
+        <div class="spk-stats" style="margin-top:12px">
+          <div>
+            <div class="spk-stat-val" style="color:${color}">${sp.total_webinars}</div>
+            <div class="spk-stat-lbl">Webinars</div>
+          </div>
+          ${perf ? `
+          <div>
+            <div class="spk-stat-val">${fmt(perf.total_regs)}</div>
+            <div class="spk-stat-lbl">Registrations</div>
+          </div>
+          <div>
+            <div class="spk-stat-val" style="color:${gColor}">${perf.attendance_rate}%</div>
+            <div class="spk-stat-lbl">Att. Rate</div>
+          </div>` : ''}
+        </div>
+        ${perf ? `
+        <div style="margin-top:10px">
+          <div style="height:4px;background:var(--border,rgba(0,0,0,0.08));border-radius:4px;overflow:hidden">
+            <div style="width:${Math.min(100,perf.attendance_rate)}%;height:100%;background:${gColor};border-radius:4px;transition:width 0.8s"></div>
+          </div>
+        </div>` : ''}
+      </div>`;
+  }).join('');
+
+  const sect = document.getElementById('spk-perf-section');
+  if (sect) sect.outerHTML = `<div class="spk-grid">${cards}</div>
+    <div style="margin-top:36px">
+      <h2 class="sec-title" style="margin-bottom:16px">Performance Detail</h2>
+      ${_renderSpeakerIntel({ speaker_performance: Object.values(perfMap) })}
+    </div>`;
 }
 
 /* ── Speaker detail ─────────────────────────────────────────────────────── */
@@ -2534,7 +2569,6 @@ async function renderIntelligence() {
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>AI Insights
         </button>
         <button class="intel-tab ${S._intelTab==='topics'?'active':''}"   onclick="S._intelTab='topics';renderIntelligence()">Topic Intelligence</button>
-        <button class="intel-tab ${S._intelTab==='speakers'?'active':''}" onclick="S._intelTab='speakers';renderIntelligence()">Speaker Performance</button>
         <button class="intel-tab ${S._intelTab==='campaign'?'active':''}" onclick="S._intelTab='campaign';renderIntelligence()">Campaign Learning</button>
         <button class="intel-tab ${S._intelTab==='competitor'?'active':''}" onclick="S._intelTab='competitor';renderIntelligence()">Competitor Intel</button>
       </div>
@@ -2556,7 +2590,6 @@ function _drawIntelTab(data, tab) {
   if (!body) return;
   if (tab === 'insights')      _renderAIInsights(body);
   else if (tab === 'topics')   body.innerHTML = _renderTopicIntel(data);
-  else if (tab === 'speakers') body.innerHTML = _renderSpeakerIntel(data);
   else if (tab === 'campaign') body.innerHTML = _renderCampaignIntel(data);
   else if (tab === 'icp')      body.innerHTML = _renderICPIntel(data);
   else if (tab === 'competitor') renderCompetitorIntel();
@@ -2735,7 +2768,6 @@ function _renderSpeakerIntel(data) {
 
       <div class="spk-detail-insight">
         ${s.attendance_rate >= 40 ? `<span style="color:#10b981">✓ Strong attendance — audience stays engaged throughout</span>`
-          : s.attendance_rate >= 20 ? `<span style="color:#f59e0b">~ Room to improve attendance conversion from registrations</span>`
           : `<span style="color:#f43f5e">↙ High drop-off — consider topic-audience fit or promotion timing</span>`}
       </div>
     </div>`;
@@ -2908,10 +2940,6 @@ function _drawCompetitorIntel(body, competitors, activity) {
         <button class="btn btn-primary" onclick="openCompetitorActivityModal()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Log Manually
-        </button>
-        <button class="btn btn-ghost btn-sm" onclick="openAutoResearchModal()" style="border-color:#6366f1;color:#6366f1">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          Research with AI
         </button>
         <button class="btn btn-gradient" onclick="runCompetitorGapAnalysis()" id="comp-gap-btn">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>

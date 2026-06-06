@@ -253,7 +253,6 @@ def _get_intelligence_inner(db: Session):
         FROM webinars w
         LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM registrations GROUP BY webinar_id) reg ON reg.webinar_id = w.id
         LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM attendances WHERE attended=TRUE GROUP BY webinar_id) att ON att.webinar_id = w.id
-        WHERE w.status = 'completed'
         GROUP BY w.icp
         ORDER BY total_regs DESC
     """)).fetchall()
@@ -662,6 +661,110 @@ Return ONLY valid JSON array."""}]
         "activities_saved": saved,
         "raw_research": raw_research,
     }
+
+
+@app.get("/api/competitor-research/weekly")
+async def weekly_competitor_research(db: Session = Depends(get_db)):
+    """Vercel cron endpoint — runs every Monday to auto-research all competitors."""
+    import os, json, httpx
+    from datetime import date as _date, datetime as _dt
+    from sqlalchemy import text as _t
+
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    if not api_key:
+        return {"error": "OPENROUTER_API_KEY not configured"}
+
+    comps = db.execute(_t("SELECT id, name, website, focus FROM competitors ORDER BY name")).fetchall()
+    results = []
+
+    for comp in comps:
+        today = _date.today().strftime("%B %d, %Y")
+        try:
+            search_resp = httpx.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+                         "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
+                json={
+                    "model": "anthropic/claude-sonnet-4-5",
+                    "max_tokens": 1200,
+                    "messages": [{"role": "user", "content":
+                        f"""Today is {today}. Based on your knowledge, describe "{comp.name}" ({comp.website or ''}).
+
+What recent webinars, events, content or thought leadership have they done in the past 3 months? Focus: Indian wealth advisory, HNI/NRI, PMS, financial planning.
+
+For each item describe: approximate date, topic/title, target audience, key messaging angle.
+
+Only report what you are reasonably confident about. Keep it concise."""}]
+                },
+                timeout=30.0
+            )
+            search_resp.raise_for_status()
+            raw_research = search_resp.json()["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            results.append({"competitor": comp.name, "error": str(e)})
+            continue
+
+        try:
+            parse_resp = httpx.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+                         "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
+                json={
+                    "model": "anthropic/claude-sonnet-4-5",
+                    "max_tokens": 1500,
+                    "messages": [{"role": "user", "content":
+                        f"""Extract activity records from this research about "{comp.name}":
+
+{raw_research}
+
+Return JSON array. Each item:
+{{"activity_date":"YYYY-MM-DD","format":"webinar|linkedin|youtube|report|event|other","topic":"title max 120 chars","speaker":null,"audience_focus":"HNI|NRI|retail|etc","messaging_angle":"key hook max 80 chars","cta":null,"link":null,"notes":"one line"}}
+
+Use today {_date.today().isoformat()} if date unknown. Return [] if nothing concrete. ONLY valid JSON array."""}]
+                },
+                timeout=25.0
+            )
+            parse_resp.raise_for_status()
+            raw2 = parse_resp.json()["choices"][0]["message"]["content"].strip()
+            activities = _extract_json(raw2)
+            if not isinstance(activities, list):
+                activities = []
+        except Exception:
+            activities = []
+
+        saved = 0
+        for act in activities:
+            try:
+                existing = db.execute(_t(
+                    "SELECT id FROM competitor_activity WHERE competitor_id=:cid AND topic=:t AND activity_date=:d"
+                ), {"cid": comp.id, "t": str(act.get("topic",""))[:200], "d": str(act.get("activity_date",""))}).fetchone()
+                if existing:
+                    continue
+                db.execute(_t("""
+                    INSERT INTO competitor_activity
+                    (competitor_id, activity_date, format, topic, speaker, audience_focus, messaging_angle, cta, link, notes)
+                    VALUES (:cid,:d,:fmt,:topic,:spk,:aud,:angle,:cta,:link,:notes)
+                """), {
+                    "cid": comp.id,
+                    "d": str(act.get("activity_date",""))[:10] or str(_date.today()),
+                    "fmt": str(act.get("format","other"))[:50],
+                    "topic": str(act.get("topic",""))[:200],
+                    "spk": str(act.get("speaker",""))[:100] if act.get("speaker") else None,
+                    "aud": str(act.get("audience_focus",""))[:100] if act.get("audience_focus") else None,
+                    "angle": str(act.get("messaging_angle",""))[:200] if act.get("messaging_angle") else None,
+                    "cta": str(act.get("cta",""))[:100] if act.get("cta") else None,
+                    "link": str(act.get("link",""))[:500] if act.get("link") else None,
+                    "notes": str(act.get("notes",""))[:500] if act.get("notes") else None,
+                })
+                db.commit()
+                saved += 1
+            except Exception:
+                db.rollback()
+
+        results.append({"competitor": comp.name, "found": len(activities), "saved": saved})
+
+    return {"ran_at": _date.today().isoformat(), "results": results}
+
 
 
 @app.get("/api/intelligence/insights")
