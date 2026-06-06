@@ -5587,6 +5587,184 @@ html:not(.dark) .card-body span:not([class]) { color: var(--rh-text-1) !importan
   margin-top: 4px;
 }
 
+/* ── AI Insights v2 ─────────────────────────────────────────────────────── */
+.insights-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  gap: 12px;
+  text-align: center;
+}
+.insights-loading-icon {
+  width: 56px;
+  height: 56px;
+  background: #6366f118;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.insights-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.insights-grid-v2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 18px;
+}
+.insight-card-v2 {
+  background: var(--ic-bg, rgba(255,255,255,0.04));
+  border: 1.5px solid var(--ic, rgba(255,255,255,0.12));
+  border-radius: 16px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  opacity: 0;
+  animation: insightFadeIn 0.4s ease forwards;
+  transition: transform 0.18s, box-shadow 0.18s;
+}
+.insight-card-v2:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.14);
+}
+@keyframes insightFadeIn {
+  from { opacity:0; transform:translateY(10px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+.insight-v2-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.insight-v2-type {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 4px 10px 4px 8px;
+  border-radius: 20px;
+  border: 1px solid;
+}
+.insight-v2-metric {
+  font-size: 14px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+}
+.insight-v2-headline {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.35;
+}
+.insight-v2-detail {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  flex: 1;
+}
+.insight-v2-action {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding-top: 10px;
+  border-top: 1px solid var(--border, rgba(255,255,255,0.07));
+  margin-top: 4px;
+}
+.insight-v2-action span { flex: 1; line-height: 1.45; }
+
+/* ── Speaker Detail Cards ───────────────────────────────────────────────── */
+.spk-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 18px;
+  margin-top: 4px;
+}
+.spk-detail-card {
+  background: var(--card-bg, rgba(255,255,255,0.04));
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: 16px;
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: box-shadow 0.18s, transform 0.18s;
+}
+.spk-detail-card:hover {
+  box-shadow: 0 6px 24px rgba(0,0,0,0.12);
+  transform: translateY(-1px);
+}
+.spk-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.spk-grade-ring {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 2.5px solid var(--g-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.spk-detail-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+.spk-metric-box {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.spk-metric-val {
+  font-size: 18px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  line-height: 1;
+}
+.spk-metric-lbl {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+.spk-metric-bar {
+  height: 3px;
+  background: var(--border, rgba(255,255,255,0.08));
+  border-radius: 4px;
+  margin-top: 4px;
+  overflow: hidden;
+}
+.spk-detail-insight {
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  border-left: 3px solid rgba(255,255,255,0.1);
+  line-height: 1.4;
+}
+
 /* Topics news context */
 .topics-news-detail {
   grid-column: 1 / -1;

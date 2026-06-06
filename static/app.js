@@ -2536,7 +2536,6 @@ async function renderIntelligence() {
         <button class="intel-tab ${S._intelTab==='topics'?'active':''}"   onclick="S._intelTab='topics';renderIntelligence()">Topic Intelligence</button>
         <button class="intel-tab ${S._intelTab==='speakers'?'active':''}" onclick="S._intelTab='speakers';renderIntelligence()">Speaker Performance</button>
         <button class="intel-tab ${S._intelTab==='campaign'?'active':''}" onclick="S._intelTab='campaign';renderIntelligence()">Campaign Learning</button>
-        <button class="intel-tab ${S._intelTab==='icp'?'active':''}"      onclick="S._intelTab='icp';renderIntelligence()">ICP Refinement</button>
         <button class="intel-tab ${S._intelTab==='competitor'?'active':''}" onclick="S._intelTab='competitor';renderIntelligence()">Competitor Intel</button>
       </div>
       <div id="intel-body"><div class="pg-loading"><div class="spinner"></div><p>Loading intelligence…</p></div></div>
@@ -2572,7 +2571,16 @@ const INSIGHT_TYPE_META = {
 };
 
 async function _renderAIInsights(body) {
-  body.innerHTML = `<div class="intel-section"><div class="pg-loading"><div class="spinner"></div><p>Generating AI insights from your data…</p></div></div>`;
+  body.innerHTML = `
+    <div class="intel-section">
+      <div class="insights-loading">
+        <div class="insights-loading-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="spin" style="color:#6366f1"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg>
+        </div>
+        <div style="font-weight:600;font-size:15px;color:var(--text-primary)">Analysing your programme data…</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-top:4px">Claude is reviewing attendance, registrations and webinar patterns</div>
+      </div>
+    </div>`;
   try {
     if (!_intelInsightsCache) _intelInsightsCache = await api('/api/intelligence/insights');
     const insights = _intelInsightsCache.insights || [];
@@ -2580,34 +2588,49 @@ async function _renderAIInsights(body) {
       body.innerHTML = `<div class="intel-section"><div class="empty-state"><div class="empty-title">Not enough data for insights yet</div><div class="empty-sub">Upload registration and attendance data for completed webinars first.</div></div></div>`;
       return;
     }
-    const cards = insights.map(ins => {
-      const meta = INSIGHT_TYPE_META[ins.type] || INSIGHT_TYPE_META.trend;
+
+    const TYPE_CFG = {
+      win:         { icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>`, color:'#10b981', bg:'#10b98110', label:'Win' },
+      risk:        { icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`, color:'#f43f5e', bg:'#f43f5e10', label:'Risk' },
+      opportunity: { icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>`, color:'#6366f1', bg:'#6366f110', label:'Opportunity' },
+      trend:       { icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`, color:'#f59e0b', bg:'#f59e0b10', label:'Trend' },
+      action:      { icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`, color:'#22d3ee', bg:'#22d3ee10', label:'Action' },
+    };
+
+    const cards = insights.map((ins, i) => {
+      const cfg = TYPE_CFG[ins.type] || TYPE_CFG.trend;
       return `
-      <div class="insight-card" style="border-left:3px solid ${meta.color}">
-        <div class="insight-card-header">
-          <span class="insight-type-badge" style="background:${meta.color}18;color:${meta.color};border-color:${meta.color}40">
-            ${meta.icon} ${meta.label}
-          </span>
-          <span class="insight-metric" style="color:${meta.color}">${esc(ins.metric||'')}</span>
+      <div class="insight-card-v2" style="--ic:${cfg.color};--ic-bg:${cfg.bg};animation-delay:${i*80}ms">
+        <div class="insight-v2-top">
+          <div class="insight-v2-type" style="color:${cfg.color};background:${cfg.bg};border-color:${cfg.color}30">
+            <span style="display:flex">${cfg.icon}</span>
+            <span>${cfg.label}</span>
+          </div>
+          ${ins.metric ? `<div class="insight-v2-metric" style="color:${cfg.color}">${esc(ins.metric)}</div>` : ''}
         </div>
-        <div class="insight-headline">${esc(ins.headline)}</div>
-        <div class="insight-detail">${esc(ins.detail)}</div>
-        <div class="insight-action">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-          ${esc(ins.action)}
+        <div class="insight-v2-headline">${esc(ins.headline)}</div>
+        <div class="insight-v2-detail">${esc(ins.detail)}</div>
+        <div class="insight-v2-action">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${cfg.color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          <span>${esc(ins.action)}</span>
         </div>
       </div>`;
     }).join('');
+
+    const ts = _intelInsightsCache.generated_at ? new Date(_intelInsightsCache.generated_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
     body.innerHTML = `
       <div class="intel-section">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div class="insights-header-row">
           <div>
-            <h3 class="intel-h3" style="margin:0">AI-Generated Insights</h3>
-            <p class="intel-p" style="margin:4px 0 0">Based entirely on your real registration and attendance data.</p>
+            <h3 class="intel-h3" style="margin:0">AI Intelligence Report</h3>
+            <p class="intel-p" style="margin:4px 0 0">Derived entirely from real registration, attendance and webinar data in your database.${ts?` Last generated ${ts}.`:''}</p>
           </div>
-          <button class="btn btn-ghost btn-sm" onclick="_intelInsightsCache=null;_renderAIInsights(document.getElementById('intel-body'))">Regenerate</button>
+          <button class="btn btn-ghost btn-sm" onclick="_intelInsightsCache=null;_renderAIInsights(document.getElementById('intel-body'))">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Regenerate
+          </button>
         </div>
-        <div class="insights-grid">${cards}</div>
+        <div class="insights-grid-v2">${cards}</div>
       </div>`;
   } catch(e) {
     body.innerHTML = `<div class="intel-section"><div class="empty-state"><div class="empty-title">Failed to generate insights</div><div class="empty-sub">${esc(e.message)}</div></div></div>`;
@@ -2641,8 +2664,6 @@ function _renderTopicIntel(data) {
     <div class="intel-section">
       <div class="intel-kpis">
         <div class="intel-kpi"><div class="intel-kpi-lbl">Total Webinars</div><div class="intel-kpi-val">${data.total_webinars||0}</div></div>
-        ${data.total_spend ? `<div class="intel-kpi"><div class="intel-kpi-lbl">Total Spend (Campaign)</div><div class="intel-kpi-val">₹${fmt(Math.round(data.total_spend))}</div></div>` : ''}
-        ${data.total_leads ? `<div class="intel-kpi"><div class="intel-kpi-lbl">Total Leads (Campaign)</div><div class="intel-kpi-val">${fmt(data.total_leads)}</div></div>` : ''}
       </div>
       <h3 class="intel-h3">ICP Performance Breakdown</h3>
       <p class="intel-p">Which ICP themes are pulling the right audience? Spend, CPL, leads, impressions and clicks were imported from your <em>RH_Reporting_FY26-27 - Webinar Highlights.csv</em>.</p>
@@ -2656,41 +2677,95 @@ function _renderTopicIntel(data) {
 }
 
 function _renderSpeakerIntel(data) {
-  const rows = (data.speaker_performance || []).map(s => {
+  const speakers = data.speaker_performance || [];
+  if (!speakers.length) {
+    return `<div class="intel-section"><div class="empty-state"><div class="empty-title">No speaker data yet</div><div class="empty-sub">Complete at least 2 webinars per speaker to see performance metrics.</div></div></div>`;
+  }
+
+  // Sort by total_regs desc
+  const sorted = [...speakers].sort((a, b) => b.total_regs - a.total_regs);
+  const avgAttRate = sorted.reduce((s, x) => s + x.attendance_rate, 0) / sorted.length;
+
+  const cards = sorted.map((s, idx) => {
     const grade = s.attendance_rate >= 40 ? 'A' : s.attendance_rate >= 30 ? 'B' : s.attendance_rate >= 20 ? 'C' : 'D';
-    const gColor = { A:'#10B981', B:'#6366F1', C:'#F59E0B', D:'#DC2626' }[grade];
+    const gColor = { A:'#10b981', B:'#6366f1', C:'#f59e0b', D:'#f43f5e' }[grade];
     const av = avColor(s.name); const ini = initials(s.name);
+    const attVsAvg = s.attendance_rate - avgAttRate;
+    const attVsAvgStr = attVsAvg >= 0 ? `+${attVsAvg.toFixed(1)}%` : `${attVsAvg.toFixed(1)}%`;
+    const attVsAvgColor = attVsAvg >= 0 ? '#10b981' : '#f43f5e';
+    const regsBarPct = sorted[0].total_regs > 0 ? Math.round(s.total_regs / sorted[0].total_regs * 100) : 0;
+    const attBarPct = Math.min(100, s.attendance_rate);
+    const badge = idx === 0 ? `<span style="background:#f59e0b22;color:#f59e0b;border:1px solid #f59e0b40;border-radius:6px;font-size:10px;font-weight:700;padding:2px 7px;margin-left:8px">TOP</span>` : '';
+
     return `
-    <tr onclick="nav('speakers')">
-      <td>
-        <div style="display:flex;align-items:center;gap:10px">
-          <div class="spk-avatar" style="width:32px;height:32px;background:${av};color:#fff;display:flex;align-items:center;justify-content:center;border-radius:8px;font-weight:700;font-size:11px">${ini}</div>
-          <span style="font-weight:600;color:var(--text-primary)">${esc(s.name)}</span>
+    <div class="spk-detail-card">
+      <div class="spk-detail-header">
+        <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0">
+          <div style="width:44px;height:44px;background:${av};color:#fff;display:flex;align-items:center;justify-content:center;border-radius:12px;font-weight:800;font-size:15px;flex-shrink:0">${ini}</div>
+          <div style="min-width:0">
+            <div style="font-weight:700;font-size:15px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.name)}${badge}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${s.webinars} webinar${s.webinars>1?'s':''} hosted</div>
+          </div>
         </div>
-      </td>
-      <td style="text-align:center;font-family:var(--font-mono);font-weight:600">${s.webinars}</td>
-      <td style="text-align:right;font-family:var(--font-mono);font-weight:600">${fmt(s.total_regs)}</td>
-      <td style="text-align:right;font-family:var(--font-mono);color:var(--text-secondary)">${fmt(s.avg_regs_per_webinar)}</td>
-      <td style="text-align:right">
-        <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end">
-          <span style="color:${gColor};font-weight:700;font-family:var(--font-mono)">${s.attendance_rate}%</span>
-          <span class="intel-grade" style="background:${gColor}1A;color:${gColor};border-color:${gColor}40">${grade}</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="spk-grade-ring" style="--g-color:${gColor}">
+            <span style="font-size:18px;font-weight:800;color:${gColor}">${grade}</span>
+          </div>
         </div>
-      </td>
-      <td style="text-align:right;font-family:var(--font-mono);color:var(--text-secondary)">₹${fmt(Math.round(s.spend||0))}</td>
-      <td style="text-align:right;font-family:var(--font-mono);color:var(--text-secondary)">${s.cost_per_attendee>0?'₹'+fmt(Math.round(s.cost_per_attendee)):'—'}</td>
-    </tr>`;
+      </div>
+
+      <div class="spk-detail-metrics">
+        <div class="spk-metric-box">
+          <div class="spk-metric-val">${fmt(s.total_regs)}</div>
+          <div class="spk-metric-lbl">Total Registrations</div>
+          <div class="spk-metric-bar"><div style="width:${regsBarPct}%;background:${av};height:100%;border-radius:4px;transition:width 0.8s"></div></div>
+        </div>
+        <div class="spk-metric-box">
+          <div class="spk-metric-val">${fmt(Math.round(s.avg_regs_per_webinar))}</div>
+          <div class="spk-metric-lbl">Avg Regs / Webinar</div>
+        </div>
+        <div class="spk-metric-box">
+          <div class="spk-metric-val" style="color:${gColor}">${s.attendance_rate}%</div>
+          <div class="spk-metric-lbl">Attendance Rate</div>
+          <div class="spk-metric-bar"><div style="width:${attBarPct}%;background:${gColor};height:100%;border-radius:4px;transition:width 0.8s"></div></div>
+        </div>
+        <div class="spk-metric-box">
+          <div class="spk-metric-val" style="color:${attVsAvgColor};font-size:15px">${attVsAvgStr}</div>
+          <div class="spk-metric-lbl">vs. Programme Avg</div>
+        </div>
+        <div class="spk-metric-box">
+          <div class="spk-metric-val">${fmt(s.total_att)}</div>
+          <div class="spk-metric-lbl">Total Attendees</div>
+        </div>
+        <div class="spk-metric-box">
+          <div class="spk-metric-val">${s.cost_per_attendee>0?'₹'+fmt(Math.round(s.cost_per_attendee)):'—'}</div>
+          <div class="spk-metric-lbl">Cost / Attendee</div>
+        </div>
+      </div>
+
+      <div class="spk-detail-insight">
+        ${s.attendance_rate >= 40 ? `<span style="color:#10b981">✓ Exceptional retention — audience stays engaged throughout</span>`
+          : s.attendance_rate >= 30 ? `<span style="color:#6366f1">↗ Above-average attendance rate for the programme</span>`
+          : s.attendance_rate >= 20 ? `<span style="color:#f59e0b">~ Room to improve attendance conversion from registrations</span>`
+          : `<span style="color:#f43f5e">↙ High drop-off — consider topic-audience fit or promotion timing</span>`}
+      </div>
+    </div>`;
   }).join('');
+
   return `
     <div class="intel-section">
-      <h3 class="intel-h3">Speaker Pull & Conversion</h3>
-      <p class="intel-p">Who's bringing in the right audience at what cost?</p>
-      <div class="intel-table-wrap">
-        <table class="intel-table">
-          <thead><tr><th>Speaker</th><th style="text-align:center">Webinars</th><th style="text-align:right">Total Regs</th><th style="text-align:right">Avg/Webinar</th><th style="text-align:right">Att Rate</th><th style="text-align:right">Total Spend</th><th style="text-align:right">Cost/Att</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:12px">
+        <div>
+          <h3 class="intel-h3" style="margin:0">Speaker Performance Deep-Dive</h3>
+          <p class="intel-p" style="margin:4px 0 0">Programme avg attendance rate: <strong>${avgAttRate.toFixed(1)}%</strong>. Grade A = 40%+, B = 30–40%, C = 20–30%, D below 20%.</p>
+        </div>
+        <div class="intel-kpis" style="margin:0">
+          <div class="intel-kpi" style="min-width:80px"><div class="intel-kpi-lbl">Speakers</div><div class="intel-kpi-val">${sorted.length}</div></div>
+          <div class="intel-kpi" style="min-width:80px"><div class="intel-kpi-lbl">Total Regs</div><div class="intel-kpi-val">${fmt(sorted.reduce((s,x)=>s+x.total_regs,0))}</div></div>
+          <div class="intel-kpi" style="min-width:80px"><div class="intel-kpi-lbl">Avg Att Rate</div><div class="intel-kpi-val">${avgAttRate.toFixed(1)}%</div></div>
+        </div>
       </div>
+      <div class="spk-detail-grid">${cards}</div>
     </div>`;
 }
 
@@ -3076,7 +3151,7 @@ async function runAutoResearch() {
   if (btn) { btn.disabled = true; btn.textContent = 'Searching…'; }
   if (result) result.innerHTML = `<div style="font-size:12px;color:var(--text-muted)">Searching the web for recent activity… this takes ~15 seconds.</div>`;
   try {
-    const data = await api('/api/competitor-research', { method:'POST', body: JSON.stringify({ competitor_id: parseInt(cid) }) });
+    const data = await api('/api/competitor-research', 'POST', { competitor_id: parseInt(cid) });
     if (result) result.innerHTML = `
       <div style="background:#10b98118;border:1px solid #10b98140;border-radius:8px;padding:14px;font-size:13px">
         <div style="font-weight:700;color:#10b981;margin-bottom:6px">✓ Research complete</div>
