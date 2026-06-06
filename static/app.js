@@ -434,6 +434,7 @@ function nav(page, sub) {
     case 'leaderboard': renderLeaderboard();        break;
     case 'topics':      renderTopics();             break;
     case 'intelligence': renderIntelligence();      break;
+    case 'pipeline':    renderPipeline();           break;
     case 'webinar':     renderWebinarDetail(sub);   break;
     case 'speaker':     renderSpeakerDetail(sub);   break;
   }
@@ -1731,9 +1732,14 @@ async function renderLeaderboard(speakerId, webinarId) {
                 <td>${renderReadinessBadge(readinessKey, e.tag)}</td>
                 <td><span class="lb-score">${e.score}</span></td>
                 <td>
+                  <div style="display:flex;gap:4px;align-items:center">
                   ${e.email ? `<button class="lb-tag-edit" onclick="openTagEditor('${safeEmail}','${safeName}', '${e.tag||''}')" title="Edit lead tag">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                   </button>` : ''}
+                  ${e.email ? `<button class="lb-tag-edit" onclick="addLeaderboardToPipeline('${safeEmail}','${safeName}')" title="Add to pipeline" style="color:#6366f1">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                  </button>` : ''}
+                  </div>
                 </td>
               </tr>`;
             }).join('')}
@@ -3184,6 +3190,275 @@ function prefillTopicWebinar(speaker, title) {
     if (titleInput) titleInput.value = title;
     if (speakerInput) speakerInput.value = speaker;
   }, 150);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MEETING PIPELINE (Phase 4)
+══════════════════════════════════════════════════════════════════════════ */
+let _pipelineCache = null;
+let _pipelineFilter = 'all';  // all | new | contacted | meeting_booked | converted | not_interested
+
+const PIPELINE_STATUS_META = {
+  new:             { label: 'New',            color: '#6366f1', bg: '#6366f11a' },
+  contacted:       { label: 'Contacted',      color: '#f59e0b', bg: '#f59e0b1a' },
+  meeting_booked:  { label: 'Meeting Booked', color: '#10b981', bg: '#10b9811a' },
+  converted:       { label: 'Converted',      color: '#22d3ee', bg: '#22d3ee1a' },
+  not_interested:  { label: 'Not Interested', color: '#94a3b8', bg: '#94a3b81a' },
+};
+
+async function renderPipeline() {
+  setContent(`
+    <div class="pipeline-page">
+      <div class="page-hd">
+        <div>
+          <h1 class="page-title">Meeting Pipeline</h1>
+          <p class="page-sub">Track hot leads from webinar attendance through to booked meetings and conversions.</p>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-ghost btn-sm" onclick="window.open('/api/pipeline/export','_blank')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export CSV
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="_pipelineCache=null;renderPipeline()">Refresh</button>
+          <button class="btn btn-primary btn-sm" onclick="openAddToPipelineModal()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Lead
+          </button>
+        </div>
+      </div>
+      <div id="pipeline-body"><div class="pg-loading"><div class="spinner"></div><p>Loading pipeline…</p></div></div>
+    </div>`);
+  try {
+    if (!_pipelineCache) _pipelineCache = await api('/api/pipeline');
+    _drawPipeline(_pipelineCache);
+  } catch(e) {
+    document.getElementById('pipeline-body').innerHTML = `<div class="empty-state"><div class="empty-title">Failed to load pipeline</div><div class="empty-sub">${esc(e.message)}</div></div>`;
+  }
+}
+
+function _drawPipeline(contacts) {
+  const body = document.getElementById('pipeline-body');
+  if (!body) return;
+
+  const filtered = _pipelineFilter === 'all' ? contacts : contacts.filter(c => c.status === _pipelineFilter);
+
+  // KPI summary row
+  const counts = {};
+  for (const s of Object.keys(PIPELINE_STATUS_META)) counts[s] = 0;
+  contacts.forEach(c => { if (counts[c.status] !== undefined) counts[c.status]++; });
+
+  const kpiHtml = `
+    <div class="pipeline-kpis">
+      <div class="pipeline-kpi ${_pipelineFilter==='all'?'active':''}" onclick="_pipelineFilter='all';_drawPipeline(_pipelineCache)" style="cursor:pointer">
+        <div class="pipeline-kpi-val">${contacts.length}</div>
+        <div class="pipeline-kpi-lbl">Total</div>
+      </div>
+      ${Object.entries(PIPELINE_STATUS_META).map(([k,m]) => `
+        <div class="pipeline-kpi ${_pipelineFilter===k?'active':''}" onclick="_pipelineFilter='${k}';_drawPipeline(_pipelineCache)" style="cursor:pointer;--kpi-color:${m.color}">
+          <div class="pipeline-kpi-val" style="color:${m.color}">${counts[k]||0}</div>
+          <div class="pipeline-kpi-lbl">${m.label}</div>
+        </div>`).join('')}
+    </div>`;
+
+  if (!filtered.length) {
+    body.innerHTML = kpiHtml + `<div class="empty-state" style="margin-top:32px">
+      <div class="empty-title">${_pipelineFilter==='all'?'No leads in pipeline yet':'No leads in this stage'}</div>
+      <div class="empty-sub">${_pipelineFilter==='all'?'Add leads from the Leaderboard or click "Add Lead" above.':'Try selecting a different stage above.'}</div>
+    </div>`;
+    return;
+  }
+
+  const rows = filtered.map(c => {
+    const meta = PIPELINE_STATUS_META[c.status] || PIPELINE_STATUS_META.new;
+    const av = avColor(c.name); const ini = initials(c.name);
+    const totalMin = c.total_duration || 0;
+    const dur = totalMin >= 60 ? (totalMin/60).toFixed(1)+'h' : totalMin+'m';
+    const followUp = c.follow_up_date ? `<span style="font-size:11px;color:var(--text-muted)">${fmtDate(c.follow_up_date)}</span>` : '';
+    return `
+    <tr class="pipeline-row">
+      <td>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="spk-avatar" style="width:32px;height:32px;min-width:32px;background:${av};color:#fff;display:flex;align-items:center;justify-content:center;border-radius:8px;font-weight:700;font-size:11px">${ini}</div>
+          <div>
+            <div style="font-weight:600;color:var(--text-primary);font-size:13px">${esc(c.name)}</div>
+            <div style="font-size:11px;color:var(--text-muted)">${esc(c.email)}</div>
+          </div>
+        </div>
+      </td>
+      <td style="text-align:center;font-family:var(--font-mono);font-weight:600">${c.total_webinars||0}</td>
+      <td style="text-align:center;font-family:var(--font-mono);color:var(--text-secondary)">${dur}</td>
+      <td style="text-align:center;font-size:11px;color:var(--text-muted)">${c.last_webinar?fmtDate(c.last_webinar):'-'}</td>
+      <td style="text-align:center">
+        <select class="pipeline-status-select" data-email="${esc(c.email)}" style="background:${meta.bg};color:${meta.color};border-color:${meta.color}40"
+          onchange="updatePipelineStatus('${esc(c.email)}',this.value)">
+          ${Object.entries(PIPELINE_STATUS_META).map(([k,m])=>`<option value="${k}" ${c.status===k?'selected':''}>${m.label}</option>`).join('')}
+        </select>
+      </td>
+      <td style="text-align:center;font-size:11px;color:var(--text-muted)">${esc(c.assigned_to||'—')}</td>
+      <td>
+        <div style="font-size:12px;color:var(--text-secondary);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.notes||'')}">
+          ${c.notes ? esc(c.notes) : '<span style="color:var(--text-muted)">No notes</span>'}
+        </div>
+        ${followUp}
+      </td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-xs" onclick="openEditPipelineModal(${JSON.stringify(c).replace(/"/g,'&quot;')})" title="Edit">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="btn btn-ghost btn-xs" style="color:#f43f5e" onclick="removePipelineLead('${esc(c.email)}')" title="Remove">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          </button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  body.innerHTML = kpiHtml + `
+    <div class="intel-table-wrap" style="margin-top:16px">
+      <table class="intel-table pipeline-table">
+        <thead><tr>
+          <th>Lead</th>
+          <th style="text-align:center">Webinars</th>
+          <th style="text-align:center">Time</th>
+          <th style="text-align:center">Last Seen</th>
+          <th style="text-align:center">Status</th>
+          <th style="text-align:center">Assigned</th>
+          <th>Notes</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+async function updatePipelineStatus(email, status) {
+  try {
+    await api(`/api/pipeline/${encodeURIComponent(email)}`, { method:'PUT', body: JSON.stringify({ status }) });
+    const contact = (_pipelineCache||[]).find(c => c.email === email);
+    if (contact) { contact.status = status; _drawPipeline(_pipelineCache); }
+  } catch(e) {
+    alert('Failed to update status: ' + e.message);
+  }
+}
+
+async function removePipelineLead(email) {
+  if (!confirm(`Remove ${email} from pipeline?`)) return;
+  try {
+    await api(`/api/pipeline/${encodeURIComponent(email)}`, { method:'DELETE' });
+    _pipelineCache = (_pipelineCache||[]).filter(c => c.email !== email);
+    _drawPipeline(_pipelineCache);
+  } catch(e) {
+    alert('Failed to remove: ' + e.message);
+  }
+}
+
+function openAddToPipelineModal() {
+  _openPipelineModal(null);
+}
+
+function openEditPipelineModal(contact) {
+  _openPipelineModal(contact);
+}
+
+function _openPipelineModal(contact) {
+  const isEdit = !!contact;
+  const existing = document.getElementById('pipeline-modal-overlay');
+  if (existing) existing.remove();
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="pipeline-modal-overlay" class="modal-overlay open" onclick="if(event.target===this)closePipelineModal()">
+      <div class="modal-box" style="max-width:480px">
+        <div class="modal-header">
+          <h3>${isEdit ? 'Edit Pipeline Lead' : 'Add Lead to Pipeline'}</h3>
+          <button class="modal-close" onclick="closePipelineModal()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;padding:20px 24px">
+          <div class="form-group">
+            <label class="form-label">Email *</label>
+            <input class="form-input" id="pl-email" type="email" value="${esc(contact?.email||'')}" placeholder="lead@example.com" ${isEdit?'readonly':''} />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Status</label>
+            <select class="form-input" id="pl-status">
+              ${Object.entries(PIPELINE_STATUS_META).map(([k,m])=>`<option value="${k}" ${(contact?.status||'new')===k?'selected':''}>${m.label}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Assigned To</label>
+            <input class="form-input" id="pl-assigned" type="text" value="${esc(contact?.assigned_to||'')}" placeholder="Salesperson name" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Follow-up Date</label>
+            <input class="form-input" id="pl-followup" type="date" value="${esc(contact?.follow_up_date||'')}" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notes</label>
+            <textarea class="form-input" id="pl-notes" rows="3" placeholder="Call notes, context, interest areas…">${esc(contact?.notes||'')}</textarea>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding:16px 24px;display:flex;justify-content:flex-end;gap:8px">
+          <button class="btn btn-ghost" onclick="closePipelineModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="savePipelineLead()">
+            ${isEdit ? 'Save Changes' : 'Add to Pipeline'}
+          </button>
+        </div>
+      </div>
+    </div>`);
+}
+
+function closePipelineModal() {
+  const el = document.getElementById('pipeline-modal-overlay');
+  if (el) el.remove();
+}
+
+async function savePipelineLead() {
+  const email     = (document.getElementById('pl-email')?.value || '').trim();
+  const status    = document.getElementById('pl-status')?.value || 'new';
+  const assigned  = (document.getElementById('pl-assigned')?.value || '').trim();
+  const followup  = (document.getElementById('pl-followup')?.value || '').trim();
+  const notes     = (document.getElementById('pl-notes')?.value || '').trim();
+
+  if (!email) { alert('Email is required'); return; }
+
+  try {
+    const btn = document.querySelector('#pipeline-modal-overlay .btn-primary');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    await api(`/api/pipeline/${encodeURIComponent(email)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status, assigned_to: assigned||null, follow_up_date: followup||null, notes: notes||null }),
+    });
+    closePipelineModal();
+    _pipelineCache = null;
+    if (S.page === 'pipeline') {
+      _pipelineCache = await api('/api/pipeline');
+      _drawPipeline(_pipelineCache);
+    }
+  } catch(e) {
+    alert('Save failed: ' + e.message);
+    const btn = document.querySelector('#pipeline-modal-overlay .btn-primary');
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+  }
+}
+
+/* Add to pipeline from leaderboard row */
+async function addLeaderboardToPipeline(email, name) {
+  try {
+    await api(`/api/pipeline/${encodeURIComponent(email)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: 'new' }),
+    });
+    _pipelineCache = null;
+    _pipelineToast(`${name} added to pipeline`);
+  } catch(e) {
+    alert('Failed: ' + e.message);
+  }
+}
+
+function _pipelineToast(msg) {
+  showToast(msg, 'success');
 }
 
 /* ── AI Chatbot ──────────────────────────────────────────────────────────── */

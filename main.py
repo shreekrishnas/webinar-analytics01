@@ -1808,6 +1808,133 @@ def get_leaderboard(
     return crud.get_leaderboard(db, speaker_id=speaker_id, webinar_id=webinar_id, limit=limit)
 
 
+# ── Meeting Pipeline ─────────────────────────────────────────────────────────
+
+PIPELINE_STATUSES = {"new", "contacted", "meeting_booked", "converted", "not_interested"}
+
+
+@app.get("/api/pipeline")
+def list_pipeline(db: Session = Depends(get_db)):
+    """Return all pipeline contacts enriched with leaderboard data."""
+    from sqlalchemy import text as _text
+    contacts = db.execute(_text(
+        "SELECT email, status, assigned_to, notes, follow_up_date, added_at, updated_at FROM pipeline_contacts ORDER BY updated_at DESC"
+    )).fetchall()
+
+    # Build leaderboard lookup: email → {name, total_webinars, total_duration, readiness, last_webinar}
+    lb_rows = db.execute(_text("""
+        SELECT
+            r.email,
+            r.attendee_name AS name,
+            COUNT(DISTINCT a.webinar_id) AS total_webinars,
+            COALESCE(SUM(a.duration_minutes), 0) AS total_duration,
+            MAX(w.date) AS last_webinar
+        FROM registrations r
+        JOIN attendances a ON a.registration_id = r.id AND a.attended = TRUE
+        JOIN webinars w ON w.id = a.webinar_id
+        GROUP BY r.email, r.attendee_name
+    """)).fetchall()
+    lb_map = {}
+    for row in lb_rows:
+        # Keep highest total_duration per email (in case of duplicates)
+        if row.email not in lb_map or row.total_duration > lb_map[row.email]['total_duration']:
+            lb_map[row.email] = {
+                "name": row.name,
+                "total_webinars": row.total_webinars,
+                "total_duration": row.total_duration,
+                "last_webinar": str(row.last_webinar) if row.last_webinar else None,
+            }
+
+    # Lead tags lookup (table may not exist in all environments)
+    try:
+        tags = db.execute(_text("SELECT email, tag FROM lead_tags")).fetchall()
+        tag_map = {t.email: t.tag for t in tags}
+    except Exception:
+        tag_map = {}
+
+    result = []
+    for c in contacts:
+        lb = lb_map.get(c.email, {})
+        result.append({
+            "email": c.email,
+            "name": lb.get("name") or c.email,
+            "status": c.status,
+            "assigned_to": c.assigned_to,
+            "notes": c.notes,
+            "follow_up_date": str(c.follow_up_date) if c.follow_up_date else None,
+            "added_at": str(c.added_at) if c.added_at else None,
+            "updated_at": str(c.updated_at) if c.updated_at else None,
+            "total_webinars": lb.get("total_webinars", 0),
+            "total_duration": lb.get("total_duration", 0),
+            "last_webinar": lb.get("last_webinar"),
+            "lead_tag": tag_map.get(c.email, ""),
+        })
+    return result
+
+
+@app.put("/api/pipeline/{email}", status_code=200)
+def upsert_pipeline(email: str, payload: dict, db: Session = Depends(get_db)):
+    """Add or update a contact in the pipeline."""
+    from sqlalchemy import text as _text
+    from datetime import datetime as _dt
+
+    status = payload.get("status", "new")
+    if status not in PIPELINE_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {', '.join(sorted(PIPELINE_STATUSES))}")
+
+    assigned_to   = (payload.get("assigned_to") or "").strip() or None
+    notes         = (payload.get("notes") or "").strip() or None
+    follow_up_raw = (payload.get("follow_up_date") or "").strip() or None
+    now = _dt.utcnow().isoformat(sep=" ", timespec="seconds")
+
+    # Check if exists (SQLite vs PostgreSQL upsert compatible pattern)
+    existing = db.execute(_text("SELECT email FROM pipeline_contacts WHERE email = :e"), {"e": email}).fetchone()
+    if existing:
+        db.execute(_text("""
+            UPDATE pipeline_contacts
+            SET status=:s, assigned_to=:a, notes=:n, follow_up_date=:f, updated_at=:u
+            WHERE email=:e
+        """), {"s": status, "a": assigned_to, "n": notes, "f": follow_up_raw, "u": now, "e": email})
+    else:
+        db.execute(_text("""
+            INSERT INTO pipeline_contacts (email, status, assigned_to, notes, follow_up_date, added_at, updated_at)
+            VALUES (:e, :s, :a, :n, :f, :u, :u)
+        """), {"e": email, "s": status, "a": assigned_to, "n": notes, "f": follow_up_raw, "u": now})
+    db.commit()
+    return {"email": email, "status": status}
+
+
+@app.delete("/api/pipeline/{email}", status_code=204)
+def remove_pipeline(email: str, db: Session = Depends(get_db)):
+    from sqlalchemy import text as _text
+    db.execute(_text("DELETE FROM pipeline_contacts WHERE email = :e"), {"e": email})
+    db.commit()
+
+
+@app.get("/api/pipeline/export")
+def export_pipeline(db: Session = Depends(get_db)):
+    """Download full pipeline as CSV."""
+    from sqlalchemy import text as _text
+    contacts = db.execute(_text(
+        "SELECT email, status, assigned_to, notes, follow_up_date, added_at FROM pipeline_contacts ORDER BY updated_at DESC"
+    )).fetchall()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["Email", "Status", "Assigned To", "Notes", "Follow Up Date", "Added At"])
+    for c in contacts:
+        writer.writerow([
+            c.email, c.status or "", c.assigned_to or "",
+            c.notes or "", str(c.follow_up_date) if c.follow_up_date else "", str(c.added_at) if c.added_at else "",
+        ])
+    data = buf.getvalue().encode("utf-8-sig")
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="pipeline.csv"'},
+    )
+
+
 # ── Admin: fix out-of-sync sequences ─────────────────────────────────────────
 
 @app.post("/api/admin/bulk-update-webinars")

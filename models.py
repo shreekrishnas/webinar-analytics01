@@ -94,6 +94,19 @@ class WebinarNote(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class PipelineContact(Base):
+    """Sales pipeline: tracks hot leads from webinars through to meeting/conversion."""
+    __tablename__ = "pipeline_contacts"
+
+    email = Column(String, primary_key=True, index=True)
+    status = Column(String, default="new")   # new | contacted | meeting_booked | converted | not_interested
+    assigned_to = Column(String)
+    notes = Column(Text)
+    follow_up_date = Column(Date, nullable=True)
+    added_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class WebinarAd(Base):
     __tablename__ = "webinar_ads"
 
