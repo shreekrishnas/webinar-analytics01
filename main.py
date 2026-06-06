@@ -83,10 +83,24 @@ async def root():
 
 # ── Platform stats ────────────────────────────────────────────────────────────
 
-@app.get("/api/stats", response_model=schemas.PlatformStats)
+@app.get("/api/stats")
 def platform_stats(response: Response, db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store"
-    return crud.get_platform_stats(db)
+    stats = crud.get_platform_stats(db)
+    # Add follow-up pending: attendees not yet in pipeline or still 'new'
+    try:
+        from sqlalchemy import text as _t
+        fp = db.execute(_t("""
+            SELECT COUNT(DISTINCT r.email) FROM attendances a
+            JOIN registrations r ON r.id=a.registration_id
+            WHERE a.attended=TRUE AND r.email IS NOT NULL
+            AND r.email NOT IN (SELECT email FROM pipeline_contacts WHERE status != 'new')
+        """)).fetchone()[0] or 0
+        result = stats.dict() if hasattr(stats, 'dict') else dict(stats)
+        result['followup_pending'] = int(fp)
+        return result
+    except Exception:
+        return stats
 
 
 # ── Webinars ──────────────────────────────────────────────────────────────────
@@ -280,11 +294,7 @@ def _get_intelligence_inner(db: Session):
             COALESCE(w.icp, 'Others') AS icp,
             COUNT(*) AS webinar_count,
             COALESCE(SUM(reg.cnt), 0) AS total_regs,
-            COALESCE(SUM(att.cnt), 0) AS total_att,
-            COALESCE(SUM(w.spend), 0) AS total_spend,
-            COALESCE(SUM(w.leads), 0) AS total_leads,
-            AVG(w.cpl) AS avg_cpl,
-            COALESCE(SUM(w.impressions), 0) AS total_impressions
+            COALESCE(SUM(att.cnt), 0) AS total_att
         FROM webinars w
         LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM registrations GROUP BY webinar_id) reg ON reg.webinar_id = w.id
         LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM attendances WHERE attended=TRUE GROUP BY webinar_id) att ON att.webinar_id = w.id
@@ -297,17 +307,12 @@ def _get_intelligence_inner(db: Session):
         regs = int(r.total_regs or 0)
         att = int(r.total_att or 0)
         rate = round(att / regs * 100, 1) if regs else 0
-        cost_per_att = round(float(r.total_spend or 0) / att, 1) if att else 0
         icp_rows.append({
             "icp": r.icp,
             "webinar_count": int(r.webinar_count or 0),
             "total_regs": regs,
             "total_att": att,
             "attendance_rate": rate,
-            "total_spend": round(float(r.total_spend or 0), 0),
-            "total_leads": int(r.total_leads or 0),
-            "avg_cpl": round(float(r.avg_cpl or 0), 1),
-            "cost_per_attendee": cost_per_att,
         })
 
     # ── 2. Speaker deep performance ──
@@ -317,8 +322,6 @@ def _get_intelligence_inner(db: Session):
             COUNT(DISTINCT w.id) AS webinars,
             COALESCE(SUM(reg.cnt), 0) AS total_regs,
             COALESCE(SUM(att.cnt), 0) AS total_att,
-            COALESCE(SUM(w.spend), 0) AS spend,
-            AVG(w.cpl) AS avg_cpl,
             AVG(reg.cnt) AS avg_regs_per_webinar
         FROM speakers s
         JOIN webinars w ON w.speaker_id = s.id OR w.co_speaker_id = s.id
@@ -335,7 +338,6 @@ def _get_intelligence_inner(db: Session):
         regs = int(r.total_regs or 0)
         att = int(r.total_att or 0)
         rate = round(att / regs * 100, 1) if regs else 0
-        cost_per_att = round(float(r.spend or 0) / att, 1) if att else 0
         spk_rows.append({
             "id": r.id,
             "name": r.name,
@@ -344,15 +346,12 @@ def _get_intelligence_inner(db: Session):
             "total_att": att,
             "attendance_rate": rate,
             "avg_regs_per_webinar": round(float(r.avg_regs_per_webinar or 0), 0),
-            "spend": round(float(r.spend or 0), 0),
-            "avg_cpl": round(float(r.avg_cpl or 0), 1),
-            "cost_per_attendee": cost_per_att,
         })
 
     # ── 3. Campaign learning: best day/time + budget tier ──
     # Best day of week
     day_rows = db.execute(_t("""
-        SELECT w.date, COALESCE(reg.cnt, 0) AS regs, COALESCE(att.cnt, 0) AS att, w.spend
+        SELECT w.date, COALESCE(reg.cnt, 0) AS regs, COALESCE(att.cnt, 0) AS att
         FROM webinars w
         LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM registrations GROUP BY webinar_id) reg ON reg.webinar_id = w.id
         LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM attendances WHERE attended=TRUE GROUP BY webinar_id) att ON att.webinar_id = w.id
@@ -384,16 +383,6 @@ def _get_intelligence_inner(db: Session):
     ]
     day_order = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
     day_perf.sort(key=lambda x: day_order.index(x["day"]))
-
-    # Budget efficiency tiers
-    budget_eff = db.execute(_t("""
-        SELECT w.title, w.date, w.spend, COALESCE(reg.cnt,0) AS regs, COALESCE(att.cnt,0) AS att, w.cpl
-        FROM webinars w
-        LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM registrations GROUP BY webinar_id) reg ON reg.webinar_id = w.id
-        LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM attendances WHERE attended=TRUE GROUP BY webinar_id) att ON att.webinar_id = w.id
-        WHERE w.spend > 0 AND w.status='completed'
-        ORDER BY w.spend ASC
-    """)).fetchall()
 
     # ── 4. ICP refinement: email-domain analysis (Python-side aggregation) ──
     all_emails = db.execute(_t("""
@@ -454,10 +443,6 @@ def _get_intelligence_inner(db: Session):
             "rate": round(at/rg*100, 1) if rg else 0,
         })
 
-    # Only include spend/leads totals if they actually have real campaign data
-    raw_spend = sum(r["total_spend"] for r in icp_rows)
-    raw_leads = sum(r["total_leads"] for r in icp_rows)
-
     return {
         "topic_intelligence": icp_rows,
         "speaker_performance": spk_rows,
@@ -465,9 +450,335 @@ def _get_intelligence_inner(db: Session):
         "domain_analysis": domains,
         "source_performance": sources,
         "total_webinars": sum(r["webinar_count"] for r in icp_rows),
-        "total_spend": raw_spend if raw_spend > 0 else None,
-        "total_leads": raw_leads if raw_leads > 0 else None,
     }
+
+
+@app.get("/api/webinar-funnel/{webinar_id}")
+def get_webinar_funnel(webinar_id: int, db: Session = Depends(get_db)):
+    """Return funnel data for a single webinar: regs -> attendees -> follow-up."""
+    from sqlalchemy import text as _t
+    w = db.query(models.Webinar).filter(models.Webinar.id == webinar_id).first()
+    if not w:
+        raise HTTPException(status_code=404, detail="Webinar not found")
+
+    regs = db.execute(_t("SELECT COUNT(*) FROM registrations WHERE webinar_id=:w"), {"w": webinar_id}).fetchone()[0]
+    att = db.execute(_t("SELECT COUNT(*) FROM attendances WHERE webinar_id=:w AND attended=TRUE"), {"w": webinar_id}).fetchone()[0]
+
+    # Check if ads exist for this webinar
+    ads = db.execute(_t("SELECT SUM(impressions), SUM(clicks) FROM webinar_ads WHERE webinar_id=:w"), {"w": webinar_id}).fetchone()
+    impressions = int(ads[0] or 0)
+    clicks = int(ads[1] or 0)
+
+    regs = int(regs or 0)
+    att = int(att or 0)
+    no_show = max(0, regs - att)
+
+    # Pipeline follow-up count for attendees who have email
+    att_emails = db.execute(_t("""
+        SELECT r.email FROM attendances a
+        JOIN registrations r ON r.id = a.registration_id
+        WHERE a.webinar_id=:w AND a.attended=TRUE AND r.email IS NOT NULL
+    """), {"w": webinar_id}).fetchall()
+    att_email_list = [r.email for r in att_emails]
+
+    followed_up = 0
+    if att_email_list:
+        placeholders = ','.join([f"'{e}'" for e in att_email_list[:100]])
+        followed_up = db.execute(_t(f"SELECT COUNT(*) FROM pipeline_contacts WHERE email IN ({placeholders}) AND status NOT IN ('new')")).fetchone()[0] or 0
+
+    stages = []
+    if impressions > 0:
+        stages.append({"label": "Impressions", "count": impressions, "pct": 100})
+        click_pct = round(clicks/impressions*100, 1) if impressions else 0
+        stages.append({"label": "Clicks", "count": clicks, "pct": click_pct, "drop": round(100-click_pct, 1)})
+        reg_pct = round(regs/clicks*100, 1) if clicks else 0
+        stages.append({"label": "Registrations", "count": regs, "pct": reg_pct, "drop": round(100-reg_pct, 1)})
+    else:
+        stages.append({"label": "Registrations", "count": regs, "pct": 100})
+
+    att_pct = round(att/regs*100, 1) if regs else 0
+    stages.append({"label": "Attendees", "count": att, "pct": att_pct, "drop": round(100-att_pct, 1)})
+
+    fu_pct = round(followed_up/att*100, 1) if att else 0
+    stages.append({"label": "Followed Up", "count": followed_up, "pct": fu_pct, "drop": round(100-fu_pct, 1)})
+
+    # Generate insight
+    insight = ""
+    if att_pct < 25 and regs > 50:
+        insight = f"Registrations are strong ({regs}), but only {att_pct}% attended. Review reminder timing and audience commitment."
+    elif att_pct >= 50:
+        insight = f"Excellent attendance rate of {att_pct}%. This webinar had strong audience commitment."
+    elif att_pct >= 35:
+        insight = f"Good attendance rate of {att_pct}%. Consider improving pre-webinar reminders to push above 50%."
+    else:
+        insight = f"Attendance rate of {att_pct}% is below target. Review topic relevance and reminder sequence."
+
+    return {"webinar_id": webinar_id, "title": w.title, "stages": stages, "insight": insight, "has_ads": impressions > 0}
+
+
+@app.get("/api/repeat-audience")
+def get_repeat_audience(db: Session = Depends(get_db)):
+    """Track first-time vs repeat registrants and attendees."""
+    from sqlalchemy import text as _t
+
+    # People who attended multiple webinars
+    repeat_attendees = db.execute(_t("""
+        SELECT r.email, r.attendee_name,
+               COUNT(DISTINCT a.webinar_id) AS webinar_count,
+               MAX(a.joined_at) AS last_seen
+        FROM attendances a
+        JOIN registrations r ON r.id = a.registration_id
+        WHERE a.attended = TRUE AND r.email IS NOT NULL AND r.email NOT LIKE '%@rhorizon%'
+        GROUP BY r.email, r.attendee_name
+        HAVING COUNT(DISTINCT a.webinar_id) >= 2
+        ORDER BY webinar_count DESC
+        LIMIT 50
+    """)).fetchall()
+
+    # Total unique registrants
+    total_unique_regs = db.execute(_t("""
+        SELECT COUNT(DISTINCT email) FROM registrations WHERE email IS NOT NULL
+    """)).fetchone()[0] or 0
+
+    # Total unique attendees
+    total_unique_att = db.execute(_t("""
+        SELECT COUNT(DISTINCT r.email) FROM attendances a
+        JOIN registrations r ON r.id = a.registration_id
+        WHERE a.attended = TRUE AND r.email IS NOT NULL
+    """)).fetchone()[0] or 0
+
+    # People who registered but never attended
+    never_attended = db.execute(_t("""
+        SELECT COUNT(DISTINCT r.email) FROM registrations r
+        WHERE r.email IS NOT NULL
+        AND r.email NOT IN (
+            SELECT DISTINCT r2.email FROM attendances a
+            JOIN registrations r2 ON r2.id = a.registration_id
+            WHERE a.attended = TRUE AND r2.email IS NOT NULL
+        )
+    """)).fetchone()[0] or 0
+
+    repeat_list = [{
+        "email": r.email,
+        "name": r.attendee_name,
+        "webinar_count": int(r.webinar_count),
+        "last_seen": str(r.last_seen)[:10] if r.last_seen else None,
+    } for r in repeat_attendees]
+
+    repeat_count = len(repeat_list)
+
+    return {
+        "total_unique_registrants": int(total_unique_regs),
+        "total_unique_attendees": int(total_unique_att),
+        "repeat_attendees_count": repeat_count,
+        "never_attended_count": int(never_attended),
+        "repeat_attendees": repeat_list,
+    }
+
+
+@app.get("/api/topic-performance")
+def get_topic_performance(db: Session = Depends(get_db)):
+    """Per-ICP topic performance with best speaker and sub-topic suggestions."""
+    from sqlalchemy import text as _t
+
+    # Per ICP: webinar count, regs, attendees, attendance rate, best speaker
+    icp_rows = db.execute(_t("""
+        SELECT
+            COALESCE(w.icp, 'Others') AS icp,
+            COUNT(DISTINCT w.id) AS webinar_count,
+            COALESCE(SUM(reg.cnt), 0) AS total_regs,
+            COALESCE(SUM(att.cnt), 0) AS total_att,
+            s.name AS top_speaker_name,
+            s.id AS top_speaker_id
+        FROM webinars w
+        LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM registrations GROUP BY webinar_id) reg ON reg.webinar_id = w.id
+        LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM attendances WHERE attended=TRUE GROUP BY webinar_id) att ON att.webinar_id = w.id
+        LEFT JOIN speakers s ON s.id = w.speaker_id
+        WHERE w.status = 'completed'
+        GROUP BY w.icp
+        ORDER BY total_att DESC
+    """)).fetchall()
+
+    # For each ICP, find the best speaker (highest att rate for that ICP)
+    icp_data = []
+    for r in icp_rows:
+        regs = int(r.total_regs or 0)
+        att = int(r.total_att or 0)
+        rate = round(att/regs*100, 1) if regs else 0
+
+        # Best speaker for this ICP
+        best_spk = db.execute(_t("""
+            SELECT s.name,
+                   SUM(att.cnt) as total_att,
+                   SUM(reg.cnt) as total_regs
+            FROM webinars w
+            JOIN speakers s ON s.id = w.speaker_id
+            LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM registrations GROUP BY webinar_id) reg ON reg.webinar_id = w.id
+            LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM attendances WHERE attended=TRUE GROUP BY webinar_id) att ON att.webinar_id = w.id
+            WHERE w.status='completed' AND COALESCE(w.icp,'Others')=:icp AND reg.cnt > 0
+            GROUP BY s.name
+            ORDER BY (CAST(att.cnt AS FLOAT)/reg.cnt) DESC
+            LIMIT 1
+        """), {"icp": r.icp or 'Others'}).fetchone()
+
+        # Recent webinars for this ICP
+        recent = db.execute(_t("""
+            SELECT w.title, w.date, s.name as speaker,
+                   (SELECT COUNT(*) FROM registrations WHERE webinar_id=w.id) as regs,
+                   (SELECT COUNT(*) FROM attendances WHERE webinar_id=w.id AND attended=TRUE) as att
+            FROM webinars w LEFT JOIN speakers s ON s.id=w.speaker_id
+            WHERE COALESCE(w.icp,'Others')=:icp AND w.status='completed'
+            ORDER BY w.date DESC LIMIT 3
+        """), {"icp": r.icp or 'Others'}).fetchall()
+
+        grade = 'A' if rate >= 40 else 'B' if rate >= 30 else 'C' if rate >= 20 else 'D'
+
+        icp_data.append({
+            "icp": r.icp or 'Others',
+            "webinar_count": int(r.webinar_count or 0),
+            "total_regs": regs,
+            "total_att": att,
+            "attendance_rate": rate,
+            "grade": grade,
+            "best_speaker": best_spk.name if best_spk else None,
+            "recent_webinars": [
+                {"title": x.title, "date": str(x.date), "speaker": x.speaker,
+                 "regs": int(x.regs or 0), "att": int(x.att or 0),
+                 "rate": round(int(x.att or 0)/int(x.regs or 1)*100, 1)}
+                for x in recent
+            ]
+        })
+
+    return {"topics": icp_data}
+
+
+@app.get("/api/lead-quality")
+def get_lead_quality(db: Session = Depends(get_db)):
+    """Score each attendee by ICP match, attendance count, repeat attendance, follow-up status."""
+    from sqlalchemy import text as _t
+
+    rows = db.execute(_t("""
+        SELECT r.email, r.attendee_name,
+               COUNT(DISTINCT a.webinar_id) AS webinar_count,
+               AVG(a.duration_minutes) AS avg_duration,
+               MAX(COALESCE(w.icp,'Others')) AS primary_icp,
+               MAX(a.joined_at) AS last_seen
+        FROM attendances a
+        JOIN registrations r ON r.id = a.registration_id
+        JOIN webinars w ON w.id = a.webinar_id
+        WHERE a.attended = TRUE AND r.email IS NOT NULL AND r.email NOT LIKE '%@rhorizon%'
+        GROUP BY r.email, r.attendee_name
+        ORDER BY webinar_count DESC, avg_duration DESC
+        LIMIT 100
+    """)).fetchall()
+
+    # Get pipeline status for these emails
+    emails = [r.email for r in rows]
+    pipeline_map = {}
+    if emails:
+        placeholders = ','.join([f"'{e}'" for e in emails[:100]])
+        pl_rows = db.execute(_t(f"SELECT email, status FROM pipeline_contacts WHERE email IN ({placeholders})")).fetchall()
+        pipeline_map = {r.email: r.status for r in pl_rows}
+
+    premium_icps = {'Family Office', 'PMS', 'NRI', 'ESOPs'}
+    leads = []
+    for r in rows:
+        webinar_count = int(r.webinar_count or 0)
+        avg_dur = float(r.avg_duration or 0)
+        icp = r.primary_icp or 'Others'
+        pl_status = pipeline_map.get(r.email, 'none')
+
+        # Score 0-100
+        score = 0
+        score += min(30, webinar_count * 10)  # repeat attendance: up to 30
+        score += min(25, round(avg_dur / 60 * 25)) if avg_dur else 0  # duration: up to 25
+        score += 25 if icp in premium_icps else 10  # ICP: 25 for premium, 10 for others
+        score += 20 if pl_status in ('meeting_booked', 'converted') else 10 if pl_status == 'contacted' else 0  # follow-up
+        score = min(100, score)
+
+        if score >= 70: quality = "High Quality"
+        elif score >= 45: quality = "Medium Quality"
+        elif score >= 25: quality = "Low Quality"
+        else: quality = "Needs Review"
+
+        leads.append({
+            "email": r.email,
+            "name": r.attendee_name,
+            "webinar_count": webinar_count,
+            "avg_duration_min": round(avg_dur, 0),
+            "primary_icp": icp,
+            "last_seen": str(r.last_seen)[:10] if r.last_seen else None,
+            "pipeline_status": pl_status,
+            "score": score,
+            "quality": quality,
+        })
+
+    leads.sort(key=lambda x: -x['score'])
+    return {"leads": leads, "total": len(leads)}
+
+
+@app.get("/api/speaker-insights")
+def get_speaker_insights(db: Session = Depends(get_db)):
+    """Per-speaker: best topics, best ICP, performance trend."""
+    from sqlalchemy import text as _t
+
+    speakers = db.execute(_t("SELECT id, name, bio FROM speakers ORDER BY name")).fetchall()
+    result = []
+
+    for spk in speakers:
+        # All completed webinars for this speaker
+        webinars = db.execute(_t("""
+            SELECT w.id, w.title, w.icp, w.date,
+                   (SELECT COUNT(*) FROM registrations WHERE webinar_id=w.id) as regs,
+                   (SELECT COUNT(*) FROM attendances WHERE webinar_id=w.id AND attended=TRUE) as att
+            FROM webinars w
+            WHERE (w.speaker_id=:id OR w.co_speaker_id=:id) AND w.status='completed'
+            ORDER BY w.date DESC
+        """), {"id": spk.id}).fetchall()
+
+        if not webinars:
+            continue
+
+        wlist = []
+        for w in webinars:
+            regs = int(w.regs or 0); att = int(w.att or 0)
+            rate = round(att/regs*100, 1) if regs else 0
+            wlist.append({"id": w.id, "title": w.title, "icp": w.icp or 'Others',
+                          "date": str(w.date), "regs": regs, "att": att, "rate": rate})
+
+        # Best ICP (highest avg attendance rate)
+        icp_map = {}
+        for w in wlist:
+            icp = w["icp"]
+            if icp not in icp_map: icp_map[icp] = {"total": 0, "count": 0}
+            icp_map[icp]["total"] += w["rate"]
+            icp_map[icp]["count"] += 1
+        best_icp = max(icp_map, key=lambda k: icp_map[k]["total"]/icp_map[k]["count"]) if icp_map else None
+
+        # Best webinars (top 3 by rate)
+        best_webinars = sorted(wlist, key=lambda x: -x["rate"])[:3]
+        # Weak webinars (bottom 2 by rate with enough regs)
+        weak_webinars = sorted([w for w in wlist if w["regs"] >= 30], key=lambda x: x["rate"])[:2]
+
+        avg_rate = round(sum(w["rate"] for w in wlist) / len(wlist), 1) if wlist else 0
+        total_regs = sum(w["regs"] for w in wlist)
+        total_att = sum(w["att"] for w in wlist)
+
+        result.append({
+            "id": spk.id,
+            "name": spk.name,
+            "webinar_count": len(wlist),
+            "total_regs": total_regs,
+            "total_att": total_att,
+            "avg_attendance_rate": avg_rate,
+            "best_icp": best_icp,
+            "best_webinars": best_webinars,
+            "weak_webinars": weak_webinars,
+            "recent_webinars": wlist[:5],
+        })
+
+    result.sort(key=lambda x: -x["avg_attendance_rate"])
+    return {"speakers": result}
 
 
 # ── Competitor Intelligence (Phase 3) ────────────────────────────────────────

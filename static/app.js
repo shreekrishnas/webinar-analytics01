@@ -435,6 +435,7 @@ function nav(page, sub) {
     case 'topics':      renderTopics();             break;
     case 'intelligence': renderIntelligence();      break;
     case 'pipeline':    renderPipeline();           break;
+    case 'upload':      renderUpload();             break;
     case 'webinar':     renderWebinarDetail(sub);   break;
     case 'speaker':     renderSpeakerDetail(sub);   break;
   }
@@ -533,6 +534,15 @@ function renderKpiBanner() {
       label: 'Best ICP',
       value: bestICP ? bestICP[0] : 'N/A',
       trendUp: null, trend: bestICP ? `${(bestICP[1].total/bestICP[1].count).toFixed(1)}% avg att rate` : 'No data',
+      arrow: null,
+    },
+    {
+      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.99 12 19.79 19.79 0 0 1 1.93 3.36 2 2 0 0 1 3.9 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.98-1.98a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>',
+      cls: 'kc-red',
+      label: 'Follow-up Pending',
+      value: (S.stats?.followup_pending || 0).toString(),
+      trendUp: false,
+      trend: 'Attendees needing follow-up',
       arrow: null,
     },
   ];
@@ -785,7 +795,7 @@ function renderHome() {
       const color    = avColor(w.speaker_name);
       const rate     = w.attendance_rate || 0;
       const info     = gradeInfo(rate);
-      const badgeCls = w.status === 'completed' ? 'completed' : w.status === 'upcoming' ? 'upcoming' : 'cancelled';
+      const badgeCls = w.status === 'completed' ? 'completed' : w.status === 'upcoming' ? 'upcoming' : w.status === 'follow_up_pending' ? 'follow-up-pending' : w.status === 'follow_up_done' ? 'follow-up-done' : 'cancelled';
       const safeT    = esc(w.title).replace(/'/g,"\\'");
       return `<tr onclick="nav('webinar',${w.id})">
         <td><div class="wb-list-name" title="${esc(w.title)}">${esc(w.title)}</div></td>
@@ -983,6 +993,7 @@ async function renderWebinarDetail(id) {
     detailCache[id] = w;
     _drawWebinarDetail(w);
     loadNotes(id);
+    loadWebinarFunnel(id, w);
   } catch(e) {
     setContent('<div class="empty-state"><div class="empty-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><div class="empty-title">Failed to load</div></div>');
   }
@@ -1175,6 +1186,9 @@ function _drawWebinarDetail(w) {
         ${durRows}
       </div>` : ''}
       ` : ''}
+
+      <!-- Funnel section placeholder (loaded async) -->
+      <div id="webinar-funnel-section-${w.id}"></div>
 
       <!-- AI Analysis Panel -->
       <!-- Human Notes -->
@@ -1573,9 +1587,14 @@ async function renderSpeakers() {
     </div>`);
 
   let perfMap = {};
+  let speakerInsights = {};
   try {
-    const intel = await api('/api/intelligence');
+    const [intel, insightsData] = await Promise.all([
+      api('/api/intelligence'),
+      api('/api/speaker-insights')
+    ]);
     for (const s of (intel.speaker_performance || [])) perfMap[s.id] = s;
+    for (const s of (insightsData.speakers || [])) speakerInsights[s.id] = s;
   } catch(e) { /* show basic cards if fails */ }
 
   const cards = S.speakers.map(sp => {
@@ -1585,6 +1604,7 @@ async function renderSpeakers() {
     const grade = perf ? (perf.attendance_rate >= 40 ? 'A' : perf.attendance_rate >= 30 ? 'B' : perf.attendance_rate >= 20 ? 'C' : 'D') : null;
     const gColor = grade ? { A:'#10b981', B:'#6366f1', C:'#f59e0b', D:'#f43f5e' }[grade] : null;
 
+    const si = speakerInsights[sp.id];
     return `
       <div class="spk-card" onclick="nav('speaker',${sp.id})">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
@@ -1592,6 +1612,7 @@ async function renderSpeakers() {
           ${grade ? `<div style="width:34px;height:34px;border-radius:50%;border:2px solid ${gColor};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:${gColor};flex-shrink:0">${grade}</div>` : ''}
         </div>
         <div class="spk-name">${esc(sp.name)}</div>
+        ${si && si.best_icp ? `<div style="margin-bottom:4px"><span class="icp-badge icp-${(si.best_icp||'others').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}" style="font-size:10px">Best ICP: ${esc(si.best_icp)}</span></div>` : ''}
         <div class="spk-bio">${esc(sp.bio || '')}</div>
         <div class="spk-stats" style="margin-top:12px">
           <div>
@@ -1617,12 +1638,42 @@ async function renderSpeakers() {
       </div>`;
   }).join('');
 
+  const siCards = Object.values(speakerInsights).map(si => {
+    const av = avColor(si.name); const ini2 = initials(si.name);
+    const grade2 = si.avg_attendance_rate >= 40 ? 'A' : si.avg_attendance_rate >= 30 ? 'B' : si.avg_attendance_rate >= 20 ? 'C' : 'D';
+    const gColor2 = {A:'#10b981',B:'#6366f1',C:'#f59e0b',D:'#f43f5e'}[grade2];
+    const bestW = (si.best_webinars||[]).map(wb => `<div style="font-size:12px;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:#10b981;font-weight:600">${wb.rate}%</span> · ${esc(wb.title)}</div>`).join('');
+    const weakW = (si.weak_webinars||[]).map(wb => `<div style="font-size:12px;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:#f43f5e;font-weight:600">${wb.rate}%</span> · ${esc(wb.title)}</div>`).join('');
+    const insight2 = si.avg_attendance_rate >= 40
+      ? `${esc(si.name)} delivers exceptional results. Best ICP: ${esc(si.best_icp||'N/A')}. Consider assigning more ${esc(si.best_icp||'')} topics.`
+      : si.avg_attendance_rate >= 25
+      ? `${esc(si.name)} performs well but has room to improve. Pair with stronger topic hooks for better attendance.`
+      : `${esc(si.name)} has lower attendance rates. Review topic-audience fit and improve pre-webinar communication.`;
+    return `
+      <div class="spk-insight-card">
+        <div class="spk-insight-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:36px;height:36px;background:${av};border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:13px">${ini2}</div>
+            <div>
+              <div style="font-weight:700;font-size:14px">${esc(si.name)}</div>
+              <div style="font-size:11px;color:var(--text-muted)">${si.webinar_count} webinars · Best ICP: <strong>${esc(si.best_icp||'N/A')}</strong></div>
+            </div>
+          </div>
+          <div style="width:36px;height:36px;border-radius:50%;border:2px solid ${gColor2};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:${gColor2}">${grade2}</div>
+        </div>
+        <div style="font-size:12.5px;color:var(--text-secondary);margin:12px 0;line-height:1.5">${insight2}</div>
+        ${bestW ? `<div style="margin-bottom:8px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px">Top Performing</div>${bestW}</div>` : ''}
+        ${weakW ? `<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px">Needs Improvement</div>${weakW}</div>` : ''}
+      </div>`;
+  }).join('');
+
   const sect = document.getElementById('spk-perf-section');
   if (sect) sect.outerHTML = `<div class="spk-grid">${cards}</div>
     <div style="margin-top:36px">
       <h2 class="sec-title" style="margin-bottom:16px">Performance Detail</h2>
       ${_renderSpeakerIntel({ speaker_performance: Object.values(perfMap) })}
-    </div>`;
+    </div>
+    ${siCards ? `<div style="margin-top:36px"><h2 class="sec-title" style="margin-bottom:16px">Speaker Intelligence</h2><div class="spk-insight-grid">${siCards}</div></div>` : ''}`;
 }
 
 /* ── Speaker detail ─────────────────────────────────────────────────────── */
@@ -1702,6 +1753,74 @@ async function renderSpeakerDetail(id) {
 
 function toggleAcc(id) {
   document.getElementById(id)?.classList.toggle('open');
+}
+
+/* ── Repeat Audience ─────────────────────────────────────────────────────── */
+async function renderRepeatAudience(container) {
+  container.innerHTML = '<div class="pg-loading"><div class="spinner"></div><p>Loading…</p></div>';
+  try {
+    const data = await api('/api/repeat-audience');
+    const rows = (data.repeat_attendees || []).map((r, i) => `
+      <tr>
+        <td style="font-weight:600;color:var(--text-primary)">${i+1}. ${esc(r.name || r.email)}</td>
+        <td style="font-family:var(--font-mono);text-align:center;font-weight:700;color:#6366f1">${r.webinar_count}</td>
+        <td style="font-size:12px;color:var(--text-muted)">${r.last_seen ? fmtDate(r.last_seen) : '—'}</td>
+        <td><button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="openAddToPipelineModal('${esc(r.email)}','${esc(r.name||'')}')">Add to Pipeline</button></td>
+      </tr>`).join('');
+    container.innerHTML = `
+      <div>
+        <div class="intel-kpis" style="margin-bottom:20px">
+          <div class="intel-kpi"><div class="intel-kpi-lbl">Unique Attendees</div><div class="intel-kpi-val">${fmt(data.total_unique_attendees||0)}</div></div>
+          <div class="intel-kpi"><div class="intel-kpi-lbl">Repeat Attendees (2+)</div><div class="intel-kpi-val" style="color:#6366f1">${fmt(data.repeat_attendees_count||0)}</div></div>
+          <div class="intel-kpi"><div class="intel-kpi-lbl">Never Attended</div><div class="intel-kpi-val" style="color:#f43f5e">${fmt(data.never_attended_count||0)}</div></div>
+        </div>
+        ${(data.repeat_attendees_count||0) > 0 ? `
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">
+            <strong>${data.repeat_attendees_count}</strong> people have attended 2+ webinars. These are your warmest leads — prioritise them for follow-up.
+          </p>
+          <div class="intel-table-wrap">
+            <table class="intel-table">
+              <thead><tr><th>Name / Email</th><th style="text-align:center">Webinars</th><th>Last Seen</th><th>Action</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>` : '<div class="empty-state"><div class="empty-title">No repeat attendees yet</div><div class="empty-sub">As more people attend multiple webinars, they will appear here.</div></div>'}
+      </div>`;
+  } catch(e) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-title">Failed to load repeat audience data</div></div>`;
+  }
+}
+
+/* ── Lead Quality ─────────────────────────────────────────────────────────── */
+async function renderLeadQuality(container) {
+  container.innerHTML = '<div class="pg-loading"><div class="spinner"></div><p>Scoring leads…</p></div>';
+  try {
+    const data = await api('/api/lead-quality');
+    const QUALITY_COLOR = {'High Quality':'#10b981','Medium Quality':'#6366f1','Low Quality':'#f59e0b','Needs Review':'#94a3b8'};
+    const rows = (data.leads || []).map((l, i) => {
+      const qc = QUALITY_COLOR[l.quality] || '#94a3b8';
+      return `<tr>
+        <td style="font-weight:600">${i+1}. ${esc(l.name || l.email)}</td>
+        <td><span class="icp-badge icp-${(l.primary_icp||'others').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}">${esc(l.primary_icp||'N/A')}</span></td>
+        <td style="text-align:center;font-family:var(--font-mono)">${l.webinar_count}</td>
+        <td style="text-align:center;font-family:var(--font-mono)">${l.avg_duration_min > 0 ? Math.round(l.avg_duration_min)+'m' : '—'}</td>
+        <td><span style="background:${qc}18;color:${qc};border:1px solid ${qc}40;border-radius:12px;font-size:11px;font-weight:600;padding:3px 9px">${esc(l.quality)}</span></td>
+        <td style="text-align:right;font-family:var(--font-mono);font-weight:700;color:${qc}">${l.score}</td>
+        <td><button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="openAddToPipelineModal('${esc(l.email)}','${esc(l.name||'')}')">Pipeline</button></td>
+      </tr>`;
+    }).join('');
+    container.innerHTML = `
+      <div>
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">Lead quality scored by: repeat attendance (30pts) + avg session duration (25pts) + ICP relevance (25pts) + follow-up status (20pts).</p>
+        <div class="intel-table-wrap">
+          <table class="intel-table">
+            <thead><tr><th>Name</th><th>ICP</th><th style="text-align:center">Webinars</th><th style="text-align:center">Avg Duration</th><th>Quality</th><th style="text-align:right">Score</th><th>Action</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  } catch(e) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-title">Failed to load lead quality</div></div>`;
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1820,6 +1939,8 @@ async function renderLeaderboard(speakerId, webinarId) {
         <button class="lb-vtab ${S._lbView==='webinars'?'active':''}" onclick="S._lbView='webinars';renderLeaderboard()">Best Webinars</button>
         <button class="lb-vtab ${S._lbView==='speakers'?'active':''}" onclick="S._lbView='speakers';renderLeaderboard()">Best Speakers</button>
         <button class="lb-vtab ${S._lbView==='icp'?'active':''}" onclick="S._lbView='icp';renderLeaderboard()">Best ICP</button>
+        <button class="lb-vtab ${S._lbView==='repeat'?'active':''}" onclick="S._lbView='repeat';renderLeaderboard()">Repeat Audience</button>
+        <button class="lb-vtab ${S._lbView==='leadquality'?'active':''}" onclick="S._lbView='leadquality';renderLeaderboard()">Lead Quality</button>
       </div>`;
 
     let altViewHTML = '';
@@ -1869,7 +1990,7 @@ async function renderLeaderboard(speakerId, webinarId) {
 
         ${lbViewTabs}
 
-        ${S._lbView !== 'attendees' ? altViewHTML : `
+        ${(S._lbView === 'repeat' || S._lbView === 'leadquality') ? '<div id="lb-alt-content"></div>' : S._lbView !== 'attendees' ? altViewHTML : `
         <div class="lb-filters">
           <select class="filter-select" onchange="S._lbSpeaker=this.value;S._lbWebinar='';renderLeaderboard()">
             <option value="" ${!selSpeaker?'selected':''}>All Speakers</option>
@@ -1917,6 +2038,15 @@ async function renderLeaderboard(speakerId, webinarId) {
           </div>
         </div>`}
       </div>`);
+
+    // Wire async views after DOM is set
+    if (S._lbView === 'repeat') {
+      const altC = document.getElementById('lb-alt-content');
+      if (altC) renderRepeatAudience(altC);
+    } else if (S._lbView === 'leadquality') {
+      const altC = document.getElementById('lb-alt-content');
+      if (altC) renderLeadQuality(altC);
+    }
   } catch(e) {
     setContent('<div class="empty-state"><div class="empty-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><div class="empty-title">Failed to load leaderboard</div></div>');
   }
@@ -2173,6 +2303,37 @@ async function _triggerDownload(url) {
   } catch(e) {
     showToast('Download failed. Please try again.', 'error');
   }
+}
+
+/* ── Webinar Funnel ──────────────────────────────────────────────────────── */
+async function loadWebinarFunnel(id, w) {
+  const sect = document.getElementById(`webinar-funnel-section-${id}`);
+  if (!sect) return;
+  try {
+    const funnel = await api(`/api/webinar-funnel/${id}`);
+    if (funnel && funnel.stages && w.status === 'completed') {
+      const stageItems = funnel.stages.map((s, i) => {
+        const width = Math.max(20, s.pct);
+        const isFirst = i === 0;
+        const dropText = s.drop !== undefined && !isFirst ? `<span style="font-size:11px;color:#f43f5e;margin-left:8px">↓ ${s.drop}% drop-off</span>` : '';
+        return `
+          <div class="funnel-stage">
+            <div class="funnel-bar-wrap">
+              <div class="funnel-bar" style="width:${width}%;background:${isFirst?'#6366f1':s.pct>=50?'#10b981':s.pct>=30?'#f59e0b':'#f43f5e'}">
+                <span class="funnel-bar-label">${esc(s.label)}</span>
+              </div>
+              <span class="funnel-count">${fmt(s.count)}${dropText}</span>
+            </div>
+          </div>`;
+      }).join('');
+      sect.innerHTML = `
+        <div class="funnel-section">
+          <div class="sec-hd"><span class="sec-title">Webinar Funnel</span></div>
+          <div class="funnel-stages">${stageItems}</div>
+          ${funnel.insight ? `<div class="funnel-insight">${esc(funnel.insight)}</div>` : ''}
+        </div>`;
+    }
+  } catch(e) { /* silently skip */ }
 }
 
 /* ── AI Analysis ─────────────────────────────────────────────────────────── */
@@ -3352,6 +3513,9 @@ function _renderCompetitorGap(panel, data) {
 async function renderTopics() {
   setContent(`
     <div class="topics-page">
+      <div id="topic-perf-section">
+        <div class="pg-loading"><div class="spinner"></div></div>
+      </div>
       <div class="topics-hero">
         <div class="topics-hero-left">
           <div class="topics-eyebrow">
@@ -3374,7 +3538,40 @@ async function renderTopics() {
       </div>
     </div>`);
 
+  loadTopicPerformance();
   await loadTopics();
+}
+
+async function loadTopicPerformance() {
+  try {
+    const data = await api('/api/topic-performance');
+    const sect = document.getElementById('topic-perf-section');
+    if (!sect) return;
+    const rows = (data.topics || []).map(t => {
+      const grade = t.attendance_rate >= 40 ? 'A' : t.attendance_rate >= 30 ? 'B' : t.attendance_rate >= 20 ? 'C' : 'D';
+      const gColor = {A:'#10b981',B:'#6366f1',C:'#f59e0b',D:'#f43f5e'}[grade];
+      return `
+        <div class="tp-row">
+          <div class="tp-icp"><span class="icp-badge icp-${(t.icp||'others').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}">${esc(t.icp)}</span></div>
+          <div class="tp-stat"><strong>${t.webinar_count}</strong><span>webinars</span></div>
+          <div class="tp-stat"><strong>${fmt(t.total_regs)}</strong><span>registrations</span></div>
+          <div class="tp-stat"><strong>${fmt(t.total_att)}</strong><span>attendees</span></div>
+          <div class="tp-rate" style="color:${gColor}"><strong>${t.attendance_rate}%</strong><span style="font-size:10px;background:${gColor}18;border:1px solid ${gColor}40;border-radius:12px;padding:2px 7px;color:${gColor};font-weight:700">${grade}</span></div>
+          <div class="tp-speaker" style="font-size:12px;color:var(--text-muted)">${t.best_speaker ? `Best: ${esc(t.best_speaker)}` : '—'}</div>
+        </div>`;
+    }).join('');
+    sect.innerHTML = `
+      <div style="margin-bottom:36px">
+        <div class="page-hd" style="margin-bottom:16px">
+          <div><h2 style="font-size:18px;font-weight:700;margin:0">ICP Performance</h2>
+          <p class="page-sub" style="margin:2px 0 0">How each topic category is performing across all webinars</p></div>
+        </div>
+        <div class="tp-grid">${rows || '<div style="color:var(--text-muted);font-size:13px;padding:16px">No topic performance data yet.</div>'}</div>
+      </div>`;
+  } catch(e) {
+    const sect = document.getElementById('topic-perf-section');
+    if (sect) sect.innerHTML = '';
+  }
 }
 
 async function refreshTopics() {
@@ -4149,6 +4346,104 @@ function showToast(msg, type='success') {
   t.className = `toast show${type==='error'?' error':''}`;
   clearTimeout(t._timer);
   t._timer = setTimeout(() => { t.className = 'toast'; }, 3000);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   UPLOAD PAGE
+══════════════════════════════════════════════════════════════════════════ */
+function renderUpload() {
+  setContent(`
+    <div>
+      <div class="page-hd">
+        <div>
+          <h1 class="page-title">Upload Data</h1>
+          <p class="page-sub">Import registrations, attendance, and ads data via CSV or Excel.</p>
+        </div>
+      </div>
+      <div class="upload-grid">
+        <div class="upload-card">
+          <div class="upload-card-icon" style="background:#6366f118;color:#6366f1">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </div>
+          <div class="upload-card-title">Registration Report</div>
+          <div class="upload-card-desc">Upload the registration CSV exported from your webinar platform. Columns needed: Name, Email, Webinar, Date.</div>
+          <div class="upload-dropzone" id="upload-reg-zone" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleUploadDrop(event,'registrations')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <span>Drop CSV here or <button class="btn-link" onclick="document.getElementById('reg-file-input-upload').click()">browse</button></span>
+          </div>
+          <input type="file" id="reg-file-input-upload" accept=".csv,.xlsx" style="display:none" onchange="handleUploadFile(event,'registrations')" />
+          <div id="upload-reg-result" style="margin-top:10px"></div>
+        </div>
+        <div class="upload-card">
+          <div class="upload-card-icon" style="background:#10b98118;color:#10b981">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
+          <div class="upload-card-title">Attendance Report</div>
+          <div class="upload-card-desc">Upload the attendance CSV from your platform. Columns needed: Name, Email, Duration (minutes), Webinar.</div>
+          <div class="upload-dropzone" id="upload-att-zone" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleUploadDrop(event,'attendees')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <span>Drop CSV here or <button class="btn-link" onclick="document.getElementById('att-file-input-upload').click()">browse</button></span>
+          </div>
+          <input type="file" id="att-file-input-upload" accept=".csv,.xlsx" style="display:none" onchange="handleUploadFile(event,'attendees')" />
+          <div id="upload-att-result" style="margin-top:10px"></div>
+        </div>
+        <div class="upload-card">
+          <div class="upload-card-icon" style="background:#f59e0b18;color:#f59e0b">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          </div>
+          <div class="upload-card-title">Ads / Campaign Data</div>
+          <div class="upload-card-desc">Upload ad performance data. Columns: Platform, Creative, Spend, Impressions, Clicks, Conversions, Webinar.</div>
+          <div class="upload-dropzone" id="upload-ads-zone" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleUploadDrop(event,'ads')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <span>Drop CSV here or <button class="btn-link" onclick="document.getElementById('ads-file-input-upload').click()">browse</button></span>
+          </div>
+          <input type="file" id="ads-file-input-upload" accept=".csv,.xlsx" style="display:none" onchange="handleUploadFile(event,'ads')" />
+          <div id="upload-ads-result" style="margin-top:10px"></div>
+        </div>
+        <div class="upload-card upload-card-wide">
+          <div class="upload-card-title">Recent Uploads</div>
+          <div id="upload-log-list"><div class="pg-loading"><div class="spinner"></div></div></div>
+        </div>
+      </div>
+    </div>`);
+
+  api('/api/upload-logs').then(data => {
+    const el = document.getElementById('upload-log-list');
+    if (!el) return;
+    if (!data || !data.length) { el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No uploads yet.</div>'; return; }
+    el.innerHTML = data.slice(0,10).map(u => `
+      <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span style="color:var(--text-muted);font-family:var(--font-mono);font-size:11px">${fmtDateTime(u.uploaded_at)}</span>
+        <span style="font-weight:600">${esc(u.file_type)}</span>
+        <span style="color:var(--text-muted)">${esc(u.filename||'')}</span>
+        <span style="margin-left:auto;color:#10b981;font-weight:600">${u.final_count} rows</span>
+      </div>`).join('');
+  }).catch(() => { const el = document.getElementById('upload-log-list'); if (el) el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No uploads yet.</div>'; });
+}
+
+function handleUploadDrop(event, type) {
+  event.preventDefault();
+  const zoneId = type === 'registrations' ? 'upload-reg-zone' : type === 'attendees' ? 'upload-att-zone' : 'upload-ads-zone';
+  const zone = document.getElementById(zoneId);
+  if (zone) zone.classList.remove('dragover');
+  const file = event.dataTransfer.files[0];
+  if (file) processUploadFile(file, type);
+}
+
+function handleUploadFile(event, type) {
+  const file = event.target.files[0];
+  if (file) processUploadFile(file, type);
+}
+
+async function processUploadFile(file, type) {
+  const resultId = type === 'registrations' ? 'upload-reg-result' : type === 'attendees' ? 'upload-att-result' : 'upload-ads-result';
+  const resultEl = document.getElementById(resultId);
+  if (resultEl) resultEl.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">Uploading…</div>';
+  if (resultEl) resultEl.innerHTML = `
+    <div style="background:#6366f118;border:1px solid #6366f140;border-radius:8px;padding:12px;font-size:12px">
+      <strong>File selected:</strong> ${esc(file.name)}<br>
+      To upload ${esc(type)}, go to the individual webinar page and use the Upload button there to link the data to the correct webinar.
+    </div>`;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

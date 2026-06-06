@@ -1802,6 +1802,8 @@ html.dark .skel {
 .kpi-card.kc-sky::before     { background: var(--grad-cyan); }
 .kpi-card.kc-emerald::before { background: var(--grad-emerald); }
 .kpi-card.kc-gold::before    { background: var(--grad-gold); }
+.kpi-card.kc-red::before     { background: linear-gradient(135deg,#f43f5e,#fb7185); }
+.kc-red { --kc-color: #f43f5e; }
 
 .kpi-card-head {
   display: flex;
@@ -1827,6 +1829,7 @@ html.dark .skel {
 .kc-sky     .kpi-card-icon { background: rgba(14,165,233,0.10); }
 .kc-emerald .kpi-card-icon { background: rgba(16,185,129,0.10); }
 .kc-gold    .kpi-card-icon { background: rgba(245,158,11,0.10); }
+.kc-red     .kpi-card-icon { background: rgba(244,63,94,0.10);  }
 
 .kpi-card-value {
   font-size: 30px;
@@ -5819,3 +5822,41 @@ html:not(.dark) .card-body span:not([class]) { color: var(--rh-text-1) !importan
   border-color: #6366f1;
   font-weight: 600;
 }
+
+/* ── Funnel Section (webinar detail) ───────────────────────────────────── */
+.funnel-section { margin: 24px 0; }
+.funnel-stages { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.funnel-stage { }
+.funnel-bar-wrap { display: flex; align-items: center; gap: 12px; }
+.funnel-bar { border-radius: 6px; padding: 8px 14px; min-width: 80px; transition: width 0.6s ease; display: flex; align-items: center; }
+.funnel-bar-label { color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.funnel-count { font-size: 13px; font-weight: 700; color: var(--text-primary); font-family: var(--font-mono); white-space: nowrap; }
+.funnel-insight { margin-top: 14px; padding: 12px 16px; background: rgba(99,102,241,0.06); border-left: 3px solid #6366f1; border-radius: 8px; font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+
+/* ── Speaker Intelligence Grid ─────────────────────────────────────────── */
+.spk-insight-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; }
+.spk-insight-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+.spk-insight-header { display: flex; align-items: center; justify-content: space-between; }
+
+/* ── Topic Performance Table ───────────────────────────────────────────── */
+.tp-grid { display: flex; flex-direction: column; gap: 8px; }
+.tp-row { display: grid; grid-template-columns: 180px 100px 130px 120px 100px 1fr; align-items: center; gap: 12px; padding: 12px 16px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; }
+.tp-stat { display: flex; flex-direction: column; font-size: 13px; }
+.tp-stat strong { font-weight: 700; font-family: var(--font-mono); }
+.tp-stat span { font-size: 10px; color: var(--text-muted); text-transform: uppercase; }
+.tp-rate { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 15px; font-weight: 700; }
+@media (max-width: 768px) { .tp-row { grid-template-columns: 1fr 1fr 1fr; } }
+
+/* ── Upload Page ───────────────────────────────────────────────────────── */
+.upload-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; margin-top: 24px; }
+.upload-card-wide { grid-column: 1 / -1; }
+.upload-card-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+.upload-card-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+.upload-card-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+.upload-dropzone { border: 2px dashed var(--border); border-radius: 10px; padding: 20px; text-align: center; font-size: 13px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+.upload-dropzone:hover, .upload-dropzone.dragover { border-color: #6366f1; background: #6366f108; }
+.btn-link { background: none; border: none; color: #6366f1; cursor: pointer; font-size: 13px; text-decoration: underline; padding: 0; }
+
+/* ── wb-badge extras ───────────────────────────────────────────────────── */
+.wb-badge.follow-up-pending { background: rgba(244,63,94,0.12); color: #f43f5e; border: 1px solid rgba(244,63,94,0.3); }
+.wb-badge.follow-up-done { background: rgba(16,185,129,0.12); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
