@@ -62,7 +62,7 @@ async def root():
 
 @app.get("/api/stats", response_model=schemas.PlatformStats)
 def platform_stats(response: Response, db: Session = Depends(get_db)):
-    response.headers["Cache-Control"] = "public, max-age=20, stale-while-revalidate=60"
+    response.headers["Cache-Control"] = "no-store"
     return crud.get_platform_stats(db)
 
 
@@ -76,7 +76,7 @@ def list_webinars(
     speaker_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
-    response.headers["Cache-Control"] = "public, max-age=15, stale-while-revalidate=45"
+    response.headers["Cache-Control"] = "no-store"
     if date:
         return crud.get_webinars_by_date(db, date)
     if name:
@@ -2018,7 +2018,7 @@ def delete_webinar_ad(webinar_id: int, ad_id: int, db: Session = Depends(get_db)
 @app.get("/api/speakers", response_model=List[schemas.Speaker])
 def list_speakers(response: Response, db: Session = Depends(get_db)):
     import traceback
-    response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=120"
+    response.headers["Cache-Control"] = "no-store"
     try:
         return crud.get_all_speakers(db)
     except Exception:
@@ -2053,7 +2053,7 @@ def get_leaderboard(
     limit: int = Query(50, ge=1, le=1000),
     db: Session = Depends(get_db),
 ):
-    response.headers["Cache-Control"] = "public, max-age=20, stale-while-revalidate=60"
+    response.headers["Cache-Control"] = "no-store"
     return crud.get_leaderboard(db, speaker_id=speaker_id, webinar_id=webinar_id, limit=limit)
 
 
