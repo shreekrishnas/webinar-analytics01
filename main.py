@@ -420,6 +420,10 @@ def _get_intelligence_inner(db: Session):
             "rate": round(at/rg*100, 1) if rg else 0,
         })
 
+    # Only include spend/leads totals if they actually have real campaign data
+    raw_spend = sum(r["total_spend"] for r in icp_rows)
+    raw_leads = sum(r["total_leads"] for r in icp_rows)
+
     return {
         "topic_intelligence": icp_rows,
         "speaker_performance": spk_rows,
@@ -427,8 +431,8 @@ def _get_intelligence_inner(db: Session):
         "domain_analysis": domains,
         "source_performance": sources,
         "total_webinars": sum(r["webinar_count"] for r in icp_rows),
-        "total_spend": sum(r["total_spend"] for r in icp_rows),
-        "total_leads": sum(r["total_leads"] for r in icp_rows),
+        "total_spend": raw_spend if raw_spend > 0 else None,
+        "total_leads": raw_leads if raw_leads > 0 else None,
     }
 
 
@@ -512,6 +516,242 @@ def add_competitor_activity(payload: dict, db: Session = Depends(get_db)):
     })
     db.commit()
     return {"ok": True}
+
+
+@app.post("/api/competitors", status_code=201)
+def add_competitor(payload: dict, db: Session = Depends(get_db)):
+    from sqlalchemy import text as _t
+    name = (payload.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name required")
+    if _is_pg(db):
+        row = db.execute(_t("INSERT INTO competitors (name, focus, website, color_hex) VALUES (:n,:f,:w,:c) RETURNING id"),
+                         {"n": name, "f": payload.get("focus") or "", "w": payload.get("website") or "", "c": payload.get("color_hex") or "#6366f1"})
+        cid = row.fetchone().id
+    else:
+        db.execute(_t("INSERT INTO competitors (name, focus, website, color_hex) VALUES (:n,:f,:w,:c)"),
+                   {"n": name, "f": payload.get("focus") or "", "w": payload.get("website") or "", "c": payload.get("color_hex") or "#6366f1"})
+        cid = db.execute(_t("SELECT last_insert_rowid()")).scalar()
+    db.commit()
+    return {"id": cid, "name": name}
+
+
+@app.post("/api/competitor-research")
+async def auto_research_competitor(payload: dict, db: Session = Depends(get_db)):
+    """Use Perplexity web search to auto-research a competitor's recent webinar & content activity."""
+    import os, json, httpx
+    from datetime import date as _date, datetime as _dt
+
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="OPENROUTER_API_KEY not configured")
+
+    from sqlalchemy import text as _t
+    competitor_id = payload.get("competitor_id")
+    if not competitor_id:
+        raise HTTPException(status_code=400, detail="competitor_id required")
+
+    comp = db.execute(_t("SELECT id, name, focus, website FROM competitors WHERE id = :id"), {"id": competitor_id}).fetchone()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+
+    today = _date.today().strftime("%B %d, %Y")
+    site_hint = f"site:{comp.website}" if comp.website else ""
+
+    try:
+        search_resp = httpx.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
+            json={
+                "model": "perplexity/sonar",
+                "max_tokens": 1500,
+                "messages": [{"role": "user", "content":
+                    f"""Today is {today}. Research the Indian financial advisory company "{comp.name}" ({comp.website or 'search online'}).
+
+Find their last 3-5 webinars, events, or content pieces published in the last 60 days.
+
+For each item find:
+- Date
+- Topic/title
+- Speaker name (if any)
+- Target audience (HNI, NRI, retail, women, etc.)
+- Key messaging angle or hook they used
+- CTA (register, watch, download, etc.)
+- Link if available
+
+Also note: What topics are they pushing hardest? What audience segments? What is their differentiation vs generic financial advice?
+
+Be specific and factual — only report what you actually find, not assumptions."""}]
+            },
+            timeout=40.0
+        )
+        search_resp.raise_for_status()
+        raw_research = search_resp.json()["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Search failed: {e}")
+
+    # Parse research into structured activity entries with Claude
+    try:
+        parse_resp = httpx.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
+            json={
+                "model": "anthropic/claude-sonnet-4.5",
+                "max_tokens": 2000,
+                "messages": [{"role": "user", "content":
+                    f"""Extract structured activity records from this research about "{comp.name}":
+
+{raw_research}
+
+Return a JSON array. Each item:
+{{
+  "activity_date": "YYYY-MM-DD",
+  "format": "webinar|linkedin|youtube|report|event|other",
+  "topic": "exact topic/title (max 120 chars)",
+  "speaker": "name or null",
+  "audience_focus": "HNI|NRI|retail|women|etc or null",
+  "messaging_angle": "their key hook/angle in ≤80 chars or null",
+  "cta": "register|watch|download|etc or null",
+  "link": "URL or null",
+  "notes": "one line summary of what makes this notable or null"
+}}
+
+If date is unknown, use today: {today[:10] if len(today) > 10 else _date.today().isoformat()}.
+If fewer than 3 items found, still return what you found. Return [] if nothing concrete found.
+Return ONLY valid JSON array."""}]
+            },
+            timeout=30.0
+        )
+        parse_resp.raise_for_status()
+        raw2 = parse_resp.json()["choices"][0]["message"]["content"].strip()
+        activities = _extract_json(raw2)
+        if not isinstance(activities, list):
+            activities = []
+    except Exception:
+        activities = []
+
+    # Save to DB
+    saved = 0
+    for act in activities:
+        try:
+            db.execute(_t("""
+                INSERT INTO competitor_activity
+                (competitor_id, activity_date, format, topic, speaker, audience_focus, messaging_angle, cta, link, notes)
+                VALUES (:c, :d, :f, :t, :s, :a, :m, :ct, :l, :n)
+            """), {
+                "c": competitor_id,
+                "d": act.get("activity_date") or _date.today().isoformat(),
+                "f": act.get("format") or "other",
+                "t": (act.get("topic") or "")[:120],
+                "s": act.get("speaker"),
+                "a": act.get("audience_focus"),
+                "m": act.get("messaging_angle"),
+                "ct": act.get("cta"),
+                "l": act.get("link"),
+                "n": act.get("notes"),
+            })
+            saved += 1
+        except Exception:
+            continue
+    db.commit()
+
+    return {
+        "competitor": comp.name,
+        "activities_found": len(activities),
+        "activities_saved": saved,
+        "raw_research": raw_research,
+    }
+
+
+@app.get("/api/intelligence/insights")
+async def get_intelligence_insights(db: Session = Depends(get_db)):
+    """AI-generated written insights from the intelligence data."""
+    import os, httpx
+    from sqlalchemy import text as _t
+
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="OPENROUTER_API_KEY not configured")
+
+    # Pull key metrics for AI to analyze
+    top_icp = db.execute(_t("""
+        SELECT COALESCE(w.icp,'Others') AS icp, COUNT(*) AS webinars,
+               SUM((SELECT COUNT(*) FROM registrations r WHERE r.webinar_id=w.id)) AS regs,
+               SUM((SELECT COUNT(*) FROM attendances a WHERE a.webinar_id=w.id AND a.attended=TRUE)) AS att
+        FROM webinars w WHERE w.status='completed' GROUP BY w.icp ORDER BY regs DESC
+    """)).fetchall()
+
+    top_speakers = db.execute(_t("""
+        SELECT s.name,
+               COUNT(w.id) AS webinars,
+               SUM((SELECT COUNT(*) FROM registrations r WHERE r.webinar_id=w.id)) AS regs,
+               SUM((SELECT COUNT(*) FROM attendances a WHERE a.webinar_id=w.id AND a.attended=TRUE)) AS att
+        FROM speakers s JOIN webinars w ON w.speaker_id=s.id WHERE w.status='completed'
+        GROUP BY s.name ORDER BY att DESC
+    """)).fetchall()
+
+    recent = db.execute(_t("""
+        SELECT w.title, w.date,
+               (SELECT COUNT(*) FROM registrations r WHERE r.webinar_id=w.id) AS regs,
+               (SELECT COUNT(*) FROM attendances a WHERE a.webinar_id=w.id AND a.attended=TRUE) AS att
+        FROM webinars w WHERE w.status='completed' ORDER BY w.date DESC LIMIT 5
+    """)).fetchall()
+
+    icp_summary = "; ".join(
+        f"{r.icp}: {r.webinars} webinars, {r.regs} regs, {r.att} att ({round(r.att/r.regs*100,1) if r.regs else 0}% rate)"
+        for r in top_icp
+    )
+    spk_summary = "; ".join(
+        f"{r.name}: {r.webinars} webinars, {r.regs} regs, {r.att} att ({round(r.att/r.regs*100,1) if r.regs else 0}% rate)"
+        for r in top_speakers
+    )
+    recent_summary = "; ".join(
+        f"[{r.date}] {r.title}: {r.regs} regs, {r.att} att ({round(r.att/r.regs*100,1) if r.regs else 0}%)"
+        for r in recent
+    )
+
+    prompt = f"""You are a senior marketing analyst for Right Horizons, an Indian financial advisory firm. Analyze this webinar performance data and generate sharp, actionable insights.
+
+ICP PERFORMANCE: {icp_summary}
+SPEAKER PERFORMANCE: {spk_summary}
+RECENT WEBINARS: {recent_summary}
+
+Generate exactly 5 insights. Each insight must:
+- Name a specific number or % from the data
+- State what it means for the business
+- Suggest ONE concrete next action
+
+Format as JSON array:
+[
+  {{
+    "type": "win|risk|opportunity|trend|action",
+    "headline": "short bold claim ≤60 chars",
+    "detail": "1-2 sentences with specific numbers. What it means.",
+    "action": "One specific next step ≤80 chars",
+    "metric": "the key number that supports this insight"
+  }}
+]
+
+Types: win=something working well, risk=something declining/concerning, opportunity=untapped potential, trend=pattern over time, action=immediate thing to do.
+Return ONLY valid JSON array."""
+
+    try:
+        resp = httpx.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
+            json={"model": "anthropic/claude-sonnet-4.5", "max_tokens": 1500,
+                  "messages": [{"role": "user", "content": prompt}]},
+            timeout=30.0
+        )
+        resp.raise_for_status()
+        raw = resp.json()["choices"][0]["message"]["content"].strip()
+        insights = _extract_json(raw)
+        return {"insights": insights}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Insights failed: {e}")
 
 
 @app.delete("/api/competitor-activity/{activity_id}", status_code=204)
@@ -1129,7 +1369,7 @@ Remember: nothing outside this data exists for you. You are a closed-book analys
 
 @app.get("/api/topics")
 async def get_topic_suggestions():
-    """Generate fresh weekly topic suggestions per speaker using AI."""
+    """Generate fresh weekly topic suggestions per speaker using live market news + AI."""
     import os, json, httpx
     from datetime import date
 
@@ -1139,30 +1379,41 @@ async def get_topic_suggestions():
 
     today = date.today().strftime("%B %d, %Y")
 
-    prompt = f"""Today is {today}. You are a webinar content strategist for Right Horizons, a premium Indian financial advisory firm.
+    # Step 1: Use Perplexity (live web search) to fetch current Indian financial market news
+    news_context = ""
+    try:
+        news_resp = httpx.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
+            json={
+                "model": "perplexity/sonar",
+                "max_tokens": 800,
+                "messages": [{"role": "user", "content":
+                    f"Today is {today}. List the 10 most important Indian financial markets and personal finance news stories from the last 7 days. Focus on: Nifty/Sensex moves, RBI decisions, SEBI regulations, Budget updates, mutual funds, NRI investing, rupee, gold, real estate, ESOPs, tariffs, geopolitics affecting Indian markets. Be specific with numbers, dates, policy names. Format as a numbered list, one line each."}]
+            },
+            timeout=30.0
+        )
+        if news_resp.status_code == 200:
+            news_context = news_resp.json()["choices"][0]["message"]["content"].strip()
+    except Exception:
+        pass
 
-Generate 3 highly specific, timely, non-generic webinar topic suggestions for each of these 5 speakers.
+    # Step 2: Use Claude Sonnet with live news to generate speaker topics
+    context_block = f"LIVE MARKET NEWS (last 7 days as of {today}):\n{news_context}" if news_context else f"Today is {today}. Use your knowledge of current Indian financial markets."
 
-Use their exact framing style and topic DNA:
+    prompt = f"""You are a webinar content strategist for Right Horizons, a premium Indian financial advisory firm.
+
+{context_block}
+
+Generate 3 highly specific, timely, non-generic webinar topic suggestions for each of these 5 speakers. Each topic MUST be directly connected to something in the live news above — not general advice.
 
 SPEAKER PROFILES:
 - Rachna Rego: Retirement income (SWP, ₹1L monthly), PMS for wealth milestones, women & finance, child education savings, behavioral finance. Frames topics as personal journeys ("How I would...", "What changes now?", "The Real Math"). Never generic.
 - Anil Rego: Macro events (budget, RBI, tariffs, geopolitics), ESOPs, portfolio repositioning, market timing. Reacts to breaking news. Frames as urgent decisions ("After X, what now?", "The tax trap", "Smart money is doing this").
-- Sunil Kawariya: NRI investing (GIFT City, global asset allocation), large corpus (₹10Cr+), structured products, SIF, tax-efficient wealth. Frames as exclusive insider knowledge ("The strategy most NRIs miss", "₹X Crore , what changes").
-- Preethi Shukla: Special needs children financial planning (3×), SIP mechanics, tax-efficient investing, corpus building. Frames as step-by-step systems and parent-focused empathy ("The gap nobody talks about", "Step-by-step for parents").
-- Prabhat Ranjan: Equity markets, small/midcap, sectoral themes, PMS strategy, FY outlook. Co-presents with Vijay Chauhan. Frames as research-driven conviction ("Hidden in the data", "3 sectors the market hasn't priced in").
-
-CONTEXT for {today}:
-- India-Pakistan tensions post-Operation Sindoor, ceasefire holding but uncertainty remains
-- RBI rate cut cycle beginning, repo rate moving lower
-- US-India trade deal negotiations ongoing, tariff clarity improving
-- GIFT City rapidly expanding, new fund categories approved
-- Nifty near all-time highs, mid/smallcaps corrected 15-20% from peaks
-- SIF (Specialised Investment Funds), new SEBI category launched
-- Budget FY27: higher capital gains tax on equity, new NPS rules
-- Rupee stabilizing at 84-85/USD
-- Gold at record highs, ₹9,000+ per gram
-- NPS Vatsalya (children's NPS) gaining traction
+- Sunil Kawariya: NRI investing (GIFT City, global asset allocation), large corpus (₹10Cr+), structured products, SIF, tax-efficient wealth. Frames as exclusive insider knowledge ("The strategy most NRIs miss", "₹X Crore, what changes").
+- Preethi Shukla: Special needs children financial planning, SIP mechanics, tax-efficient investing, corpus building. Frames as step-by-step systems and parent-focused empathy ("The gap nobody talks about", "Step-by-step for parents").
+- Prabhat Ranjan: Equity markets, small/midcap, sectoral themes, PMS strategy, FY outlook. Frames as research-driven conviction ("Hidden in the data", "3 sectors the market hasn't priced in").
 
 Return a JSON array with this exact structure:
 [
@@ -1171,40 +1422,38 @@ Return a JSON array with this exact structure:
     "color": "#8b5cf6",
     "topics": [
       {{
-        "title": "TIGHT webinar title - MUST be ≤80 characters including spaces",
-        "hook": "ONE short sentence, ≤120 chars. What's the urgency today?",
-        "angle": "ONE short sentence, ≤100 chars. Why Right Horizons over generic content?",
-        "expected": "High|Medium|Low"
+        "title": "TIGHT webinar title - MUST be ≤80 characters",
+        "hook": "ONE sentence ≤120 chars referencing the specific news event driving urgency",
+        "angle": "ONE sentence ≤100 chars. Why Right Horizons specifically, not generic content.",
+        "expected": "High|Medium|Low",
+        "news_link": "which news item from above inspired this topic (1-2 words)"
       }}
     ]
   }}
 ]
 
-HARD RULES (each is a deal-breaker):
-1. Title MUST be 80 characters or less. Count them. Cut if needed.
-2. Hook MUST be 120 characters or less. One sentence.
-3. Angle MUST be 100 characters or less. One sentence.
-4. NEVER use em dashes (long dash). Use commas, periods, colons, parentheses instead.
-5. Titles must sound like Rachna/Anil/Sunil/Preethi/Prabhat with ₹ figures, timeframes, specific scenarios.
-6. No generic titles like "How to Invest Wisely" or "Understanding Mutual Funds".
-7. Hook must reference something happening TODAY in markets/news.
-8. Return ONLY valid JSON, no markdown, no commentary."""
+HARD RULES:
+1. Title ≤80 characters. Count them.
+2. Hook ≤120 characters. Must name a specific recent event/number.
+3. Angle ≤100 characters.
+4. NEVER use em dashes. Use commas, colons, parentheses instead.
+5. Every title must have ₹ figures OR timeframes OR specific scenarios.
+6. NO generic titles like "How to Invest Wisely".
+7. Return ONLY valid JSON, no markdown."""
 
     try:
         resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={
-                "model": "anthropic/claude-sonnet-4.5",
-                "max_tokens": 4000,
-                "messages": [{"role": "user", "content": prompt}]
-            },
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
+            json={"model": "anthropic/claude-sonnet-4.5", "max_tokens": 4000,
+                  "messages": [{"role": "user", "content": prompt}]},
             timeout=45.0
         )
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"].strip()
         topics = _strip_em_dashes(_extract_json(raw))
-        return {"topics": topics, "generated_on": today}
+        return {"topics": topics, "generated_on": today, "news_context": news_context or None}
     except ValueError as e:
         raise HTTPException(status_code=500, detail=f"AI returned invalid JSON: {e}")
     except Exception as e:

@@ -2530,6 +2530,9 @@ async function renderIntelligence() {
         <button class="btn btn-ghost btn-sm" onclick="_intelCache=null;renderIntelligence()">Refresh</button>
       </div>
       <div class="intel-tabs">
+        <button class="intel-tab ${S._intelTab==='insights'?'active':''}"  onclick="S._intelTab='insights';renderIntelligence()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>AI Insights
+        </button>
         <button class="intel-tab ${S._intelTab==='topics'?'active':''}"   onclick="S._intelTab='topics';renderIntelligence()">Topic Intelligence</button>
         <button class="intel-tab ${S._intelTab==='speakers'?'active':''}" onclick="S._intelTab='speakers';renderIntelligence()">Speaker Performance</button>
         <button class="intel-tab ${S._intelTab==='campaign'?'active':''}" onclick="S._intelTab='campaign';renderIntelligence()">Campaign Learning</button>
@@ -2538,7 +2541,7 @@ async function renderIntelligence() {
       </div>
       <div id="intel-body"><div class="pg-loading"><div class="spinner"></div><p>Loading intelligence…</p></div></div>
     </div>`);
-  if (!S._intelTab) S._intelTab = 'topics';
+  if (!S._intelTab) S._intelTab = 'insights';
   try {
     if (!_intelCache) _intelCache = await api('/api/intelligence');
     _drawIntelTab(_intelCache, S._intelTab);
@@ -2547,14 +2550,68 @@ async function renderIntelligence() {
   }
 }
 
+let _intelInsightsCache = null;
+
 function _drawIntelTab(data, tab) {
   const body = document.getElementById('intel-body');
   if (!body) return;
-  if (tab === 'topics')        body.innerHTML = _renderTopicIntel(data);
+  if (tab === 'insights')      _renderAIInsights(body);
+  else if (tab === 'topics')   body.innerHTML = _renderTopicIntel(data);
   else if (tab === 'speakers') body.innerHTML = _renderSpeakerIntel(data);
   else if (tab === 'campaign') body.innerHTML = _renderCampaignIntel(data);
   else if (tab === 'icp')      body.innerHTML = _renderICPIntel(data);
   else if (tab === 'competitor') renderCompetitorIntel();
+}
+
+const INSIGHT_TYPE_META = {
+  win:         { icon: '🏆', color: '#10b981', label: 'Win' },
+  risk:        { icon: '⚠️', color: '#f43f5e', label: 'Risk' },
+  opportunity: { icon: '🚀', color: '#6366f1', label: 'Opportunity' },
+  trend:       { icon: '📈', color: '#f59e0b', label: 'Trend' },
+  action:      { icon: '⚡', color: '#22d3ee', label: 'Action' },
+};
+
+async function _renderAIInsights(body) {
+  body.innerHTML = `<div class="intel-section"><div class="pg-loading"><div class="spinner"></div><p>Generating AI insights from your data…</p></div></div>`;
+  try {
+    if (!_intelInsightsCache) _intelInsightsCache = await api('/api/intelligence/insights');
+    const insights = _intelInsightsCache.insights || [];
+    if (!insights.length) {
+      body.innerHTML = `<div class="intel-section"><div class="empty-state"><div class="empty-title">Not enough data for insights yet</div><div class="empty-sub">Upload registration and attendance data for completed webinars first.</div></div></div>`;
+      return;
+    }
+    const cards = insights.map(ins => {
+      const meta = INSIGHT_TYPE_META[ins.type] || INSIGHT_TYPE_META.trend;
+      return `
+      <div class="insight-card" style="border-left:3px solid ${meta.color}">
+        <div class="insight-card-header">
+          <span class="insight-type-badge" style="background:${meta.color}18;color:${meta.color};border-color:${meta.color}40">
+            ${meta.icon} ${meta.label}
+          </span>
+          <span class="insight-metric" style="color:${meta.color}">${esc(ins.metric||'')}</span>
+        </div>
+        <div class="insight-headline">${esc(ins.headline)}</div>
+        <div class="insight-detail">${esc(ins.detail)}</div>
+        <div class="insight-action">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          ${esc(ins.action)}
+        </div>
+      </div>`;
+    }).join('');
+    body.innerHTML = `
+      <div class="intel-section">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div>
+            <h3 class="intel-h3" style="margin:0">AI-Generated Insights</h3>
+            <p class="intel-p" style="margin:4px 0 0">Based entirely on your real registration and attendance data.</p>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="_intelInsightsCache=null;_renderAIInsights(document.getElementById('intel-body'))">Regenerate</button>
+        </div>
+        <div class="insights-grid">${cards}</div>
+      </div>`;
+  } catch(e) {
+    body.innerHTML = `<div class="intel-section"><div class="empty-state"><div class="empty-title">Failed to generate insights</div><div class="empty-sub">${esc(e.message)}</div></div></div>`;
+  }
 }
 
 function _renderTopicIntel(data) {
@@ -2584,8 +2641,8 @@ function _renderTopicIntel(data) {
     <div class="intel-section">
       <div class="intel-kpis">
         <div class="intel-kpi"><div class="intel-kpi-lbl">Total Webinars</div><div class="intel-kpi-val">${data.total_webinars||0}</div></div>
-        <div class="intel-kpi"><div class="intel-kpi-lbl">Total Spend</div><div class="intel-kpi-val">₹${fmt(Math.round(data.total_spend||0))}</div></div>
-        <div class="intel-kpi"><div class="intel-kpi-lbl">Total Leads</div><div class="intel-kpi-val">${fmt(data.total_leads||0)}</div></div>
+        ${data.total_spend ? `<div class="intel-kpi"><div class="intel-kpi-lbl">Total Spend (Campaign)</div><div class="intel-kpi-val">₹${fmt(Math.round(data.total_spend))}</div></div>` : ''}
+        ${data.total_leads ? `<div class="intel-kpi"><div class="intel-kpi-lbl">Total Leads (Campaign)</div><div class="intel-kpi-val">${fmt(data.total_leads)}</div></div>` : ''}
       </div>
       <h3 class="intel-h3">ICP Performance Breakdown</h3>
       <p class="intel-p">Which ICP themes are pulling the right audience? Spend, CPL, leads, impressions and clicks were imported from your <em>RH_Reporting_FY26-27 - Webinar Highlights.csv</em>.</p>
@@ -2786,7 +2843,11 @@ function _drawCompetitorIntel(body, competitors, activity) {
       <div class="comp-actions-bar">
         <button class="btn btn-primary" onclick="openCompetitorActivityModal()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Log Competitor Activity
+          Log Manually
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="openAutoResearchModal()" style="border-color:#6366f1;color:#6366f1">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Research with AI
         </button>
         <button class="btn btn-gradient" onclick="runCompetitorGapAnalysis()" id="comp-gap-btn">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
@@ -2970,6 +3031,64 @@ async function deleteCompetitorActivity(id) {
     renderCompetitorIntel();
   } catch(e) {
     showToast('Failed to delete', 'error');
+  }
+}
+
+function openAutoResearchModal() {
+  const comps = (window._compList || []);
+  if (!comps.length) { alert('No competitors set up yet. Add competitors first.'); return; }
+  if (document.getElementById('auto-research-overlay')) document.getElementById('auto-research-overlay').remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'auto-research-overlay';
+  overlay.className = 'modal-overlay open';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:480px" onclick="event.stopPropagation()">
+      <div style="padding:24px 28px">
+        <div class="modal-title">Research Competitor with AI</div>
+        <p style="color:var(--text-secondary);font-size:13px;margin:8px 0 20px">
+          Uses live web search (Perplexity) to find recent webinars, events, and content for the selected competitor. Automatically adds findings to the activity log.
+        </p>
+        <div class="form-group" style="margin-bottom:16px">
+          <label class="form-label">Select Competitor</label>
+          <select class="form-input" id="ar-competitor-select">
+            ${comps.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div id="ar-result" style="margin-top:12px"></div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px">
+          <button class="btn btn-ghost" onclick="document.getElementById('auto-research-overlay').remove()">Cancel</button>
+          <button class="btn btn-primary" id="ar-submit-btn" onclick="runAutoResearch()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Research Now
+          </button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+async function runAutoResearch() {
+  const cid = document.getElementById('ar-competitor-select')?.value;
+  if (!cid) return;
+  const btn = document.getElementById('ar-submit-btn');
+  const result = document.getElementById('ar-result');
+  if (btn) { btn.disabled = true; btn.textContent = 'Searching…'; }
+  if (result) result.innerHTML = `<div style="font-size:12px;color:var(--text-muted)">Searching the web for recent activity… this takes ~15 seconds.</div>`;
+  try {
+    const data = await api('/api/competitor-research', { method:'POST', body: JSON.stringify({ competitor_id: parseInt(cid) }) });
+    if (result) result.innerHTML = `
+      <div style="background:#10b98118;border:1px solid #10b98140;border-radius:8px;padding:14px;font-size:13px">
+        <div style="font-weight:700;color:#10b981;margin-bottom:6px">✓ Research complete</div>
+        <div style="color:var(--text-secondary)">Found <strong>${data.activities_found}</strong> activities, saved <strong>${data.activities_saved}</strong> new entries for <strong>${esc(data.competitor)}</strong>.</div>
+        ${data.raw_research ? `<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--text-muted);font-size:12px">View raw research</summary><pre style="font-size:11px;white-space:pre-wrap;margin-top:8px;color:var(--text-secondary)">${esc(data.raw_research)}</pre></details>` : ''}
+      </div>`;
+    if (btn) { btn.disabled = false; btn.textContent = 'Research Again'; }
+    // Refresh competitor intel
+    setTimeout(() => { document.getElementById('auto-research-overlay')?.remove(); renderCompetitorIntel(); }, 3000);
+  } catch(e) {
+    if (result) result.innerHTML = `<div style="color:#f43f5e;font-size:12px">Failed: ${esc(e.message)}</div>`;
+    if (btn) { btn.disabled = false; btn.textContent = 'Research Now'; }
   }
 }
 
@@ -3175,9 +3294,17 @@ function renderTopicCards(data) {
     </div>`;
   }).join('');
 
-  // Add date footer
+  // Add date footer + live news source
   if (dateStr) {
-    grid.insertAdjacentHTML('beforeend', `<div class="topics-date-footer">Generated on ${esc(dateStr)} · Powered by WebinarIQ AI</div>`);
+    const newsHtml = data.news_context
+      ? `<details class="topics-news-detail"><summary>View live market context used</summary><pre>${esc(data.news_context)}</pre></details>`
+      : '';
+    grid.insertAdjacentHTML('beforeend', `
+      <div class="topics-date-footer">
+        Generated on ${esc(dateStr)} · Powered by live market news + WebinarIQ AI
+        ${data.news_context ? '<span style="color:#10b981;margin-left:8px">● Live news</span>' : '<span style="color:#f59e0b;margin-left:8px">● Offline mode</span>'}
+      </div>
+      ${newsHtml}`);
   }
 }
 
