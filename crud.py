@@ -367,7 +367,7 @@ def _parse_zoom_registration_csv(content: bytes) -> pd.DataFrame:
       Line 6: column headers (First Name, Last Name, Email, ...)
       Line 7+: data rows
     """
-    text_content = content.decode('utf-8', errors='replace')
+    text_content = content.decode('utf-8-sig', errors='replace')
     lines = text_content.splitlines()
 
     # Find the header row — look for a line containing "First Name" or "Email"
@@ -401,7 +401,7 @@ def _parse_zoom_attendee_csv(content: bytes) -> pd.DataFrame:
     We want only the "Attendee Details" section (includes both Yes and No attendees).
     Same person can appear multiple times (reconnections) — we SUM duration per email.
     """
-    text_content = content.decode('utf-8', errors='replace')
+    text_content = content.decode('utf-8-sig', errors='replace')
     lines = text_content.splitlines()
 
     # Find "Attendee Details" section
@@ -465,6 +465,11 @@ def _parse_zoom_attendee_csv(content: bytes) -> pd.DataFrame:
         df['email'] = df['email'].fillna('').str.strip().str.lower()
         # Remove rows with no email and no name (empty reconnection rows from Zoom)
         df = df[~((df['email'] == '') & (df.get('name', pd.Series(['']*len(df))).fillna('') == ''))]
+
+    # Replace Zoom no-show placeholder '--' in time/duration columns with NaN
+    for col in ['joined_at', 'left_at', 'duration_minutes']:
+        if col in df.columns:
+            df[col] = df[col].replace('--', pd.NA)
 
     # Parse duration as numeric
     if 'duration_minutes' in df.columns:
@@ -559,14 +564,14 @@ def _dedup_df(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
 
 def _is_zoom_registration_csv(content: bytes) -> bool:
     """Return True only if this looks like a Zoom Registration Report (not attendee)."""
-    first_line = content[:200].decode('utf-8', errors='replace').splitlines()[0].strip().lower()
-    return first_line.startswith('registration report')
+    first_line = content[:200].decode('utf-8-sig', errors='replace').splitlines()[0].strip().lower()
+    return 'registration report' in first_line
 
 
 def _is_zoom_attendee_csv(content: bytes) -> bool:
     """Return True only if this looks like a Zoom Attendee Report."""
-    first_line = content[:200].decode('utf-8', errors='replace').splitlines()[0].strip().lower()
-    return first_line.startswith('attendee report')
+    first_line = content[:200].decode('utf-8-sig', errors='replace').splitlines()[0].strip().lower()
+    return 'attendee report' in first_line
 
 
 def process_registration_upload(
@@ -637,7 +642,8 @@ def process_registration_upload(
          "fc": len(df), "dr": dups_removed, "ua": now},
     )
 
-    # Re-insert saved attendances matched against new registration IDs
+    # Re-insert saved attendances matched against new registration IDs.
+    # Walk-ins (attended but no match in new regs) get fresh ghost registrations.
     if existing_att:
         new_regs = db.execute(
             text("SELECT id, email FROM registrations WHERE webinar_id = :w"), {"w": webinar_id}
@@ -647,6 +653,14 @@ def process_registration_upload(
         for a in existing_att:
             email_key = (a.email or '').lower().strip()
             rid = new_reg_by_email.get(email_key)
+            if rid is None and a.attended:
+                # Walk-in: re-create ghost registration so attendance can be linked
+                res = db.execute(
+                    text("INSERT INTO registrations (webinar_id, attendee_name, email, source, registered_at)"
+                         " VALUES (:w, :n, :e, 'attendee_upload', :r) RETURNING id"),
+                    {"w": webinar_id, "n": email_key or 'Unknown', "e": a.email or None, "r": now},
+                )
+                rid = res.fetchone()[0]
             if rid:
                 att_restore.append({"w": webinar_id, "rid": rid, "ja": a.joined_at,
                                     "la": a.left_at, "dur": a.duration_minutes, "att": a.attended})
@@ -763,13 +777,16 @@ def process_attendee_upload(
             att_payload["rid"] = reg_id
             matched_att.append(att_payload)
         else:
-            ghost_rows.append({
-                "name": name, "email": email, "att": att_payload
-            })
+            # Only create ghost registrations for actual walk-ins (attended=True).
+            # No-show attendees (attended=False) with no matching reg record are
+            # simply skipped — they did not attend and were not registered.
             if row_attended:
+                ghost_rows.append({
+                    "name": name, "email": email, "att": att_payload
+                })
                 unmatched += 1
 
-    # Insert ghost registrations one at a time with RETURNING id (raw SQL)
+    # Insert ghost registrations (walk-ins only) one at a time with RETURNING id
     for g in ghost_rows:
         res = db.execute(
             text("INSERT INTO registrations (webinar_id, attendee_name, email, source, registered_at)"
