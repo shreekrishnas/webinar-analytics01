@@ -357,6 +357,144 @@ def get_speaker_detail(db: Session, speaker_id: int) -> Optional[schemas.Speaker
 
 # ── File upload processing ────────────────────────────────────────────────────
 
+def _parse_zoom_registration_csv(content: bytes) -> pd.DataFrame:
+    """
+    Parse Zoom-exported registration CSV. Format:
+      Line 1: "Registration Report"
+      Line 2: report generated time
+      Line 3-4: webinar summary row
+      Line 5: "Attendee Details"
+      Line 6: column headers (First Name, Last Name, Email, ...)
+      Line 7+: data rows
+    """
+    text_content = content.decode('utf-8', errors='replace')
+    lines = text_content.splitlines()
+
+    # Find the header row — look for a line containing "First Name" or "Email"
+    header_idx = None
+    for i, line in enumerate(lines):
+        low = line.lower()
+        if 'first name' in low or ('email' in low and 'registration' not in low and i > 2):
+            header_idx = i
+            break
+
+    if header_idx is None:
+        # Fall back to standard parse
+        return pd.read_csv(io.BytesIO(content), sep=None, engine='python',
+                           on_bad_lines='skip', encoding_errors='replace')
+
+    # Parse from header row onwards
+    data_text = '\n'.join(lines[header_idx:])
+    df = pd.read_csv(io.StringIO(data_text), on_bad_lines='skip')
+    return df
+
+
+def _parse_zoom_attendee_csv(content: bytes) -> pd.DataFrame:
+    """
+    Parse Zoom-exported attendee CSV. Format:
+      Line 1: "Attendee Report"
+      Line 2: report generated time
+      Line 3-4: webinar summary
+      Then sections: "Host Details", "Panelist Details", "Attendee Details"
+      Each section has its own header row + data rows.
+
+    We want only the "Attendee Details" section (includes both Yes and No attendees).
+    Same person can appear multiple times (reconnections) — we SUM duration per email.
+    """
+    text_content = content.decode('utf-8', errors='replace')
+    lines = text_content.splitlines()
+
+    # Find "Attendee Details" section
+    attendee_section_idx = None
+    for i, line in enumerate(lines):
+        if line.strip().lower().startswith('attendee details'):
+            attendee_section_idx = i
+            break
+
+    if attendee_section_idx is None:
+        # No section marker — try to find header row with "Attended" column
+        for i, line in enumerate(lines):
+            if 'attended' in line.lower() and 'email' in line.lower():
+                attendee_section_idx = i - 1  # header is on this line
+                break
+
+    if attendee_section_idx is None:
+        # Fall back
+        return pd.read_csv(io.BytesIO(content), sep=None, engine='python',
+                           on_bad_lines='skip', encoding_errors='replace')
+
+    # Header row is the line after "Attendee Details"
+    header_idx = attendee_section_idx + 1
+    if header_idx >= len(lines):
+        raise ValueError("Attendee Details section found but no data follows")
+
+    # Parse from header row to end of file
+    data_text = '\n'.join(lines[header_idx:])
+    df = pd.read_csv(io.StringIO(data_text), on_bad_lines='skip')
+
+    # Normalise columns
+    df.columns = [str(c).strip() for c in df.columns]
+
+    # Map Zoom column names → our standard names
+    zoom_col_map = {
+        'First Name': 'first_name',
+        'Last Name': 'last_name',
+        'Email': 'email',
+        'Attended': 'attended_flag',
+        'Join Time': 'joined_at',
+        'Leave Time': 'left_at',
+        'Time in Session (minutes)': 'duration_minutes',
+        'Registration Time': 'registered_at',
+        'Job Title': 'job_title',
+        'Phone Number (Enter with country code ex., +91 9800000000)': 'phone',
+        'Phone Number': 'phone',
+        'State': 'state',
+        'Source Name': 'source',
+        'Country/Region Name': 'country',
+        'User Name (Original Name)': 'display_name',
+    }
+    df = df.rename(columns={k: v for k, v in zoom_col_map.items() if k in df.columns})
+
+    # Build full name
+    if 'first_name' in df.columns:
+        last = df.get('last_name', pd.Series([''] * len(df)))
+        df['name'] = (df['first_name'].fillna('') + ' ' + last.fillna('')).str.strip()
+
+    # Clean email
+    if 'email' in df.columns:
+        df['email'] = df['email'].fillna('').str.strip().str.lower()
+        # Remove rows with no email and no name (empty reconnection rows from Zoom)
+        df = df[~((df['email'] == '') & (df.get('name', pd.Series(['']*len(df))).fillna('') == ''))]
+
+    # Parse duration as numeric
+    if 'duration_minutes' in df.columns:
+        df['duration_minutes'] = pd.to_numeric(df['duration_minutes'], errors='coerce').fillna(0).astype(int)
+
+    # Parse attended flag
+    if 'attended_flag' in df.columns:
+        df['attended'] = df['attended_flag'].astype(str).str.strip().str.lower() == 'yes'
+    else:
+        df['attended'] = True
+
+    # For reconnecting attendees: aggregate per email — sum duration, keep first join/last leave
+    if 'email' in df.columns and 'duration_minutes' in df.columns:
+        # Only aggregate rows that have an email
+        has_email = df[df['email'] != ''].copy()
+        no_email  = df[df['email'] == ''].copy()
+
+        if len(has_email):
+            agg_dict = {'duration_minutes': 'sum', 'attended': 'max'}
+            for col in ['name', 'joined_at', 'left_at', 'registered_at', 'phone',
+                        'source', 'state', 'country', 'job_title', 'display_name']:
+                if col in has_email.columns:
+                    agg_dict[col] = 'first'
+            has_email = has_email.groupby('email', as_index=False).agg(agg_dict)
+
+        df = pd.concat([has_email, no_email], ignore_index=True)
+
+    return df
+
+
 def _normalise_cols(df: pd.DataFrame) -> pd.DataFrame:
     """Lowercase + strip column names, try to map common variants."""
     df.columns = [str(c).strip().lower().replace(' ', '_').replace('-', '_') for c in df.columns]
@@ -372,12 +510,16 @@ def _normalise_cols(df: pd.DataFrame) -> pd.DataFrame:
         'leave_time': 'left_at', 'leave_at': 'left_at', 'time_left': 'left_at',
         'registration_date': 'registered_at', 'date': 'registered_at',
         'registration_source': 'source', 'channel': 'source',
+        'registration_time': 'registered_at',
+        'source_name': 'source',
+        'time_in_session': 'duration_minutes',
     }
     df = df.rename(columns=rename_map)
     if 'name' not in df.columns and 'first' in df.columns:
-        last = df.get('last', '')
+        last = df.get('last', pd.Series([''] * len(df)))
         df['name'] = (df['first'].fillna('') + ' ' + last.fillna('')).str.strip()
     return df
+
 
 
 def _dedup_df(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
@@ -420,7 +562,13 @@ def process_registration_upload(
 ) -> schemas.UploadResult:
     try:
         if filename.lower().endswith('.csv'):
-            df = pd.read_csv(io.BytesIO(content), sep=None, engine='python', on_bad_lines='skip', encoding_errors='replace')
+            # Try Zoom format first (has metadata rows + section headers)
+            text_sample = content[:500].decode('utf-8', errors='replace').lower()
+            if 'registration report' in text_sample or 'attendee details' in text_sample or 'report generated' in text_sample:
+                df = _parse_zoom_registration_csv(content)
+            else:
+                df = pd.read_csv(io.BytesIO(content), sep=None, engine='python',
+                                 on_bad_lines='skip', encoding_errors='replace')
         else:
             df = pd.read_excel(io.BytesIO(content))
     except Exception as e:
@@ -485,15 +633,29 @@ def process_attendee_upload(
 ) -> schemas.UploadResult:
     try:
         if filename.lower().endswith('.csv'):
-            df = pd.read_csv(io.BytesIO(content), sep=None, engine='python', on_bad_lines='skip', encoding_errors='replace')
+            text_sample = content[:500].decode('utf-8', errors='replace').lower()
+            if 'attendee report' in text_sample or 'attendee details' in text_sample or 'report generated' in text_sample or 'host details' in text_sample:
+                df = _parse_zoom_attendee_csv(content)
+                # Already normalised inside _parse_zoom_attendee_csv — skip _normalise_cols
+                _zoom_parsed = True
+            else:
+                df = pd.read_csv(io.BytesIO(content), sep=None, engine='python',
+                                 on_bad_lines='skip', encoding_errors='replace')
+                _zoom_parsed = False
         else:
             df = pd.read_excel(io.BytesIO(content))
+            _zoom_parsed = False
     except Exception as e:
         raise ValueError(f"Could not parse file: {e}")
 
-    df = _normalise_cols(df)
+    if not _zoom_parsed:
+        df = _normalise_cols(df)
     original_count = len(df)
-    df, dups_removed = _dedup_df(df)
+    # For Zoom files, dedup was already done per-email with duration summed
+    if not _zoom_parsed:
+        df, dups_removed = _dedup_df(df)
+    else:
+        dups_removed = 0
 
     # Raw SQL deletes — bypass ORM to avoid sequence cache issues
     db.execute(text("DELETE FROM attendances WHERE webinar_id = :w"), {"w": webinar_id})
@@ -517,6 +679,13 @@ def process_attendee_upload(
     for _, row in df.iterrows():
         name  = str(row.get('name', 'Unknown')).strip() or 'Unknown'
         email = str(row.get('email', '')).strip().lower() or None
+
+        # For Zoom format, 'attended' column is already a bool
+        if _zoom_parsed and 'attended' in row:
+            row_attended = bool(row['attended'])
+        else:
+            row_attended = True  # non-Zoom files assumed all attended
+
         duration = row.get('duration_minutes', None)
         try:
             duration = int(float(duration)) if duration is not None and str(duration).strip() else None
@@ -548,6 +717,7 @@ def process_attendee_upload(
         att_payload = {
             "w": webinar_id, "rid": None,
             "ja": joined_at, "la": left_at, "dur": duration,
+            "attended_bool": row_attended,
         }
 
         if reg_id is not None:
@@ -557,7 +727,8 @@ def process_attendee_upload(
             ghost_rows.append({
                 "name": name, "email": email, "att": att_payload
             })
-            unmatched += 1
+            if row_attended:
+                unmatched += 1
 
     # Insert ghost registrations one at a time with RETURNING id (raw SQL)
     for g in ghost_rows:
@@ -574,8 +745,9 @@ def process_attendee_upload(
     if matched_att:
         db.execute(
             text("INSERT INTO attendances (webinar_id, registration_id, joined_at, left_at, duration_minutes, attended)"
-                 " VALUES (:w, :rid, :ja, :la, :dur, TRUE)"),
-            matched_att,
+                 " VALUES (:w, :rid, :ja, :la, :dur, :att)"),
+            [dict(w=r["w"], rid=r["rid"], ja=r["ja"], la=r["la"], dur=r["dur"], att=r["attended_bool"])
+             for r in matched_att],
         )
 
     # Update webinar status and log — still use ORM for single-row ops (fine)
