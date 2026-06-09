@@ -286,6 +286,8 @@ html.dark .btn.btn-ghost, html.dark .btn.btn-secondary { background: rgba(30,41,
 .btn.btn-danger:hover, .wb-card-del:hover { background: var(--status-danger) !important; box-shadow: 0 6px 20px rgba(220,38,38,0.35) !important; }
 .wb-card-del { background: transparent !important; color: #9CA3AF !important; border-radius: 0.625rem !important; }
 .wb-card-del:hover { background: rgba(239,68,68,0.10) !important; color: #DC2626 !important; box-shadow: none !important; }
+.wb-card-edit { background: transparent !important; color: #9CA3AF !important; border-radius: 0.625rem !important; width:26px; height:26px; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition: background .15s, color .15s; }
+.wb-card-edit:hover { background: rgba(99,102,241,0.10) !important; color: #6366f1 !important; box-shadow: none !important; }
 
 /* ── 6. INPUTS / SEARCH ── */
 .form-input, .filter-select, input[type="text"], input[type="email"], input[type="date"],

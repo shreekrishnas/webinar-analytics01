@@ -443,15 +443,17 @@ function nav(page, sub) {
 
 function setContent(html) {
   const el = document.getElementById('content');
+  el.style.opacity = '0';
   el.innerHTML = html;
-  // Trigger animations after content is painted
   requestAnimationFrame(() => {
+    el.style.opacity = '1';
     animateCards('.wb-card, .spk-card');
     animateBars();
     runCountUps();
     decorateLeaderboardRows();
     initScrollReveal();
-    initCardTilt();
+    // Only run expensive tilt on desktop
+    if (window.innerWidth >= 768) initCardTilt();
   });
 }
 
@@ -996,6 +998,13 @@ function webinarCardHTML(w) {
           <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
             ${w.icp && w.icp !== 'Others' ? `<span class="icp-badge icp-${(w.icp||'').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}">${esc(w.icp)}</span>` : ''}
             <span class="wb-badge ${badgeCls}" style="font-size:10px;opacity:0.75">${w.status}</span>
+            <button class="wb-card-edit" title="Edit webinar"
+              onclick="event.stopPropagation();editWebinar(${w.id})">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
             <button class="wb-card-del" title="Delete webinar"
               onclick="event.stopPropagation();confirmDeleteWebinar(${w.id},'${esc(w.title).replace(/'/g,"\\'")}')">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -1223,6 +1232,10 @@ function _drawWebinarDetail(w) {
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Export Report
               </button>` : ''}
+              <button class="btn btn-ghost btn-sm" onclick="editWebinar(${w.id})" style="font-size:12px;display:flex;align-items:center;gap:5px;border-radius:8px;height:32px;padding:0 12px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                Edit
+              </button>
               <button class="wb-card-del" style="width:32px;height:32px" title="Delete webinar"
                 onclick="confirmDeleteWebinar(${w.id},'${safeTitle}')">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -2187,21 +2200,52 @@ async function renderLeaderboard(speakerId, webinarId) {
 /* ══════════════════════════════════════════════════════════════════════════
    NEW WEBINAR MODAL
 ══════════════════════════════════════════════════════════════════════════ */
-function openWebinarModal() {
-  // Default date to today
-  const today = new Date().toISOString().split('T')[0];
-  const dateInput = document.getElementById('nw-date');
-  if (dateInput && !dateInput.value) dateInput.value = today;
+let _editWebinarId = null; // null = create mode, number = edit mode
+
+function openWebinarModal(webinar) {
+  _editWebinarId = webinar ? webinar.id : null;
+
+  // Update modal title/button
+  const titleEl = document.querySelector('#modal-overlay .modal-title');
+  const subEl   = document.querySelector('#modal-overlay .modal-sub');
+  const btn     = document.querySelector('#modal-overlay .btn-primary');
+  if (titleEl) titleEl.textContent = webinar ? 'Edit Webinar' : 'Add New Webinar';
+  if (subEl)   subEl.textContent   = webinar ? 'Update the details for this webinar session' : 'Fill in the details to create a new webinar session';
+  if (btn)     btn.innerHTML       = webinar
+    ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Save Changes'
+    : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Create Webinar';
+
+  if (webinar) {
+    // Pre-fill fields
+    const f = id => document.getElementById(id);
+    if (f('nw-title'))   f('nw-title').value   = webinar.title || '';
+    if (f('nw-date'))    f('nw-date').value     = webinar.date || '';
+    if (f('nw-time'))    f('nw-time').value     = webinar.time || '';
+    if (f('nw-speaker')) f('nw-speaker').value  = webinar.speaker_name || '';
+    if (f('nw-desc'))    f('nw-desc').value     = webinar.description || '';
+    if (f('nw-icp'))     f('nw-icp').value      = webinar.icp || 'Others';
+    const radio = document.querySelector(`input[name="nw-status-radio"][value="${webinar.status || 'upcoming'}"]`);
+    if (radio) radio.checked = true;
+  } else {
+    // Default date to today for new webinar
+    const today = new Date().toISOString().split('T')[0];
+    const dateInput = document.getElementById('nw-date');
+    if (dateInput && !dateInput.value) dateInput.value = today;
+  }
+
   document.getElementById('modal-overlay').classList.add('open');
   setTimeout(() => document.getElementById('nw-title').focus(), 80);
 }
 
 function closeWebinarModal() {
   document.getElementById('modal-overlay').classList.remove('open');
+  _editWebinarId = null;
   ['nw-title','nw-time','nw-speaker','nw-desc'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
+  const dateInput = document.getElementById('nw-date');
+  if (dateInput) dateInput.value = '';
   // Reset ICP to "Others"
   const icpSel = document.getElementById('nw-icp');
   if (icpSel) icpSel.value = 'Others';
@@ -2246,10 +2290,17 @@ async function submitWebinarModal() {
     icp: (document.getElementById('nw-icp') || {value:'Others'}).value,
   };
 
+  const isEdit = !!_editWebinarId;
+
   try {
-    const created = await api('/api/webinars', 'POST', payload);
+    let result;
+    if (isEdit) {
+      result = await api(`/api/webinars/${_editWebinarId}`, 'PATCH', payload);
+    } else {
+      result = await api('/api/webinars', 'POST', payload);
+    }
     closeWebinarModal();
-    showToast(`"${title}" saved! Upload your data below.`);
+    showToast(isEdit ? `"${title}" updated!` : `"${title}" saved! Upload your data below.`);
 
     // Refresh lists so new speaker appears
     const [webinars, speakers] = await Promise.all([
@@ -2263,13 +2314,24 @@ async function submitWebinarModal() {
     const dl = document.getElementById('speaker-list');
     if (dl) dl.innerHTML = S.speakers.map(sp => `<option value="${esc(sp.name)}">`).join('');
 
-    // Go straight to the new webinar's upload/detail page
-    nav('webinar', created.id);
+    if (isEdit) {
+      // Refresh current webinar detail page if open
+      if (S.page === 'webinar' && S.sub == _editWebinarId) {
+        nav('webinar', _editWebinarId);
+      } else {
+        renderHome();
+      }
+    } else {
+      // Go straight to the new webinar's upload/detail page
+      nav('webinar', result.id);
+    }
   } catch(e) {
     showToast('Could not save webinar. Please try again.', 'error');
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Create Webinar';
+      btn.innerHTML = isEdit
+        ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Save Changes'
+        : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Create Webinar';
     }
   }
 }
@@ -4690,6 +4752,15 @@ function renderAdCards(webinarId, ads) {
 }
 
 /* ── Delete webinar ─────────────────────────────────────────────────────── */
+async function editWebinar(id) {
+  // Find webinar in cache, or fetch it
+  let w = S.webinars.find(x => x.id == id) || detailCache[id];
+  if (!w) {
+    try { w = await api(`/api/webinars/${id}`); } catch(e) { showToast('Failed to load webinar', 'error'); return; }
+  }
+  openWebinarModal(w);
+}
+
 async function confirmDeleteWebinar(id, title) {
   if (!confirm(`Delete "${title}"?\n\nThis will permanently remove all registration and attendance data. This cannot be undone.`)) return;
   try {

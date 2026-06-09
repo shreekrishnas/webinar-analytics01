@@ -679,7 +679,7 @@ html.dark ::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.55); }
 }
 
 /* ── Content ── */
-.content { flex: 1; padding: 28px; }
+.content { flex: 1; padding: 28px; transition: opacity 0.12s ease; }
 
 /* ── Loading / Skeleton ── */
 .pg-loading {
@@ -923,13 +923,14 @@ html.dark ::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.55); }
 .upload-tag.has  { background: rgba(16,185,129,0.12); color: #059669; border: 1px solid rgba(16,185,129,0.20); }
 .upload-tag.none { background: var(--border-2); color: var(--text-3); border: 1px solid var(--border); }
 
-.wb-card-del {
+.wb-card-del, .wb-card-edit {
   width: 26px; height: 26px; border-radius: var(--r-sm);
   display: flex; align-items: center; justify-content: center;
   color: var(--text-3); flex-shrink: 0;
   transition: background var(--transition), color var(--transition);
 }
 .wb-card-del:hover { background: rgba(244,63,94,0.12); color: #f43f5e; }
+.wb-card-edit:hover { background: rgba(99,102,241,0.12); color: #6366f1; }
 
 /* Back button */
 .back-btn {
