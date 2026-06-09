@@ -178,6 +178,10 @@ def update_webinar(webinar_id: int, payload: dict, db: Session = Depends(get_db)
         w.description = payload["description"]
     if "status" in payload:
         w.status = payload["status"]
+    if "date" in payload:
+        from datetime import date as _date
+        d = payload["date"]
+        w.date = _date.fromisoformat(d) if isinstance(d, str) else d
     if "icp" in payload:
         w.icp = payload["icp"] or "Others"
     if "speaker_name" in payload:

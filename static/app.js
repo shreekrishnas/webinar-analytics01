@@ -2326,7 +2326,8 @@ async function submitWebinarModal() {
       nav('webinar', result.id);
     }
   } catch(e) {
-    showToast('Could not save webinar. Please try again.', 'error');
+    const msg = e.message ? e.message.substring(0, 200) : 'Could not save webinar. Please try again.';
+    showToast(`Error: ${msg}`, 'error');
     if (btn) {
       btn.disabled = false;
       btn.innerHTML = isEdit
