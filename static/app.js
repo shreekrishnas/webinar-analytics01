@@ -2922,52 +2922,437 @@ let _topicsCache = null; // no client-side caching — always fetch fresh
 /* ── Intelligence Module (Phase 2) ──────────────────────────────────────── */
 let _intelCache = null; // always fetch fresh — no client-side caching
 
+let _intelCache = null;
+let _intelHotLeadsCache = null;
+let _intelInsightsCache = null;
+
 async function renderIntelligence() {
+  if (!S._intelTab) S._intelTab = 'scoreboard';
   setContent(`
     <div class="intel-page">
       <div class="page-hd">
         <div>
           <h1 class="page-title">Smart Recommendations</h1>
-          <p class="page-sub">Your webinar programme analytics and intelligence hub.</p>
+          <p class="page-sub">Real data. Clear actions. No filler.</p>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="_intelCache=null;renderIntelligence()">Refresh</button>
+        <button class="btn btn-ghost btn-sm" onclick="_intelCache=null;_intelHotLeadsCache=null;renderIntelligence()">Refresh</button>
       </div>
       <div class="intel-tabs">
-        <button class="intel-tab ${S._intelTab==='insights'?'active':''}"  onclick="S._intelTab='insights';renderIntelligence()">AI Insights</button>
-        <button class="intel-tab ${S._intelTab==='topics'?'active':''}"   onclick="S._intelTab='topics';renderIntelligence()">Topic Intelligence</button>
-        <button class="intel-tab ${S._intelTab==='campaign'?'active':''}" onclick="S._intelTab='campaign';renderIntelligence()">Campaign Learning</button>
-        <button class="intel-tab ${S._intelTab==='competitor'?'active':''}" onclick="S._intelTab='competitor';renderIntelligence()">Competitor Intel</button>
+        <button class="intel-tab ${S._intelTab==='scoreboard'?'active':''}" onclick="S._intelTab='scoreboard';renderIntelligence()">Programme Scoreboard</button>
+        <button class="intel-tab ${S._intelTab==='hotleads'?'active':''}"   onclick="S._intelTab='hotleads';renderIntelligence()">Hot Leads</button>
+        <button class="intel-tab ${S._intelTab==='nextplay'?'active':''}"   onclick="S._intelTab='nextplay';renderIntelligence()">Next Play</button>
       </div>
-      <div id="intel-body"><div class="pg-loading"><div class="spinner"></div><p>Loading intelligence…</p></div></div>
+      <div id="intel-body"><div class="pg-loading"><div class="spinner"></div><p>Loading…</p></div></div>
     </div>`);
-  if (!S._intelTab) S._intelTab = 'insights';
   try {
-    _intelCache = await api('/api/intelligence');
-    _drawIntelTab(_intelCache, S._intelTab);
+    const body = document.getElementById('intel-body');
+    if (S._intelTab === 'scoreboard') {
+      _renderScoreboard(body);
+    } else if (S._intelTab === 'hotleads') {
+      await _renderHotLeads(body);
+    } else if (S._intelTab === 'nextplay') {
+      if (!_intelCache) _intelCache = await api('/api/intelligence');
+      _renderNextPlay(body, _intelCache);
+    }
   } catch(e) {
-    document.getElementById('intel-body').innerHTML = `<div class="empty-state"><div class="empty-title">Failed to load</div></div>`;
+    const b = document.getElementById('intel-body');
+    if (b) b.innerHTML = `<div class="intel-section"><div class="empty-state"><div class="empty-title">Failed to load</div><div class="empty-sub">${esc(e.message)}</div></div></div>`;
   }
 }
 
-let _intelInsightsCache = null;
+// ── Tab 1: Programme Scoreboard ───────────────────────────────────────────────
+function _renderScoreboard(body) {
+  const completed = (S.webinars || [])
+    .filter(w => w.status === 'completed' && (w.total_registrations || 0) > 0)
+    .sort((a, b) => (b.performance_score || 0) - (a.performance_score || 0));
 
-function _drawIntelTab(data, tab) {
-  const body = document.getElementById('intel-body');
-  if (!body) return;
-  if (tab === 'insights')      _renderAIInsights(body);
-  else if (tab === 'topics')   body.innerHTML = _renderTopicIntel(data);
-  else if (tab === 'campaign') body.innerHTML = _renderCampaignIntel(data);
-  else if (tab === 'icp')      body.innerHTML = _renderICPIntel(data);
-  else if (tab === 'competitor') renderCompetitorIntel();
+  if (!completed.length) {
+    body.innerHTML = `<div class="intel-section"><div class="empty-state"><div class="empty-title">No completed webinars yet</div><div class="empty-sub">Mark webinars as completed and upload data to see the scoreboard.</div></div></div>`;
+    return;
+  }
+
+  const avgRate = Math.round(completed.reduce((s, w) => s + (w.attendance_rate || 0), 0) / completed.length);
+  const avgRegs = Math.round(completed.reduce((s, w) => s + (w.total_registrations || 0), 0) / completed.length);
+
+  const scaleList  = completed.filter(w => (w.attendance_rate || 0) >= 45);
+  const maintList  = completed.filter(w => (w.attendance_rate || 0) >= 30 && (w.attendance_rate || 0) < 45);
+  const fixList    = completed.filter(w => (w.attendance_rate || 0) >= 15 && (w.attendance_rate || 0) < 30);
+  const dropList   = completed.filter(w => (w.attendance_rate || 0) < 15);
+
+  // Monthly trend
+  const byMonth = {};
+  completed.forEach(w => {
+    if (!w.date) return;
+    const m = w.date.slice(0, 7);
+    if (!byMonth[m]) byMonth[m] = { regs: 0, att: 0, count: 0 };
+    byMonth[m].regs  += (w.total_registrations || 0);
+    byMonth[m].att   += (w.total_attendees || 0);
+    byMonth[m].count += 1;
+  });
+  const months  = Object.keys(byMonth).sort().slice(-8);
+  const maxRegs = Math.max(...months.map(m => byMonth[m].regs), 1);
+
+  const statusCfg = rate => {
+    if (rate >= 45) return { label:'SCALE',    color:'#10b981', bg:'#f0fdf4', border:'#bbf7d0' };
+    if (rate >= 30) return { label:'MAINTAIN', color:'#6366f1', bg:'#eef2ff', border:'#c7d2fe' };
+    if (rate >= 15) return { label:'FIX',      color:'#f59e0b', bg:'#fffbeb', border:'#fde68a' };
+    return              { label:'DROP',      color:'#f43f5e', bg:'#fff1f2', border:'#fecdd3' };
+  };
+
+  const webRow = (w, i) => {
+    const s = statusCfg(w.attendance_rate || 0);
+    const noshow = (w.total_registrations || 0) - (w.total_attendees || 0);
+    return `
+    <tr style="animation:fadeSlideUp .25s ease both;animation-delay:${Math.min(i*25,600)}ms">
+      <td style="padding:12px 14px">
+        <div style="font-weight:600;font-size:13px;color:var(--text-primary);line-height:1.3">${esc(w.title)}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px">${fmtDate(w.date||'')} &nbsp;·&nbsp; ${esc(w.speaker_name||'—')} &nbsp;·&nbsp; <span class="icp-badge icp-${(w.icp||'others').toLowerCase().replace(/\s+/g,'-')}" style="font-size:10px;padding:1px 7px">${esc(w.icp||'Others')}</span></div>
+      </td>
+      <td style="padding:12px 14px;text-align:right;font-family:var(--font-mono);font-weight:700;font-size:13px">${fmt(w.total_registrations||0)}</td>
+      <td style="padding:12px 14px;text-align:right;font-family:var(--font-mono);font-weight:700;font-size:13px">${fmt(w.total_attendees||0)}</td>
+      <td style="padding:12px 14px;text-align:right;font-weight:800;font-size:14px;color:${s.color}">${(w.attendance_rate||0).toFixed(1)}%</td>
+      <td style="padding:12px 14px;text-align:right;font-family:var(--font-mono);font-size:12px;color:var(--text-muted)">${fmt(noshow)}</td>
+      <td style="padding:12px 14px;text-align:right"><span style="font-size:10px;font-weight:800;letter-spacing:.6px;color:${s.color};background:${s.bg};border:1px solid ${s.border};border-radius:20px;padding:3px 10px">${s.label}</span></td>
+    </tr>`;
+  };
+
+  body.innerHTML = `
+    <div class="intel-section">
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px">
+        ${[
+          { label:'Webinars Run',          val: completed.length,  sub:'completed',                                  color:'#6366f1' },
+          { label:'Avg Attendance Rate',   val: avgRate+'%',       sub: avgRate>=35?'On target ✓':'Below 35% target ⚠', color: avgRate>=35?'#10b981':'#f59e0b' },
+          { label:'Avg Registrations',     val: fmt(avgRegs),      sub:'per webinar',                                color:'#6366f1' },
+          { label:'Scale-worthy',          val: scaleList.length,  sub:`${Math.round(scaleList.length/completed.length*100)}% of programme`, color:'#10b981' },
+        ].map(k=>`
+          <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:16px 18px;border-top:3px solid ${k.color}">
+            <div style="font-size:24px;font-weight:800;color:${k.color}">${k.val}</div>
+            <div style="font-size:11px;font-weight:700;color:var(--text-primary);margin-top:3px">${k.label}</div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${k.sub}</div>
+          </div>`).join('')}
+      </div>
+
+      ${months.length >= 2 ? `
+      <div style="margin-bottom:28px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:12px">📈 Monthly Trend</div>
+        <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:14px;padding:18px 20px">
+          <div style="display:flex;align-items:flex-end;gap:6px;height:80px">
+            ${months.map(m => {
+              const d = byMonth[m];
+              const rate = d.regs > 0 ? Math.round(d.att / d.regs * 100) : 0;
+              const barH = Math.round(d.regs / maxRegs * 72);
+              const c = rate >= 40 ? '#10b981' : rate >= 25 ? '#6366f1' : '#f59e0b';
+              return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
+                <div style="font-size:10px;font-weight:800;color:${c}">${rate}%</div>
+                <div style="width:100%;background:${c};border-radius:3px 3px 0 0;height:${Math.max(barH,4)}px"></div>
+                <div style="font-size:9px;color:var(--text-muted)">${m.slice(5)}</div>
+              </div>`;
+            }).join('')}
+          </div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:8px;text-align:center">Bar height = registrations volume · % = attendance rate</div>
+        </div>
+      </div>` : ''}
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px">
+        ${[
+          { label:'SCALE',    list:scaleList,  color:'#10b981', bg:'#f0fdf4', border:'#bbf7d0', desc:'≥45% attendance' },
+          { label:'MAINTAIN', list:maintList,  color:'#6366f1', bg:'#eef2ff', border:'#c7d2fe', desc:'30–45%' },
+          { label:'FIX',      list:fixList,    color:'#f59e0b', bg:'#fffbeb', border:'#fde68a', desc:'15–30%' },
+          { label:'DROP',     list:dropList,   color:'#f43f5e', bg:'#fff1f2', border:'#fecdd3', desc:'<15% attendance' },
+        ].map(b=>`
+          <div style="background:${b.bg};border:1.5px solid ${b.border};border-radius:12px;padding:14px 16px;text-align:center">
+            <div style="font-size:28px;font-weight:800;color:${b.color}">${b.list.length}</div>
+            <div style="font-size:11px;font-weight:800;letter-spacing:.6px;color:${b.color};margin:2px 0">${b.label}</div>
+            <div style="font-size:10px;color:var(--text-muted)">${b.desc}</div>
+          </div>`).join('')}
+      </div>
+
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:10px">All Webinars — Ranked by Performance Score</div>
+      <div style="border:1.5px solid var(--border);border-radius:14px;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:var(--surface-alt,#f8fafc)">
+              <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Webinar</th>
+              <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Regs</th>
+              <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Attended</th>
+              <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Att Rate</th>
+              <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">No-shows</th>
+              <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${completed.map((w, i) => webRow(w, i)).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
-const INSIGHT_TYPE_META = {
-  win:         { icon: '🏆', color: '#10b981', label: 'Win' },
-  risk:        { icon: '⚠️', color: '#f43f5e', label: 'Risk' },
-  opportunity: { icon: '🚀', color: '#6366f1', label: 'Opportunity' },
-  trend:       { icon: '📈', color: '#f59e0b', label: 'Trend' },
-  action:      { icon: '⚡', color: '#22d3ee', label: 'Action' },
-};
+// ── Tab 2: Hot Leads ──────────────────────────────────────────────────────────
+async function _renderHotLeads(body) {
+  body.innerHTML = `<div class="intel-section"><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 0;gap:12px"><div class="spinner"></div><div style="font-size:14px;color:var(--text-muted)">Finding high-intent leads…</div></div></div>`;
+  _intelHotLeadsCache = _intelHotLeadsCache || await api('/api/intelligence/hot-leads');
+  const d = _intelHotLeadsCache;
+  const hot    = d.hot_leads || [];
+  const repeat = d.repeat_attendees || [];
+  const convRate   = d.total_unique_attendees > 0 ? Math.round(d.in_pipeline / d.total_unique_attendees * 100) : 0;
+  const notInPipeline = Math.max(0, d.total_unique_attendees - d.in_pipeline);
+
+  const hotRows = hot.slice(0, 60).map((l, i) => `
+    <tr style="animation:fadeSlideUp .25s ease both;animation-delay:${Math.min(i*20,500)}ms">
+      <td style="padding:11px 14px">
+        <div style="font-weight:600;font-size:13px;color:var(--text-primary)">${esc(l.name||'Unknown')}</div>
+        <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">${esc(l.email||'')}</div>
+      </td>
+      <td style="padding:11px 14px"><span class="icp-badge icp-${(l.icp||'others').toLowerCase().replace(/\s+/g,'-')}" style="font-size:10px">${esc(l.icp||'Others')}</span></td>
+      <td style="padding:11px 14px;max-width:220px">
+        <div style="font-size:12px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.webinar_title||'')}</div>
+        <div style="font-size:10px;color:var(--text-muted)">${fmtDate(l.webinar_date||'')}</div>
+      </td>
+      <td style="padding:11px 14px;text-align:center">
+        <span style="font-weight:800;font-size:14px;color:${(l.duration_minutes||0)>=45?'#10b981':'#6366f1'}">${l.duration_minutes||0}m</span>
+        ${(l.duration_minutes||0)>=45?`<div style="font-size:9px;color:#10b981;font-weight:700">FULL SESSION</div>`:''}
+      </td>
+      <td style="padding:11px 14px;text-align:right">
+        <button class="btn btn-primary" style="font-size:11px;padding:5px 12px;height:28px" onclick="addToPipelineFromIntel('${esc(l.email||'').replace(/'/g,"\\'")}','${esc(l.name||'').replace(/'/g,"\\'")}')">Add to Pipeline</button>
+      </td>
+    </tr>`).join('');
+
+  const repeatRows = repeat.slice(0, 30).map((l, i) => `
+    <tr style="animation:fadeSlideUp .25s ease both;animation-delay:${Math.min(i*20,500)}ms">
+      <td style="padding:11px 14px">
+        <div style="font-weight:600;font-size:13px;color:var(--text-primary)">${esc(l.name||'Unknown')}</div>
+        <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">${esc(l.email||'')}</div>
+      </td>
+      <td style="padding:11px 14px;text-align:center">
+        <span style="font-size:20px;font-weight:800;color:#6366f1">${l.webinar_count}</span>
+        <div style="font-size:10px;color:var(--text-muted)">webinars</div>
+      </td>
+      <td style="padding:11px 14px;font-size:12px;color:var(--text-secondary)">${esc(l.icps||'—')}</td>
+      <td style="padding:11px 14px;text-align:center;font-weight:700;font-size:13px;color:${(l.max_duration||0)>=45?'#10b981':'#6366f1'}">${l.max_duration||0}m</td>
+      <td style="padding:11px 14px">
+        <span style="font-size:11px;font-weight:700;color:${l.pipeline_status==='not_added'?'#f43f5e':'#10b981'};background:${l.pipeline_status==='not_added'?'#fff1f2':'#f0fdf4'};border-radius:20px;padding:3px 10px">
+          ${l.pipeline_status === 'not_added' ? '⚠ Not in pipeline' : '✓ '+esc(l.pipeline_status)}
+        </span>
+      </td>
+      <td style="padding:11px 14px;text-align:right">
+        ${l.pipeline_status === 'not_added' ? `<button class="btn btn-primary" style="font-size:11px;padding:5px 12px;height:28px" onclick="addToPipelineFromIntel('${esc(l.email||'').replace(/'/g,"\\'")}','${esc(l.name||'').replace(/'/g,"\\'")}')">Add to Pipeline</button>` : ''}
+      </td>
+    </tr>`).join('');
+
+  body.innerHTML = `
+    <div class="intel-section">
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px">
+        ${[
+          { label:'Total Unique Attendees', val:fmt(d.total_unique_attendees||0), sub:'across all webinars',          color:'#6366f1' },
+          { label:'In Pipeline',            val:fmt(d.in_pipeline||0),            sub:`${convRate}% conversion rate`, color:'#10b981' },
+          { label:'Not in Pipeline',        val:fmt(notInPipeline),               sub:'potential leads missed',       color:'#f43f5e' },
+          { label:'High-Intent (30m+)',     val:fmt(hot.length),                  sub:'stayed 30+ min, not added yet',color:'#f59e0b' },
+        ].map(k=>`
+          <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:16px 18px;border-top:3px solid ${k.color}">
+            <div style="font-size:24px;font-weight:800;color:${k.color}">${k.val}</div>
+            <div style="font-size:11px;font-weight:700;color:var(--text-primary);margin-top:3px">${k.label}</div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${k.sub}</div>
+          </div>`).join('')}
+      </div>
+
+      <div style="margin-bottom:32px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:4px">🔥 High-Intent Leads — Stayed 30+ Minutes, Not Yet in Pipeline</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">These people invested 30+ minutes in your content. Call them first — they are your warmest leads.</div>
+        ${!hot.length ? `
+          <div style="background:var(--surface);border:1.5px dashed var(--border);border-radius:14px;padding:32px;text-align:center;color:var(--text-muted)">
+            <div style="font-size:28px;margin-bottom:8px">🎉</div>
+            <div style="font-weight:600;margin-bottom:4px">All high-intent attendees are already in the pipeline</div>
+            <div style="font-size:13px">No 30+ minute attendees are missing from pipeline — great follow-up discipline.</div>
+          </div>` : `
+        <div style="border:1.5px solid var(--border);border-radius:14px;overflow:hidden">
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr style="background:var(--surface-alt,#f8fafc)">
+              <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Contact</th>
+              <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">ICP</th>
+              <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Webinar Attended</th>
+              <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Duration</th>
+              <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Action</th>
+            </tr></thead>
+            <tbody>${hotRows}</tbody>
+          </table>
+        </div>`}
+      </div>
+
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:4px">🔁 Repeat Attendees — Came Back for 2+ Webinars</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Repeat attendance is the strongest buying signal. These contacts should be in active conversations.</div>
+        ${!repeat.length ? `
+          <div style="background:var(--surface);border:1.5px dashed var(--border);border-radius:14px;padding:32px;text-align:center;color:var(--text-muted)">
+            No repeat attendees yet — this appears once audiences overlap across multiple webinars.
+          </div>` : `
+        <div style="border:1.5px solid var(--border);border-radius:14px;overflow:hidden">
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr style="background:var(--surface-alt,#f8fafc)">
+              <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Contact</th>
+              <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Webinars</th>
+              <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">ICPs Interested In</th>
+              <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Max Duration</th>
+              <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Pipeline Status</th>
+              <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Action</th>
+            </tr></thead>
+            <tbody>${repeatRows}</tbody>
+          </table>
+        </div>`}
+      </div>
+    </div>`;
+}
+
+function addToPipelineFromIntel(email, name) {
+  if (!email) return;
+  api('/api/pipeline/' + encodeURIComponent(email), 'PUT', { status: 'new', assigned_to: '', follow_up_date: null, notes: 'Added from Smart Recommendations Hot Leads' })
+    .then(() => {
+      showToast((name || email) + ' added to pipeline', 'success');
+      _intelHotLeadsCache = null;
+      _renderHotLeads(document.getElementById('intel-body'));
+    })
+    .catch(e => showToast('Failed: ' + e.message, 'error'));
+}
+
+// ── Tab 3: Next Play ──────────────────────────────────────────────────────────
+function _renderNextPlay(body, data) {
+  const completed = (S.webinars || []).filter(w => w.status === 'completed' && (w.total_registrations || 0) > 0);
+  const topics  = data.topic_intelligence || [];
+  const days    = data.day_performance || [];
+  const sources = data.source_performance || [];
+
+  // Build Speaker × ICP matrix from actual webinar data
+  const matrix = {};
+  completed.forEach(w => {
+    const spk = w.speaker_name || 'Unknown';
+    const icp = w.icp || 'Others';
+    if (!matrix[spk]) matrix[spk] = {};
+    if (!matrix[spk][icp]) matrix[spk][icp] = { regs: 0, att: 0, count: 0 };
+    matrix[spk][icp].regs  += (w.total_registrations || 0);
+    matrix[spk][icp].att   += (w.total_attendees || 0);
+    matrix[spk][icp].count += 1;
+  });
+
+  // Best Speaker-ICP combo with min 2 webinars
+  let bestCombo = null, bestRate = 0;
+  Object.entries(matrix).forEach(([spk, icps]) => {
+    Object.entries(icps).forEach(([icp, s]) => {
+      if (s.count >= 2 && s.regs > 0) {
+        const rate = Math.round(s.att / s.regs * 100);
+        if (rate > bestRate) { bestRate = rate; bestCombo = { spk, icp, rate, regs: s.regs, att: s.att, count: s.count }; }
+      }
+    });
+  });
+
+  const bestDay  = [...days].sort((a, b) => b.attendance_rate - a.attendance_rate)[0];
+  const bestSrc  = [...sources].sort((a, b) => b.rate - a.rate)[0];
+  const topIcps  = topics.filter(t => t.webinar_count >= 2).sort((a, b) => b.attendance_rate - a.attendance_rate);
+  const bestIcp  = topIcps[0];
+  const worstIcp = topIcps[topIcps.length - 1];
+
+  const allSpeakers = [...new Set(completed.map(w => w.speaker_name).filter(Boolean))];
+  const allIcps     = [...new Set(completed.map(w => w.icp || 'Others'))];
+  const matrixSpks  = allSpeakers.slice(0, 6);
+  const matrixIcps  = allIcps.slice(0, 7);
+
+  // Untried combinations
+  const untried = [];
+  allSpeakers.forEach(spk => allIcps.forEach(icp => { if (!matrix[spk]?.[icp]) untried.push({ spk, icp }); }));
+
+  body.innerHTML = `
+    <div class="intel-section">
+
+      ${(bestCombo || bestDay || bestIcp) ? `
+      <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:16px;padding:24px 28px;margin-bottom:28px;color:#fff">
+        <div style="font-size:11px;font-weight:800;letter-spacing:1.2px;opacity:.75;margin-bottom:10px">DATA-BACKED RECOMMENDATION — NEXT WEBINAR</div>
+        <div style="font-size:19px;font-weight:800;margin-bottom:10px;line-height:1.4">
+          ${bestCombo ? `Run a <strong>${esc(bestCombo.icp)}</strong> webinar with <strong>${esc(bestCombo.spk)}</strong>${bestDay ? ` on <strong>${esc(bestDay.day)}</strong>` : ''}` : bestIcp ? `Focus on <strong>${esc(bestIcp.icp)}</strong> ICP${bestDay ? ` — schedule on <strong>${esc(bestDay.day)}</strong>` : ''}` : `Schedule on <strong>${esc(bestDay?.day||'')}</strong> for best attendance`}
+        </div>
+        <div style="font-size:13px;opacity:.85;line-height:1.65;margin-bottom:16px">
+          ${bestCombo ? `This speaker-ICP combination has delivered <strong>${bestCombo.rate}%</strong> attendance rate across <strong>${bestCombo.count} webinars</strong> (${fmt(bestCombo.att)} attendees from ${fmt(bestCombo.regs)} registrations). It is your proven formula — repeat it.` : ''}
+          ${!bestCombo && bestIcp ? `<strong>${esc(bestIcp.icp)}</strong> is your strongest ICP with <strong>${bestIcp.attendance_rate}%</strong> attendance rate across ${bestIcp.webinar_count} webinars.` : ''}
+          ${bestDay ? ` <strong>${esc(bestDay.day)}</strong> delivers the highest attendance rate (${bestDay.attendance_rate}%) across ${bestDay.webinars} webinars.` : ''}
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          ${bestCombo ? `<div style="background:rgba(255,255,255,.18);border-radius:8px;padding:7px 13px;font-size:12px;font-weight:700">🏆 ${bestCombo.rate}% att rate</div>` : ''}
+          ${bestDay   ? `<div style="background:rgba(255,255,255,.18);border-radius:8px;padding:7px 13px;font-size:12px;font-weight:700">📅 Best day: ${esc(bestDay.day)}</div>` : ''}
+          ${bestIcp   ? `<div style="background:rgba(255,255,255,.18);border-radius:8px;padding:7px 13px;font-size:12px;font-weight:700">🎯 Best ICP: ${esc(bestIcp.icp)} (${bestIcp.attendance_rate}%)</div>` : ''}
+          ${bestSrc   ? `<div style="background:rgba(255,255,255,.18);border-radius:8px;padding:7px 13px;font-size:12px;font-weight:700">📡 Best channel: ${esc(bestSrc.source)} (${bestSrc.rate}%)</div>` : ''}
+        </div>
+      </div>` : ''}
+
+      ${matrixSpks.length && matrixIcps.length ? `
+      <div style="margin-bottom:32px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:4px">🔬 Speaker × ICP Performance Matrix</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Attendance rate per speaker-ICP combination. Only actual data — no estimates. Green = scale it. Red = fix or drop it.</div>
+        <div style="overflow-x:auto;border:1.5px solid var(--border);border-radius:14px">
+          <table style="width:100%;border-collapse:collapse;min-width:480px">
+            <thead>
+              <tr style="background:var(--surface-alt,#f8fafc)">
+                <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);border-bottom:1px solid var(--border)">Speaker</th>
+                ${matrixIcps.map(icp=>`<th style="padding:10px 10px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--text-muted);border-bottom:1px solid var(--border);white-space:nowrap">${esc(icp)}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${matrixSpks.map(spk => `
+              <tr>
+                <td style="padding:11px 14px;font-weight:700;font-size:13px;color:var(--text-primary);border-bottom:1px solid var(--border);white-space:nowrap;background:var(--surface)">${esc(spk)}</td>
+                ${matrixIcps.map(icp => {
+                  const cell = matrix[spk]?.[icp];
+                  if (!cell) return `<td style="padding:11px 10px;text-align:center;border-bottom:1px solid var(--border);color:var(--text-muted);font-size:11px;background:var(--surface)">—</td>`;
+                  const rate = cell.regs > 0 ? Math.round(cell.att / cell.regs * 100) : 0;
+                  const bg = rate>=45?'#f0fdf4':rate>=30?'#eef2ff':rate>=15?'#fffbeb':'#fff1f2';
+                  const color = rate>=45?'#10b981':rate>=30?'#6366f1':rate>=15?'#f59e0b':'#f43f5e';
+                  return `<td style="padding:11px 10px;text-align:center;border-bottom:1px solid var(--border);background:${bg}">
+                    <div style="font-weight:800;font-size:15px;color:${color}">${rate}%</div>
+                    <div style="font-size:9px;color:var(--text-muted)">${cell.count}×</div>
+                  </td>`;
+                }).join('')}
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>` : ''}
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+        ${topIcps.length ? `
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:12px">🎯 ICP Ranking — Best to Worst (min 2 webinars)</div>
+          <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:14px;overflow:hidden">
+            ${topIcps.map((t, i) => {
+              const barPct = topIcps[0].attendance_rate > 0 ? Math.round(t.attendance_rate / topIcps[0].attendance_rate * 100) : 0;
+              const c = t.attendance_rate >= 40 ? '#10b981' : t.attendance_rate >= 25 ? '#6366f1' : '#f59e0b';
+              return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
+                <span style="font-size:11px;font-weight:800;color:var(--text-muted);width:18px;flex-shrink:0">${i+1}</span>
+                <span class="icp-badge icp-${(t.icp||'others').toLowerCase().replace(/\s+/g,'-')}" style="font-size:10px;flex-shrink:0">${esc(t.icp||'Others')}</span>
+                <div style="flex:1;height:5px;background:var(--border);border-radius:3px"><div style="width:${barPct}%;height:100%;background:${c};border-radius:3px"></div></div>
+                <span style="font-weight:800;font-size:13px;color:${c};width:36px;text-align:right;flex-shrink:0">${t.attendance_rate}%</span>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>` : '<div></div>'}
+
+        ${untried.length ? `
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:12px">🧪 Untested Combinations — Potential Growth Plays</div>
+          <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:14px;overflow:hidden">
+            ${untried.slice(0, 10).map(u => `
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
+              <span style="font-size:13px;flex-shrink:0">🧪</span>
+              <span style="font-weight:600;font-size:12px;color:var(--text-primary);flex-shrink:0">${esc(u.spk)}</span>
+              <span style="color:var(--text-muted);font-size:12px;flex-shrink:0">×</span>
+              <span class="icp-badge icp-${(u.icp||'others').toLowerCase().replace(/\s+/g,'-')}" style="font-size:10px">${esc(u.icp)}</span>
+              <span style="font-size:10px;color:var(--text-muted);margin-left:auto">never tried</span>
+            </div>`).join('')}
+          </div>
+        </div>` : '<div></div>'}
+
+      </div>
+    </div>`;
+}
 
 async function _renderAIInsights(body) {
   body.innerHTML = `

@@ -1257,6 +1257,73 @@ Return ONLY a valid JSON array of exactly 4 objects:
         raise HTTPException(status_code=500, detail=f"Insights failed: {e}")
 
 
+@app.get("/api/intelligence/hot-leads")
+def get_hot_leads(db: Session = Depends(get_db)):
+    """Attendees who stayed 30+ min but are NOT yet in pipeline (or still status='new').
+    Also returns repeat attendees (attended 2+ webinars).
+    These are the highest-intent leads to follow up with."""
+    from sqlalchemy import text as _t
+
+    # Hot leads: attended 30+ min, not in pipeline (or new only)
+    hot = db.execute(_t("""
+        SELECT
+            r.attendee_name AS name,
+            r.email,
+            w.title AS webinar_title,
+            w.date AS webinar_date,
+            COALESCE(w.icp, 'Others') AS icp,
+            a.duration_minutes,
+            COALESCE(p.status, 'not_added') AS pipeline_status
+        FROM attendances a
+        JOIN registrations r ON r.id = a.registration_id
+        JOIN webinars w ON w.id = a.webinar_id
+        LEFT JOIN pipeline_contacts p ON p.email = r.email
+        WHERE a.attended = TRUE
+          AND a.duration_minutes >= 30
+          AND r.email IS NOT NULL
+          AND (p.id IS NULL OR p.status = 'new')
+        ORDER BY a.duration_minutes DESC, w.date DESC
+        LIMIT 100
+    """)).fetchall()
+
+    # Repeat attendees: attended 2+ different webinars
+    repeat = db.execute(_t("""
+        SELECT
+            r.attendee_name AS name,
+            r.email,
+            COUNT(DISTINCT a.webinar_id) AS webinar_count,
+            MAX(a.duration_minutes) AS max_duration,
+            (SELECT GROUP_CONCAT(DISTINCT COALESCE(w2.icp,'Others')) FROM attendances a2 JOIN registrations r2 ON r2.id=a2.registration_id JOIN webinars w2 ON w2.id=a2.webinar_id WHERE a2.attended=TRUE AND r2.email=r.email) AS icps,
+            COALESCE(p.status, 'not_added') AS pipeline_status
+        FROM attendances a
+        JOIN registrations r ON r.id = a.registration_id
+        JOIN webinars w ON w.id = a.webinar_id
+        LEFT JOIN pipeline_contacts p ON p.email = r.email
+        WHERE a.attended = TRUE AND r.email IS NOT NULL
+        GROUP BY r.attendee_name, r.email, p.status
+        HAVING COUNT(DISTINCT a.webinar_id) >= 2
+        ORDER BY webinar_count DESC, max_duration DESC
+        LIMIT 50
+    """)).fetchall()
+
+    # Summary stats
+    total_attendees = db.execute(_t(
+        "SELECT COUNT(DISTINCT r.email) FROM attendances a "
+        "JOIN registrations r ON r.id=a.registration_id WHERE a.attended=TRUE AND r.email IS NOT NULL"
+    )).scalar() or 0
+
+    in_pipeline = db.execute(_t(
+        "SELECT COUNT(DISTINCT email) FROM pipeline_contacts WHERE status != 'new'"
+    )).scalar() or 0
+
+    return {
+        "hot_leads": [dict(r._mapping) for r in hot],
+        "repeat_attendees": [dict(r._mapping) for r in repeat],
+        "total_unique_attendees": total_attendees,
+        "in_pipeline": in_pipeline,
+    }
+
+
 @app.delete("/api/competitor-activity/{activity_id}", status_code=204)
 def delete_competitor_activity(activity_id: int, db: Session = Depends(get_db)):
     from sqlalchemy import text as _t
