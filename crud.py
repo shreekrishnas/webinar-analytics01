@@ -384,7 +384,9 @@ def _parse_zoom_registration_csv(content: bytes) -> pd.DataFrame:
                            on_bad_lines='skip', encoding_errors='replace')
 
     # Parse from header row onwards
-    data_text = '\n'.join(lines[header_idx:])
+    # Strip trailing commas from each line — Zoom CSVs often have a trailing comma
+    # on data rows (one extra empty field) which causes on_bad_lines='skip' to drop them
+    data_text = '\n'.join(line.rstrip(',') for line in lines[header_idx:])
     df = pd.read_csv(io.StringIO(data_text), on_bad_lines='skip')
     return df
 
@@ -429,7 +431,9 @@ def _parse_zoom_attendee_csv(content: bytes) -> pd.DataFrame:
         raise ValueError("Attendee Details section found but no data follows")
 
     # Parse from header row to end of file
-    data_text = '\n'.join(lines[header_idx:])
+    # Strip trailing commas — Zoom CSVs often add a trailing comma on data rows
+    # (one extra empty field), which makes on_bad_lines='skip' silently drop them
+    data_text = '\n'.join(line.rstrip(',') for line in lines[header_idx:])
     df = pd.read_csv(io.StringIO(data_text), on_bad_lines='skip')
 
     # Normalise columns
