@@ -1194,39 +1194,36 @@ async def get_intelligence_insights(db: Session = Depends(get_db)):
                 for r in ads_rows
             )
 
-    prompt = f"""You are a senior marketing analyst for Right Horizons, an Indian financial advisory firm that runs webinars for HNI/NRI clients.
+    prompt = f"""You are a senior marketing analyst for Right Horizons, an Indian financial advisory firm running HNI/NRI webinars.
 
 WEBINAR DATA (all completed webinars, newest first):
 {chr(10).join(webinar_lines) if webinar_lines else 'No completed webinars yet.'}
 
 ICP PERFORMANCE: {icp_summary}
 SPEAKER PERFORMANCE: {spk_summary}
-{ads_summary}
+RECENT WEBINARS: {recent_summary}
 
-Analyze this data and generate 6 sharp, prescriptive insights that directly answer:
-1. What is working and why?
-2. What is not working and why?
-3. Which topics / ICPs / speakers should be prioritized next?
-4. Which webinars need follow-up urgently?
-5. What specific action should the team take this week?
+Generate EXACTLY 4 structured insights as a JSON array with these exact types in this order:
+1. type="overall" — Where the biggest drop happens in the programme funnel. Cite specific numbers.
+2. type="funnel" — Registration vs attendance pattern. Which ICPs or webinars convert best vs worst.
+3. type="lead_quality" — Comment on audience profile quality based on ICP data. Are the right HNI/NRI segments attending?
+4. type="recommendation" — One clear action on the weakest stage. Be specific: topic, ICP, format, or channel to fix.
 
 Rules:
 - Every insight MUST cite a specific number from the data
-- Be direct and prescriptive, not generic
-- If a webinar has high regs but low attendance rate (<25%), flag it as a risk
-- If attendance rate >45%, flag it as a win
-- Recommend the next webinar topic based on best-performing ICP/speaker combinations
-- If ads data exists, include one insight about platform/spend efficiency
-{f'- Ads data is available, include platform performance insight' if has_ads else '- No ads data available, do not mention ads cost or CPL'}
+- Be direct and prescriptive for an HNI wealth advisory context
+- Do not mention spend, CPL, impressions, or ads unless ads data is explicitly provided
+- Focus on registrations, attendance rates, ICP distribution, and speaker performance only
+{f'- Ads data available: {ads_summary}' if has_ads else ''}
 
-Return ONLY a JSON array of exactly 6 insights:
+Return ONLY a valid JSON array of exactly 4 objects:
 [
   {{
-    "type": "win|risk|opportunity|trend|action",
+    "type": "overall|funnel|lead_quality|recommendation",
     "headline": "Bold specific claim ≤65 chars",
-    "detail": "2 sentences with specific numbers and clear business implication.",
+    "detail": "2-3 sentences with specific numbers and clear business implication.",
     "action": "One specific, actionable next step ≤90 chars",
-    "metric": "The key stat supporting this (e.g. '47% attendance rate')"
+    "metric": "The key stat e.g. '47% attendance rate'"
   }}
 ]"""
 

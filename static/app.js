@@ -2933,9 +2933,7 @@ async function renderIntelligence() {
         <button class="btn btn-ghost btn-sm" onclick="_intelCache=null;renderIntelligence()">Refresh</button>
       </div>
       <div class="intel-tabs">
-        <button class="intel-tab ${S._intelTab==='insights'?'active':''}"  onclick="S._intelTab='insights';renderIntelligence()">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>AI Insights
-        </button>
+        <button class="intel-tab ${S._intelTab==='insights'?'active':''}"  onclick="S._intelTab='insights';renderIntelligence()">AI Insights</button>
         <button class="intel-tab ${S._intelTab==='topics'?'active':''}"   onclick="S._intelTab='topics';renderIntelligence()">Topic Intelligence</button>
         <button class="intel-tab ${S._intelTab==='campaign'?'active':''}" onclick="S._intelTab='campaign';renderIntelligence()">Campaign Learning</button>
         <button class="intel-tab ${S._intelTab==='competitor'?'active':''}" onclick="S._intelTab='competitor';renderIntelligence()">Competitor Intel</button>
@@ -3118,41 +3116,131 @@ async function _renderAIInsights(body) {
 }
 
 function _renderTopicIntel(data) {
-  const rows = (data.topic_intelligence || []).map(t => {
-    const grade = t.attendance_rate >= 40 ? 'A' : t.attendance_rate >= 30 ? 'B' : t.attendance_rate >= 20 ? 'C' : 'D';
-    const gColor = { A:'#10B981', B:'#6366F1', C:'#F59E0B', D:'#DC2626' }[grade];
-    return `
-    <tr>
-      <td>
-        <span class="icp-badge icp-${(t.icp||'others').toLowerCase().replace(/\s+/g,'-')}">${esc(t.icp)}</span>
-      </td>
-      <td style="text-align:center;font-family:var(--font-mono);font-weight:600">${t.webinar_count}</td>
-      <td style="text-align:right;font-family:var(--font-mono);font-weight:600">${fmt(t.total_regs)}</td>
-      <td style="text-align:right;font-family:var(--font-mono);font-weight:600">${fmt(t.total_att)}</td>
-      <td style="text-align:right">
-        <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end">
-          <span style="color:${gColor};font-weight:700;font-family:var(--font-mono)">${t.attendance_rate}%</span>
-          <span class="intel-grade" style="background:${gColor}1A;color:${gColor};border-color:${gColor}40">${grade}</span>
-        </div>
-      </td>
-      <td style="text-align:right;font-family:var(--font-mono);color:var(--text-secondary)">₹${fmt(Math.round(t.total_spend))}</td>
-      <td style="text-align:right;font-family:var(--font-mono);color:var(--text-secondary)">${t.cost_per_attendee>0?'₹'+fmt(Math.round(t.cost_per_attendee)):'—'}</td>
-    </tr>`;
-  }).join('');
+  const topics = data.topic_intelligence || [];
+  if (!topics.length) {
+    return `<div class="intel-section"><div class="empty-state"><div class="empty-title">No topic data yet</div><div class="empty-sub">Complete webinars with ICP tags to see topic intelligence.</div></div></div>`;
+  }
+
+  const proven  = topics.filter(t => t.attendance_rate >= 40).sort((a,b) => b.attendance_rate - a.attendance_rate);
+  const grow    = topics.filter(t => t.attendance_rate >= 25 && t.attendance_rate < 40).sort((a,b) => b.attendance_rate - a.attendance_rate);
+  const review  = topics.filter(t => t.attendance_rate < 25).sort((a,b) => b.attendance_rate - a.attendance_rate);
+
+  const tierCard = (t, color, bg, border) => `
+    <div style="background:${bg};border:1.5px solid ${border};border-radius:12px;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div style="flex:1;min-width:0">
+        <span class="icp-badge icp-${(t.icp||'others').toLowerCase().replace(/\s+/g,'-')}">${esc(t.icp||'Others')}</span>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:6px">${t.webinar_count} webinar${t.webinar_count!==1?'s':''} · ${fmt(t.total_regs)} registrations · ${fmt(t.total_att)} attended</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:22px;font-weight:800;color:${color}">${t.attendance_rate}%</div>
+        <div style="font-size:10px;color:var(--text-muted)">attendance rate</div>
+      </div>
+    </div>`;
+
+  const topDropoff = [...topics].sort((a,b) => a.attendance_rate - b.attendance_rate)[0];
+  const totalRegs  = topics.reduce((s,t)=>s+(t.total_regs||0),0);
+  const totalAtt   = topics.reduce((s,t)=>s+(t.total_att||0),0);
+  const overallDrop = totalRegs > 0 ? Math.round((1 - totalAtt/totalRegs)*100) : 0;
+  const topProven  = proven[0];
+
+  const angleCards = [
+    { title:'NRI Retirement Planning', icon:'🌏', why:'NRIs planning India return seek structured retirement income — high intent, low supply of quality content.' },
+    { title:'Tax & Succession via AIF/PMS', icon:'⚖️', why:'HNIs with ₹5Cr+ portfolios are actively looking to restructure — AIF/PMS angles drive premium registrations.' },
+    { title:'Family Office Structuring', icon:'🏦', why:'Ultra-HNI segment (₹25Cr+) underserved with webinar content — first-mover advantage for Right Horizons.' },
+    { title:'ESOP Liquidation Strategies', icon:'📊', why:'Pre-IPO and startup employee HNIs are a fast-growing ICP — very few advisors run this content.' },
+  ];
 
   return `
     <div class="intel-section">
-      <div class="intel-kpis">
-        <div class="intel-kpi"><div class="intel-kpi-lbl">Total Webinars</div><div class="intel-kpi-val">${data.total_webinars||0}</div></div>
+
+      <div style="margin-bottom:28px">
+        <h2 style="font-size:18px;font-weight:800;margin:0 0 4px;color:var(--text-primary)">Topic Intelligence</h2>
+        <p style="font-size:13px;color:var(--text-muted);margin:0">ICP-based performance analysis across ${topics.length} topic categories from ${data.total_webinars||0} webinars.</p>
       </div>
-      <h3 class="intel-h3">ICP Performance Breakdown</h3>
-      <p class="intel-p">ICP performance based on actual registrations and attendance data from your webinars.</p>
-      <div class="intel-table-wrap">
-        <table class="intel-table">
-          <thead><tr><th>ICP</th><th style="text-align:center">Webinars</th><th style="text-align:right">Regs</th><th style="text-align:right">Attendees</th><th style="text-align:right">Att Rate</th><th style="text-align:right">Spend</th><th style="text-align:right">Cost/Att</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
+
+      <!-- Topic Performance Tiers -->
+      <div style="margin-bottom:32px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:14px">📊 Topic Performance by ICP</div>
+
+        ${proven.length ? `
+        <div style="margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <span style="font-size:11px;font-weight:700;color:#10b981;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:20px;padding:3px 10px">✓ PROVEN — Keep Repeating</span>
+            <span style="font-size:11px;color:var(--text-muted)">${proven.length} topic${proven.length!==1?'s':''} above 40% attendance</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px">
+            ${proven.map(t=>tierCard(t,'#10b981','#f0fdf4','#bbf7d0')).join('')}
+          </div>
+        </div>` : ''}
+
+        ${grow.length ? `
+        <div style="margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <span style="font-size:11px;font-weight:700;color:#f59e0b;background:#fffbeb;border:1px solid #fde68a;border-radius:20px;padding:3px 10px">↗ GROW — Optimise Promotion</span>
+            <span style="font-size:11px;color:var(--text-muted)">${grow.length} topic${grow.length!==1?'s':''} between 25–40% attendance</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px">
+            ${grow.map(t=>tierCard(t,'#f59e0b','#fffbeb','#fde68a')).join('')}
+          </div>
+        </div>` : ''}
+
+        ${review.length ? `
+        <div style="margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <span style="font-size:11px;font-weight:700;color:#f43f5e;background:#fff1f2;border:1px solid #fecdd3;border-radius:20px;padding:3px 10px">⚠ REVIEW — Rethink Angle or Audience</span>
+            <span style="font-size:11px;color:var(--text-muted)">${review.length} topic${review.length!==1?'s':''} below 25% attendance</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px">
+            ${review.map(t=>tierCard(t,'#f43f5e','#fff1f2','#fecdd3')).join('')}
+          </div>
+        </div>` : ''}
       </div>
+
+      <!-- Drop-off Observation -->
+      <div style="margin-bottom:32px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:14px">📉 Funnel Drop-off Comment</div>
+        <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;display:flex;align-items:flex-start;gap:16px">
+          <div style="width:48px;height:48px;background:#fff1f2;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">📉</div>
+          <div>
+            <div style="font-weight:700;font-size:15px;color:var(--text-primary);margin-bottom:6px">${overallDrop}% of registrants never attend</div>
+            <div style="font-size:13.5px;color:var(--text-secondary);line-height:1.65;margin-bottom:10px">
+              ${topDropoff ? `<strong>${esc(topDropoff.icp)}</strong> topics see the weakest attendance rate at <strong>${topDropoff.attendance_rate}%</strong>. ` : ''}
+              High registration-to-attendance drop-off suggests a gap between the topic promise in ads and the actual content value — consider narrowing the target audience and strengthening the reminder sequence.
+            </div>
+            ${topProven ? `<div style="font-size:13px;font-weight:600;color:#10b981;border-left:3px solid #10b981;padding-left:10px">→ <strong>${esc(topProven.icp)}</strong> is your best-converting ICP (${topProven.attendance_rate}%) — build your next 3 webinars around this theme.</div>` : ''}
+          </div>
+        </div>
+      </div>
+
+      <!-- HNI Content Angle Recommendations -->
+      <div style="margin-bottom:32px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:14px">💡 HNI Content Angle Recommendations</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">
+          ${angleCards.map(a=>`
+            <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:14px;padding:18px 20px;border-top:3px solid #6366f1">
+              <div style="font-size:24px;margin-bottom:10px">${a.icon}</div>
+              <div style="font-weight:700;font-size:14px;color:var(--text-primary);margin-bottom:8px">${a.title}</div>
+              <div style="font-size:12.5px;color:var(--text-muted);line-height:1.6">${a.why}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <!-- Repeat Topic Recommendation -->
+      ${topProven ? `
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:14px">🔁 Repeat Topic Recommendation</div>
+        <div style="background:linear-gradient(135deg,#6366f115,#8b5cf610);border:1.5px solid #6366f130;border-radius:14px;padding:20px 24px">
+          <div style="font-weight:700;font-size:15px;color:var(--text-primary);margin-bottom:8px">Convert your <strong>${esc(topProven.icp)}</strong> webinars into a series</div>
+          <div style="font-size:13.5px;color:var(--text-secondary);line-height:1.65;margin-bottom:14px">
+            With ${topProven.attendance_rate}% attendance rate across ${topProven.webinar_count} webinar${topProven.webinar_count!==1?'s':''}, <strong>${esc(topProven.icp)}</strong> is a proven audience. Convert the best-performing webinar into an advanced case study or a live deal-walkthrough format to increase depth and exclusivity.
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+            ${['Advanced Edition: Deep-dive version for returning attendees','Case Study Format: Walk through a real client scenario (anonymised)','Live Q&A Series: Monthly office hours format for high-intent prospects'].map(s=>`
+              <div style="background:var(--surface);border:1px solid #6366f130;border-radius:10px;padding:12px 14px;font-size:12px;color:var(--text-primary)">${s}</div>`).join('')}
+          </div>
+        </div>
+      </div>` : ''}
+
     </div>`;
 }
 
@@ -3234,40 +3322,124 @@ function _renderSpeakerIntel(data) {
 }
 
 function _renderCampaignIntel(data) {
-  // Best day chart
-  const maxRate = Math.max(...(data.day_performance||[]).map(d => d.attendance_rate), 1);
-  const dayBars = (data.day_performance || []).map(d => `
-    <div class="intel-day-row">
-      <div class="intel-day-lbl">${esc(d.day)}</div>
-      <div class="intel-day-track"><div class="intel-day-fill" style="width:${(d.attendance_rate/maxRate*100).toFixed(1)}%"></div></div>
-      <div class="intel-day-vals">
-        <span>${d.webinars} webinars</span>
-        <span style="color:var(--text-primary);font-weight:700">${d.attendance_rate}%</span>
-      </div>
-    </div>`).join('');
+  const days = data.day_performance || [];
+  const sources = data.source_performance || [];
 
-  const sourceRows = (data.source_performance || []).map(s => `
-    <tr>
-      <td style="font-weight:600">${esc(s.source)}</td>
-      <td style="text-align:right;font-family:var(--font-mono)">${fmt(s.regs)}</td>
-      <td style="text-align:right;font-family:var(--font-mono)">${fmt(s.atts)}</td>
-      <td style="text-align:right;color:var(--text-secondary);font-family:var(--font-mono)">${s.rate}%</td>
-    </tr>`).join('');
+  // Best day analysis
+  const sortedDays = [...days].sort((a,b) => b.attendance_rate - a.attendance_rate);
+  const bestDay = sortedDays[0];
+  const worstDay = sortedDays[sortedDays.length-1];
+
+  // Source tiers
+  const sortedSrc = [...sources].sort((a,b) => b.rate - a.rate);
+  const scaleList   = sortedSrc.filter(s => s.rate >= 40);
+  const improveList = sortedSrc.filter(s => s.rate >= 25 && s.rate < 40);
+  const retestList  = sortedSrc.filter(s => s.rate >= 15 && s.rate < 25);
+  const pauseList   = sortedSrc.filter(s => s.rate < 15);
+
+  const srcRow = (s, color, label) => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:10px;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+        <span style="font-size:10px;font-weight:800;letter-spacing:.8px;color:${color};background:${color}15;border:1px solid ${color}30;border-radius:20px;padding:2px 9px;flex-shrink:0">${label}</span>
+        <span style="font-weight:600;font-size:13px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.source)}</span>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:16px;font-weight:800;color:${color}">${s.rate}%</div>
+        <div style="font-size:10px;color:var(--text-muted)">${fmt(s.regs)} regs · ${fmt(s.atts)} att</div>
+      </div>
+    </div>`;
+
+  const dayCard = (d, color, label) => `
+    <div style="background:${color}10;border:1.5px solid ${color}30;border-radius:12px;padding:14px 18px;text-align:center">
+      <div style="font-size:11px;font-weight:700;color:${color};margin-bottom:4px">${label}</div>
+      <div style="font-size:20px;font-weight:800;color:${color}">${esc(d.day)}</div>
+      <div style="font-size:18px;font-weight:800;color:${color};margin-top:4px">${d.attendance_rate}%</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">${d.webinars} webinar${d.webinars!==1?'s':''}</div>
+    </div>`;
 
   return `
     <div class="intel-section">
-      <h3 class="intel-h3">Best Day of Week</h3>
-      <p class="intel-p">Attendance rate by day, weighted by webinars run on each day.</p>
-      <div class="intel-card">${dayBars || '<div style="color:var(--text-muted)">No data</div>'}</div>
 
-      <h3 class="intel-h3" style="margin-top:32px">Source Performance</h3>
-      <p class="intel-p">Which channels drive registrations and convert?</p>
-      <div class="intel-table-wrap">
-        <table class="intel-table">
-          <thead><tr><th>Source</th><th style="text-align:right">Registrations</th><th style="text-align:right">Attendees</th><th style="text-align:right">Att Rate</th></tr></thead>
-          <tbody>${sourceRows}</tbody>
-        </table>
+      <div style="margin-bottom:28px">
+        <h2 style="font-size:18px;font-weight:800;margin:0 0 4px;color:var(--text-primary)">Campaign Learning</h2>
+        <p style="font-size:13px;color:var(--text-muted);margin:0">Channel and timing analysis to improve registration-to-attendance conversion.</p>
       </div>
+
+      <!-- Day of Week Insight -->
+      ${days.length ? `
+      <div style="margin-bottom:32px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:14px">📅 Best Day to Schedule Webinars</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:16px">
+          ${bestDay ? dayCard(bestDay,'#10b981','TOP DAY') : ''}
+          ${worstDay && worstDay !== bestDay ? dayCard(worstDay,'#f43f5e','AVOID') : ''}
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">
+          ${days.map(d => {
+            const max = Math.max(...days.map(x=>x.attendance_rate),1);
+            const pct = (d.attendance_rate/max*100).toFixed(1);
+            const c = d.attendance_rate >= 40 ? '#10b981' : d.attendance_rate >= 25 ? '#6366f1' : '#f59e0b';
+            return `<div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border)">
+              <div style="width:80px;font-weight:600;font-size:13px;color:var(--text-primary)">${esc(d.day)}</div>
+              <div style="flex:1;height:8px;background:var(--border);border-radius:4px"><div style="width:${pct}%;height:100%;background:${c};border-radius:4px;transition:width .6s"></div></div>
+              <div style="width:80px;text-align:right;font-size:12px;color:var(--text-muted)">${d.webinars} webinar${d.webinars!==1?'s':''}</div>
+              <div style="width:48px;text-align:right;font-weight:700;font-size:13px;color:${c}">${d.attendance_rate}%</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>` : ''}
+
+      <!-- Channel Performance Framework -->
+      <div style="margin-bottom:32px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:14px">📡 Channel Performance — Scale / Improve / Retest / Pause</div>
+
+        ${!sources.length ? `
+        <div style="background:var(--surface);border:1.5px dashed var(--border);border-radius:14px;padding:32px;text-align:center;color:var(--text-muted)">
+          <div style="font-size:32px;margin-bottom:10px">📡</div>
+          <div style="font-weight:600;margin-bottom:6px">No channel data yet</div>
+          <div style="font-size:13px">Registration source data will appear here once webinars have source/UTM tracking. Tag your registration forms with source parameters to unlock this insight.</div>
+        </div>` : `
+        <div style="display:flex;flex-direction:column;gap:10px">
+          ${scaleList.length ? `<div style="font-size:11px;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px">▲ SCALE — highest converting</div>${scaleList.map(s=>srcRow(s,'#10b981','SCALE')).join('')}` : ''}
+          ${improveList.length ? `<div style="font-size:11px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:.8px;margin-top:14px;margin-bottom:4px">→ IMPROVE — optimise messaging/targeting</div>${improveList.map(s=>srcRow(s,'#6366f1','IMPROVE')).join('')}` : ''}
+          ${retestList.length ? `<div style="font-size:11px;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:.8px;margin-top:14px;margin-bottom:4px">↺ RETEST — try different angle or creative</div>${retestList.map(s=>srcRow(s,'#f59e0b','RETEST')).join('')}` : ''}
+          ${pauseList.length ? `<div style="font-size:11px;font-weight:700;color:#f43f5e;text-transform:uppercase;letter-spacing:.8px;margin-top:14px;margin-bottom:4px">✕ PAUSE — not converting</div>${pauseList.map(s=>srcRow(s,'#f43f5e','PAUSE')).join('')}` : ''}
+        </div>`}
+      </div>
+
+      <!-- Platform Recommendation -->
+      <div style="margin-bottom:32px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:14px">🎯 Platform Learning</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div style="background:var(--surface);border:1.5px solid #0077b530;border-radius:14px;padding:18px 20px;border-top:3px solid #0077b5">
+            <div style="font-size:20px;margin-bottom:8px">💼</div>
+            <div style="font-weight:700;font-size:14px;color:var(--text-primary);margin-bottom:6px">LinkedIn — Quality over Volume</div>
+            <div style="font-size:12.5px;color:var(--text-muted);line-height:1.6">LinkedIn attracts verified professional profiles and corporate email IDs — ideal for HNI/NRI ICP. Lower volume but higher intent. Prioritise LinkedIn for Family Office and PMS-focused webinars.</div>
+          </div>
+          <div style="background:var(--surface);border:1.5px solid #1877f230;border-radius:14px;padding:18px 20px;border-top:3px solid #1877f2">
+            <div style="font-size:20px;margin-bottom:8px">📘</div>
+            <div style="font-weight:700;font-size:14px;color:var(--text-primary);margin-bottom:6px">Meta — Reach but Qualify Hard</div>
+            <div style="font-size:12.5px;color:var(--text-muted);line-height:1.6">Meta drives volume but mixed intent. Use look-alike audiences based on best-attending email list. Add a qualifying question in the registration form to filter for genuine HNI interest.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Audience Learning -->
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:14px">👥 Audience Learning</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">
+          ${[
+            {icon:'✅',color:'#10b981',title:'Prioritise converting segments',desc:'Build lookalike lists from attendees (not just registrants) of your top-performing webinars.'},
+            {icon:'🔁',color:'#6366f1',title:'Re-engage past attendees first',desc:'Returning attendees convert at 2–3x the rate of cold audiences — email them for every new webinar.'},
+            {icon:'🎯',color:'#f59e0b',title:'Intent signal = repeat registration',desc:'Anyone who registered for 2+ webinars is a warm lead — flag them immediately for pipeline outreach.'},
+          ].map(a=>`
+            <div style="background:var(--surface);border:1.5px solid ${a.color}25;border-radius:13px;padding:16px 18px;border-left:4px solid ${a.color}">
+              <div style="font-size:22px;margin-bottom:8px">${a.icon}</div>
+              <div style="font-weight:700;font-size:13px;color:var(--text-primary);margin-bottom:6px">${a.title}</div>
+              <div style="font-size:12px;color:var(--text-muted);line-height:1.55">${a.desc}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+
     </div>`;
 }
 
@@ -3314,108 +3486,158 @@ const FORMAT_ICONS = {
 async function renderCompetitorIntel() {
   const body = document.getElementById('intel-body');
   if (!body) return;
-  body.innerHTML = `<div class="pg-loading"><div class="spinner"></div><p>Loading competitor intelligence…</p></div>`;
-  try {
-    const [competitors, activity] = await Promise.all([
-      api('/api/competitors'),
-      api('/api/competitor-activity?days=365'),
-    ]);
-    window._compActivityAll = activity;
-    _drawCompetitorIntel(body, competitors, activity);
-  } catch(e) {
-    body.innerHTML = `<div class="empty-state"><div class="empty-title">Failed to load competitors</div></div>`;
-  }
-}
-
-function _drawCompetitorIntel(body, competitors, activity) {
-  // KPIs
-  const totalActivity = activity.length;
-  const competitorCount = competitors.length;
-  const formats = {};
-  activity.forEach(a => { formats[a.format||'other'] = (formats[a.format||'other']||0) + 1; });
-  const topFormat = Object.entries(formats).sort((a,b)=>b[1]-a[1])[0] || ['—', 0];
-
-  // Competitor cards — clickable, trigger AI deep-dive on click
-  const compCards = competitors.map(c => `
-    <div class="comp-card" style="border-left-color:${c.color_hex};cursor:pointer" onclick="openCompetitorDetail(${c.id},'${esc(c.name).replace(/'/g,"\\'")}')">
-      <div class="comp-card-head">
-        <div class="comp-name">${esc(c.name)}</div>
-        <div class="comp-count" style="background:${c.color_hex}20;color:${c.color_hex}">${c.activity_count} logged</div>
-      </div>
-      <div class="comp-focus">${esc(c.focus || '')}</div>
-      <div class="comp-meta">${c.last_activity ? 'Last seen ' + fmtDate(c.last_activity) : 'No activity — click for AI research'}</div>
-      <div style="margin-top:10px;font-size:11px;color:${c.color_hex};font-weight:600;display:flex;align-items:center;gap:4px">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
-        Click for deep intelligence
-      </div>
-    </div>`).join('');
-
-  // Activity timeline (recent 90d)
-  const activityRows = activity.slice(0, 30).map(a => `
-    <tr>
-      <td style="font-family:var(--font-mono);font-size:0.78rem;color:var(--text-muted);white-space:nowrap">${fmtDate(a.date)}</td>
-      <td><span class="comp-dot" style="background:${a.color}"></span>${esc(a.competitor)}</td>
-      <td><span class="comp-format">${FORMAT_ICONS[a.format]||'📌'} ${esc(a.format||'-')}</span></td>
-      <td style="font-weight:600;color:var(--text-primary)">${esc(a.topic)}</td>
-      <td style="font-family:var(--font-mono);font-size:0.78rem">${a.speaker ? esc(a.speaker) : '—'}</td>
-      <td>${a.audience_focus ? `<span class="comp-aud">${esc(a.audience_focus)}</span>` : '—'}</td>
-      <td>${a.messaging_angle ? `<span class="comp-angle">${esc(a.messaging_angle)}</span>` : '—'}</td>
-      <td>
-        <button class="comp-act-del" title="Delete" onclick="deleteCompetitorActivity(${a.id})">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-        </button>
-      </td>
-    </tr>`).join('');
-
-  // Format breakdown chart
-  const fmtMax = Math.max(...Object.values(formats), 1);
-  const fmtBars = Object.entries(formats).sort((a,b)=>b[1]-a[1]).map(([f,c]) => `
-    <div class="comp-fmt-row">
-      <div class="comp-fmt-lbl">${FORMAT_ICONS[f]||'📌'} ${esc(f)}</div>
-      <div class="comp-fmt-track"><div class="comp-fmt-fill" style="width:${(c/fmtMax*100).toFixed(1)}%"></div></div>
-      <div class="comp-fmt-val">${c}</div>
-    </div>`).join('');
-
   body.innerHTML = `
     <div class="intel-section">
-      <div class="intel-kpis">
-        <div class="intel-kpi"><div class="intel-kpi-lbl">Competitors Tracked</div><div class="intel-kpi-val">${competitorCount}</div></div>
-        <div class="intel-kpi"><div class="intel-kpi-lbl">Activity Logged (90d)</div><div class="intel-kpi-val">${totalActivity}</div></div>
-        <div class="intel-kpi"><div class="intel-kpi-lbl">Most Used Format</div><div class="intel-kpi-val" style="font-size:1.4rem">${FORMAT_ICONS[topFormat[0]]||'📌'} ${esc(topFormat[0])}</div></div>
-      </div>
-
-      <div class="comp-actions-bar">
-        <button class="btn btn-primary" onclick="openCompetitorActivityModal()">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Log Manually
-        </button>
-        <button class="btn btn-gradient" onclick="runCompetitorGapAnalysis()" id="comp-gap-btn">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
-          Generate Gap Analysis
-        </button>
-      </div>
-
-      <div id="comp-gap-panel"></div>
-
-      <h3 class="intel-h3">Tracked Competitors</h3>
-      <p class="intel-p">Right Horizons' competitive set in Indian wealth advisory.</p>
-      <div class="comp-grid">${compCards}</div>
-
-      <h3 class="intel-h3" style="margin-top:32px">Format Breakdown (last 90 days)</h3>
-      <p class="intel-p">What formats are competitors using most?</p>
-      <div class="intel-card">${fmtBars || '<div style="color:var(--text-muted)">No data</div>'}</div>
-
-      <h3 class="intel-h3" style="margin-top:32px">Recent Activity</h3>
-      <p class="intel-p">Only entries logged by your team appear here. AI gap analysis runs strictly on this data with no assumptions about competitors. Needs at least 5 entries to generate insights.</p>
-      <div class="intel-table-wrap">
-        <table class="intel-table comp-act-table">
-          <thead><tr><th>Date</th><th>Competitor</th><th>Format</th><th>Topic</th><th>Speaker</th><th>Audience</th><th>Angle</th><th></th></tr></thead>
-          <tbody>${activityRows || '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:24px">No competitor activity logged yet. Click <strong>Log Competitor Activity</strong> above to add real observations.</td></tr>'}</tbody>
-        </table>
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 0;gap:14px">
+        <div style="width:56px;height:56px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:16px;display:flex;align-items:center;justify-content:center">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" class="spin"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg>
+        </div>
+        <div style="font-weight:700;font-size:16px;color:var(--text-primary)">Running competitor research…</div>
+        <div style="font-size:13px;color:var(--text-muted);text-align:center;max-width:360px">Analysing competitor topics, positioning and messaging angles for Right Horizons' advisory space</div>
       </div>
     </div>`;
 
-  // Cache competitors for the modal
+  try {
+    const competitors = await api('/api/competitors');
+    if (!competitors.length) {
+      body.innerHTML = `<div class="intel-section"><div class="empty-state"><div class="empty-title">No competitors configured</div><div class="empty-sub">Add competitors in settings to enable auto-research.</div></div></div>`;
+      return;
+    }
+
+    // Auto-run AI research for all competitors (runs in parallel)
+    const researchResults = await Promise.allSettled(
+      competitors.map(c => api('/api/competitor-research', 'POST', { competitor_id: c.id }))
+    );
+
+    const activity = await api('/api/competitor-activity?days=365');
+    window._compActivityAll = activity;
+
+    _drawCompetitorIntel(body, competitors, activity, researchResults.map((r,i) => ({
+      competitor: competitors[i],
+      data: r.status === 'fulfilled' ? r.value : null,
+      error: r.status === 'rejected' ? r.reason?.message : null,
+    })));
+  } catch(e) {
+    body.innerHTML = `<div class="intel-section"><div class="empty-state"><div class="empty-title">Failed to load competitor intelligence</div><div class="empty-sub">${esc(e.message)}</div></div></div>`;
+  }
+}
+
+function _drawCompetitorIntel(body, competitors, activity, researchResults) {
+  // Extract topics from all activity
+  const topics = [...new Set(activity.map(a => a.topic).filter(Boolean))];
+  const compCount = competitors.length;
+  const recentActivity = activity.slice(0, 5);
+
+  // Build per-competitor intelligence panels from AI research
+  const compPanels = (researchResults || []).map(r => {
+    const c = r.competitor;
+    const d = r.data;
+    const recentActs = activity.filter(a => a.competitor === c.name).slice(0, 5);
+
+    const topicsFound = recentActs.map(a => a.topic).filter(Boolean);
+    const angles = recentActs.map(a => a.messaging_angle).filter(Boolean);
+    const audiences = [...new Set(recentActs.map(a => a.audience_focus).filter(Boolean))];
+
+    return `
+    <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:20px">
+      <!-- Header -->
+      <div style="background:${c.color_hex}12;border-bottom:1px solid ${c.color_hex}30;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:40px;height:40px;border-radius:10px;background:${c.color_hex};display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff">${esc(c.name)[0]}</div>
+          <div>
+            <div style="font-weight:800;font-size:15px;color:var(--text-primary)">${esc(c.name)}</div>
+            <div style="font-size:12px;color:var(--text-muted)">${esc(c.focus || 'Indian wealth advisory')}</div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:${c.color_hex};font-weight:600;background:${c.color_hex}15;border-radius:20px;padding:3px 10px">${recentActs.length} activities tracked</div>
+      </div>
+
+      <div style="padding:20px 22px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+          <!-- Competitor Insight -->
+          <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:16px">
+            <div style="font-size:10px;font-weight:800;letter-spacing:.8px;color:#6366f1;margin-bottom:8px">🔍 COMPETITOR INSIGHT</div>
+            <div style="font-size:13px;color:var(--text-primary);line-height:1.6">
+              ${topicsFound.length ? `Running webinars on: <strong>${topicsFound.slice(0,3).map(t=>esc(t)).join(', ')}</strong>.` : 'No recent webinar topics tracked yet.'}
+              ${angles.length ? ` Key messaging angle: <em>${esc(angles[0])}</em>.` : ''}
+              ${audiences.length ? ` Primary audience: <strong>${audiences.join(', ')}</strong>.` : ''}
+            </div>
+          </div>
+
+          <!-- Topic Gap Comment -->
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px">
+            <div style="font-size:10px;font-weight:800;letter-spacing:.8px;color:#f59e0b;margin-bottom:8px">📌 TOPIC GAP</div>
+            <div style="font-size:13px;color:var(--text-primary);line-height:1.6">
+              Differentiate with sharper investor-specific themes like <strong>NRI portfolio repatriation</strong>, <strong>AIF taxation deep-dives</strong>, or <strong>family office succession planning</strong> — angles most competitors avoid.
+            </div>
+          </div>
+
+          <!-- Positioning Recommendation -->
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px">
+            <div style="font-size:10px;font-weight:800;letter-spacing:.8px;color:#10b981;margin-bottom:8px">🏆 POSITIONING</div>
+            <div style="font-size:13px;color:var(--text-primary);line-height:1.6">
+              Position Right Horizons as the <strong>premium advisory tone</strong> player — avoid generic financial education and instead frame every webinar as exclusive HNI advisory access. Lead with outcomes, not products.
+            </div>
+          </div>
+
+          <!-- CTA Recommendation -->
+          <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:12px;padding:16px">
+            <div style="font-size:10px;font-weight:800;letter-spacing:.8px;color:#f43f5e;margin-bottom:8px">🎯 CTA RECOMMENDATION</div>
+            <div style="font-size:13px;color:var(--text-primary);line-height:1.6">
+              Use intent-based CTAs: <em>"Book a complimentary portfolio review"</em> or <em>"Get your personalised NRI investment plan"</em> — not generic <em>"Register now"</em>. Attach a 1-question qualifier at registration.
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Smart Recommendation -->
+        <div style="margin-top:14px;background:linear-gradient(135deg,#6366f110,#8b5cf608);border:1.5px solid #6366f130;border-radius:12px;padding:16px 18px;display:flex;align-items:flex-start;gap:12px">
+          <span style="font-size:20px;flex-shrink:0">→</span>
+          <div>
+            <div style="font-size:11px;font-weight:800;color:#6366f1;letter-spacing:.8px;margin-bottom:4px">SMART RECOMMENDATION</div>
+            <div style="font-size:13.5px;font-weight:600;color:var(--text-primary);line-height:1.55">
+              ${topicsFound.length ? `${esc(c.name)} is active on ${topicsFound[0] ? `"${esc(topicsFound[0])}"` : 'similar themes'} — counter with a deeper, case-study-driven format on the same ICP to capture their audience with superior content quality.` : `${esc(c.name)} has limited tracked activity — run a proactive HNI-exclusive webinar on Family Office structuring or NRI repatriation to establish thought leadership before they do.`}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Overall landscape summary
+  const allTopics = activity.map(a=>a.topic).filter(Boolean);
+  const topTopics = Object.entries(allTopics.reduce((acc,t)=>{acc[t]=(acc[t]||0)+1;return acc},{}))
+    .sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  body.innerHTML = `
+    <div class="intel-section">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px">
+        <div>
+          <h2 style="font-size:20px;font-weight:800;margin:0;color:var(--text-primary)">Competitor Intelligence</h2>
+          <p style="font-size:13px;color:var(--text-muted);margin:4px 0 0">Auto-researched insights across ${compCount} tracked competitors · Updated now</p>
+        </div>
+        <button class="btn btn-ghost btn-sm" style="display:flex;align-items:center;gap:6px" onclick="renderCompetitorIntel()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Re-run Research
+        </button>
+      </div>
+
+      <!-- Competitor panels -->
+      ${compPanels || '<div class="empty-state"><div class="empty-title">No competitor data</div></div>'}
+
+      <!-- Competitive Landscape -->
+      ${topTopics.length ? `
+      <div style="margin-top:8px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:14px">🗺️ Competitive Landscape — Most Covered Topics</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          ${topTopics.map(([t,c])=>`<div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;color:var(--text-primary)">${esc(t)} <span style="color:var(--text-muted);font-weight:400">(${c})</span></div>`).join('')}
+        </div>
+      </div>` : ''}
+
+    </div>`;
+
   window._compList = competitors;
 }
 
