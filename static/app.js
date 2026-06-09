@@ -3121,9 +3121,10 @@ function _renderTopicIntel(data) {
     return `<div class="intel-section"><div class="empty-state"><div class="empty-title">No topic data yet</div><div class="empty-sub">Complete webinars with ICP tags to see topic intelligence.</div></div></div>`;
   }
 
-  const proven  = topics.filter(t => t.attendance_rate >= 40).sort((a,b) => b.attendance_rate - a.attendance_rate);
-  const grow    = topics.filter(t => t.attendance_rate >= 25 && t.attendance_rate < 40).sort((a,b) => b.attendance_rate - a.attendance_rate);
-  const review  = topics.filter(t => t.attendance_rate < 25).sort((a,b) => b.attendance_rate - a.attendance_rate);
+  const proven  = topics.filter(t => t.attendance_rate >= 40 && t.webinar_count >= 3).sort((a,b) => b.attendance_rate - a.attendance_rate);
+  const grow    = topics.filter(t => t.attendance_rate >= 25 && t.attendance_rate < 40 && t.webinar_count >= 3).sort((a,b) => b.attendance_rate - a.attendance_rate);
+  const review  = topics.filter(t => t.attendance_rate < 25 && t.webinar_count >= 3).sort((a,b) => b.attendance_rate - a.attendance_rate);
+  const limited = topics.filter(t => t.webinar_count < 3).sort((a,b) => b.attendance_rate - a.attendance_rate);
 
   const tierCard = (t, color, bg, border) => `
     <div style="background:${bg};border:1.5px solid ${border};border-radius:12px;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px">
@@ -3137,7 +3138,7 @@ function _renderTopicIntel(data) {
       </div>
     </div>`;
 
-  const topDropoff = [...topics].sort((a,b) => a.attendance_rate - b.attendance_rate)[0];
+  const topDropoff = [...topics].filter(t=>t.webinar_count>=3).sort((a,b) => a.attendance_rate - b.attendance_rate)[0];
   const totalRegs  = topics.reduce((s,t)=>s+(t.total_regs||0),0);
   const totalAtt   = topics.reduce((s,t)=>s+(t.total_att||0),0);
   const overallDrop = totalRegs > 0 ? Math.round((1 - totalAtt/totalRegs)*100) : 0;
@@ -3193,6 +3194,24 @@ function _renderTopicIntel(data) {
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px">
             ${review.map(t=>tierCard(t,'#f43f5e','#fff1f2','#fecdd3')).join('')}
           </div>
+        </div>` : ''}
+
+        ${limited.length ? `
+        <div style="margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <span style="font-size:11px;font-weight:700;color:var(--text-muted);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:3px 10px">⏳ BUILDING DATA — fewer than 3 webinars</span>
+            <span style="font-size:11px;color:var(--text-muted)">${limited.length} ICP${limited.length!==1?'s':''} with limited history</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px">
+            ${limited.map(t=>tierCard(t,'var(--text-muted)','var(--surface)','var(--border)')).join('')}
+          </div>
+        </div>` : ''}
+
+        ${!proven.length && !grow.length && !review.length ? `
+        <div style="background:var(--surface);border:1.5px dashed var(--border);border-radius:14px;padding:32px;text-align:center;color:var(--text-muted)">
+          <div style="font-size:28px;margin-bottom:8px">📊</div>
+          <div style="font-weight:600;margin-bottom:4px">Need 3+ webinars per ICP for tier classification</div>
+          <div style="font-size:13px">Currently showing all topics in the "Building Data" section below. Run at least 3 webinars per ICP to unlock Proven/Grow/Review tiers.</div>
         </div>` : ''}
       </div>
 
@@ -4960,7 +4979,8 @@ async function exportWebinarReport(webinarId, title) {
 
     const w = webinar || S.webinars.find(x => x.id === webinarId) || {};
     const funnelStages = funnel?.stages || [];
-    const aiText = aiAnalysis?.summary || aiAnalysis?.analysis || w.ai_summary || '';
+    const aiData = aiAnalysis?.analysis || null;
+    const aiText = typeof aiData === 'string' ? aiData : (w.ai_summary || '');
 
     // Compare against all completed webinars for context
     const completed = (S.webinars||[]).filter(x=>x.status==='completed'&&x.total_registrations>0);
@@ -5051,12 +5071,37 @@ ${funnelStages.map((s,i) => {
   </div>`;
 }).join('')}` : ''}
 
-${aiText ? `
+${aiData && typeof aiData === 'object' ? `
 <h2>AI Analysis (Claude)</h2>
 <div class="ai-box">
   <div class="ai-box-header">
     <span class="ai-label">✦ AI Generated · Claude Sonnet</span>
+    ${aiData.grade ? `<span style="margin-left:auto;font-size:18px;font-weight:800;color:${aiData.grade==='A'?'#059669':aiData.grade==='B'?'#6366f1':aiData.grade==='C'?'#d97706':'#dc2626'};background:${aiData.grade==='A'?'#d1fae5':aiData.grade==='B'?'#dbeafe':aiData.grade==='C'?'#fef3c7':'#fee2e2'};border-radius:8px;padding:2px 12px">Grade ${aiData.grade}</span>` : ''}
   </div>
+  ${aiData.score_summary ? `<div style="font-size:15px;font-weight:700;color:#111827;margin-bottom:16px;padding:12px 16px;background:#fff;border-radius:8px;border-left:4px solid #6366f1">${esc(aiData.score_summary)}</div>` : ''}
+  ${(aiData.sections||[]).length ? `
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+    ${(aiData.sections||[]).map(s=>`
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px">
+      <div style="font-size:11px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${s.icon||''} ${esc(s.title)}</div>
+      <div style="font-size:13px;line-height:1.65;color:#374151;margin-bottom:8px">${esc(s.insight)}</div>
+      ${s.highlight ? `<div style="font-size:12px;font-weight:700;color:#111827;border-top:1px solid #e5e7eb;padding-top:8px">${esc(s.highlight)}</div>` : ''}
+    </div>`).join('')}
+  </div>` : ''}
+  ${(aiData.recommendations||[]).length ? `
+  <div style="margin-bottom:16px">
+    <div style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Recommendations</div>
+    ${(aiData.recommendations||[]).map((r,i)=>`
+    <div style="display:flex;gap:10px;margin-bottom:8px;padding:10px 14px;background:#fff;border-radius:8px;border-left:3px solid #6366f1">
+      <span style="font-size:13px;font-weight:800;color:#6366f1;flex-shrink:0">${i+1}.</span>
+      <span style="font-size:13px;color:#374151;line-height:1.55">${esc(r)}</span>
+    </div>`).join('')}
+  </div>` : ''}
+  ${aiData.verdict ? `<div style="background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;padding:14px 16px;font-size:13.5px;line-height:1.7;color:#374151">${esc(aiData.verdict)}</div>` : ''}
+</div>` : aiText ? `
+<h2>AI Analysis (Claude)</h2>
+<div class="ai-box">
+  <div class="ai-box-header"><span class="ai-label">✦ AI Generated · Claude Sonnet</span></div>
   <div class="ai-content">${esc(aiText)}</div>
 </div>` : ''}
 

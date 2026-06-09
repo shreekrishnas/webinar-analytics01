@@ -420,7 +420,7 @@ def process_registration_upload(
 ) -> schemas.UploadResult:
     try:
         if filename.lower().endswith('.csv'):
-            df = pd.read_csv(io.BytesIO(content))
+            df = pd.read_csv(io.BytesIO(content), sep=None, engine='python', on_bad_lines='skip', encoding_errors='replace')
         else:
             df = pd.read_excel(io.BytesIO(content))
     except Exception as e:
@@ -485,7 +485,7 @@ def process_attendee_upload(
 ) -> schemas.UploadResult:
     try:
         if filename.lower().endswith('.csv'):
-            df = pd.read_csv(io.BytesIO(content))
+            df = pd.read_csv(io.BytesIO(content), sep=None, engine='python', on_bad_lines='skip', encoding_errors='replace')
         else:
             df = pd.read_excel(io.BytesIO(content))
     except Exception as e:
