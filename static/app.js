@@ -1082,57 +1082,52 @@ function _drawWebinarDetail(w) {
   const rateClr  = rate >= 60 ? '#059669' : rate >= 40 ? '#d97706' : rate > 0 ? '#dc2626' : 'var(--text-3)';
   const badgeCls = w.status === 'completed' ? 'completed' : w.status === 'upcoming' ? 'upcoming' : w.status === 'cancelled' ? 'cancelled' : 'incomplete';
 
-  // Smart upload section:
-  // Show upload card only if that data type is missing - regardless of status
-  const showRegUpload = !w.has_registration_data;
-  const showAttUpload = !w.has_attendee_data;
-  const showUploadSection = showRegUpload || showAttUpload;
-
   const uploadSVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>';
+  const checkSVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>';
 
-  const regCard = showRegUpload ? `
-    <div class="upload-card" id="reg-upload-card"
+  const regCard = `
+    <div class="upload-card${w.has_registration_data ? ' upload-card-done' : ''}" id="reg-upload-card"
          ondragover="event.preventDefault();this.classList.add('dragover')"
          ondragleave="this.classList.remove('dragover')"
          ondrop="handleFileDrop(event,${w.id},'registrations')">
       <div class="upload-card-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg></div>
-      <div class="upload-card-title">Registration Data</div>
-      <div class="upload-card-sub">Upload list of people who registered</div>
+      <div class="upload-card-title">Registration Data ${w.has_registration_data ? '<span style="color:#059669;font-size:11px;font-weight:500">' + checkSVG + ' Uploaded</span>' : ''}</div>
+      <div class="upload-card-sub">${w.has_registration_data ? w.total_registrations + ' registrations — re-upload to replace' : 'Upload list of people who registered'}</div>
       <input type="file" class="upload-file-input" id="reg-file-input"
              accept=".csv,.xlsx,.xls"
              onchange="handleFileSelect(event,${w.id},'registrations')"/>
-      <button class="btn btn-primary btn-sm upload-card-btn"
+      <button class="btn ${w.has_registration_data ? 'btn-ghost' : 'btn-primary'} btn-sm upload-card-btn"
               onclick="document.getElementById('reg-file-input').click()">
-        ${uploadSVG} Upload File
+        ${uploadSVG} ${w.has_registration_data ? 'Re-upload' : 'Upload File'}
       </button>
-    </div>` : '';
+    </div>`;
 
-  const attCard = showAttUpload ? `
-    <div class="upload-card" id="att-upload-card"
+  const attCard = `
+    <div class="upload-card${w.has_attendee_data ? ' upload-card-done' : ''}" id="att-upload-card"
          ondragover="event.preventDefault();this.classList.add('dragover')"
          ondragleave="this.classList.remove('dragover')"
          ondrop="handleFileDrop(event,${w.id},'attendees')">
       <div class="upload-card-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg></div>
-      <div class="upload-card-title">Attendee Data</div>
-      <div class="upload-card-sub">Upload list of people who attended (e.g. Zoom report)</div>
+      <div class="upload-card-title">Attendee Data ${w.has_attendee_data ? '<span style="color:#059669;font-size:11px;font-weight:500">' + checkSVG + ' Uploaded</span>' : ''}</div>
+      <div class="upload-card-sub">${w.has_attendee_data ? w.total_attendees + ' attendees — re-upload to replace' : 'Upload Zoom attendee report or attendance list'}</div>
       <input type="file" class="upload-file-input" id="att-file-input"
              accept=".csv,.xlsx,.xls"
              onchange="handleFileSelect(event,${w.id},'attendees')"/>
-      <button class="btn btn-primary btn-sm upload-card-btn"
+      <button class="btn ${w.has_attendee_data ? 'btn-ghost' : 'btn-primary'} btn-sm upload-card-btn"
               onclick="document.getElementById('att-file-input').click()">
-        ${uploadSVG} Upload File
+        ${uploadSVG} ${w.has_attendee_data ? 'Re-upload' : 'Upload File'}
       </button>
-    </div>` : '';
+    </div>`;
 
-  const uploadSectionHTML = showUploadSection ? `
+  const uploadSectionHTML = `
     <div class="sec-hd" style="margin-bottom:12px">
       <span class="sec-title">Data Upload</span>
       <span style="font-size:12px;color:var(--text-3)">Upload CSV or Excel files</span>
     </div>
-    <div class="upload-section" style="${!showRegUpload || !showAttUpload ? 'grid-template-columns:1fr' : ''}">
+    <div class="upload-section">
       ${regCard}
       ${attCard}
-    </div>` : '';
+    </div>`;
 
   // Analysis cards (download removed - data is placeholder for many webinars)
   const analysisHTML = `
@@ -1375,8 +1370,8 @@ async function uploadFile(webinarId, type, file) {
       S.webinars[idx].total_registrations = fresh.total_registrations;
       S.webinars[idx].total_attendees = fresh.total_attendees;
       S.webinars[idx].attendance_rate = fresh.attendance_rate;
-      S.webinars[idx].has_registration_data = fresh.total_registrations > 0;
-      S.webinars[idx].has_attendee_data = fresh.total_attendees > 0;
+      S.webinars[idx].has_registration_data = fresh.has_registration_data;
+      S.webinars[idx].has_attendee_data = fresh.has_attendee_data;
     }
     _drawWebinarDetail(fresh);
   } catch(e) {

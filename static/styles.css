@@ -1000,11 +1000,11 @@ html.dark ::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.55); }
   transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
   position: relative;
 }
-.upload-card.has-data      { border-style: solid; border-color: rgba(16,185,129,0.50); background: rgba(16,185,129,0.04); }
-.upload-card:hover:not(.has-data) { border-color: var(--accent); background: var(--accent-bg); box-shadow: 0 0 0 4px rgba(79,70,229,0.06); }
+.upload-card.has-data, .upload-card.upload-card-done { border-style: solid; border-color: rgba(16,185,129,0.50); background: rgba(16,185,129,0.04); }
+.upload-card:hover { border-color: var(--accent); background: var(--accent-bg); box-shadow: 0 0 0 4px rgba(79,70,229,0.06); }
 .upload-card.dragover      { border-color: var(--accent); background: var(--accent-bg); box-shadow: 0 0 0 4px rgba(79,70,229,0.10); }
 .upload-card-icon  { width: 52px; height: 52px; border-radius: var(--r); background: var(--bg); display: flex; align-items: center; justify-content: center; }
-.upload-card.has-data .upload-card-icon { background: rgba(16,185,129,0.15); }
+.upload-card.has-data .upload-card-icon, .upload-card.upload-card-done .upload-card-icon { background: rgba(16,185,129,0.15); }
 .upload-card-title { font-size: 15px; font-weight: 700; color: var(--text); }
 .upload-card-sub   { font-size: 12px; color: var(--text-3); }
 .upload-card-result { background: var(--bg); border-radius: var(--r-sm); padding: 10px 14px; width: 100%; text-align: left; font-size: 12px; color: var(--text-2); line-height: 1.7; }
