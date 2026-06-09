@@ -273,7 +273,9 @@ html.dark .nav-link.active { color: #A5B4FC !important; background: rgba(99,102,
   backdrop-filter: blur(8px) !important;
 }
 html.dark .btn.btn-ghost, html.dark .btn.btn-secondary { background: rgba(30,41,59,0.6) !important; color: var(--text-secondary) !important; }
-.btn.btn-ghost:hover, .btn.btn-secondary:hover { background: rgba(255,255,255,0.90) !important; }
+.btn.btn-ghost:hover, .btn.btn-secondary:hover { background: rgba(255,255,255,0.90) !important; color: #374151 !important; }
+html.dark .btn.btn-ghost:hover, html.dark .btn.btn-secondary:hover { background: rgba(51,65,85,0.8) !important; color: #e2e8f0 !important; }
+.btn.btn-primary:hover { color: #fff !important; }
 
 /* Danger */
 .btn.btn-danger, .wb-card-del {

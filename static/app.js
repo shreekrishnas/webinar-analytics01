@@ -486,7 +486,7 @@ function renderKpiBanner() {
   const completedW = S.webinars.filter(w => w.status === 'completed' && w.attendance_rate > 0);
   const bestW = completedW.sort((a,b) => b.attendance_rate - a.attendance_rate)[0];
 
-  // Best ICP by avg attendance rate
+  // Best ICP: min 3 completed webinars, exclude 'Others'
   const icpMap = {};
   S.webinars.filter(w=>w.status==='completed').forEach(w => {
     const icp = w.icp || 'Others';
@@ -494,7 +494,9 @@ function renderKpiBanner() {
     icpMap[icp].total += (w.attendance_rate||0);
     icpMap[icp].count++;
   });
-  const bestICP = Object.entries(icpMap).sort((a,b) => (b[1].total/b[1].count)-(a[1].total/a[1].count))[0];
+  const bestICP = Object.entries(icpMap)
+    .filter(([icp, v]) => v.count >= 3 && icp !== 'Others')
+    .sort((a,b) => (b[1].total/b[1].count)-(a[1].total/a[1].count))[0] || null;
 
   const kpis = [
     {
@@ -1092,7 +1094,7 @@ function _drawWebinarDetail(w) {
          ondrop="handleFileDrop(event,${w.id},'registrations')">
       <div class="upload-card-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg></div>
       <div class="upload-card-title">Registration Data ${w.has_registration_data ? '<span style="color:#059669;font-size:11px;font-weight:500">' + checkSVG + ' Uploaded</span>' : ''}</div>
-      <div class="upload-card-sub">${w.has_registration_data ? w.total_registrations + ' registrations — re-upload to replace' : 'Upload list of people who registered'}</div>
+      <div class="upload-card-sub">${w.has_registration_data ? w.total_registrations + ' registrations. Re-upload to replace.' : 'Upload list of people who registered'}</div>
       <input type="file" class="upload-file-input" id="reg-file-input"
              accept=".csv,.xlsx,.xls"
              onchange="handleFileSelect(event,${w.id},'registrations')"/>
@@ -1109,7 +1111,7 @@ function _drawWebinarDetail(w) {
          ondrop="handleFileDrop(event,${w.id},'attendees')">
       <div class="upload-card-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg></div>
       <div class="upload-card-title">Attendee Data ${w.has_attendee_data ? '<span style="color:#059669;font-size:11px;font-weight:500">' + checkSVG + ' Uploaded</span>' : ''}</div>
-      <div class="upload-card-sub">${w.has_attendee_data ? w.total_attendees + ' attendees — re-upload to replace' : 'Upload Zoom attendee report or attendance list'}</div>
+      <div class="upload-card-sub">${w.has_attendee_data ? w.total_attendees + ' attendees. Re-upload to replace.' : 'Upload Zoom attendee report or attendance list'}</div>
       <input type="file" class="upload-file-input" id="att-file-input"
              accept=".csv,.xlsx,.xls"
              onchange="handleFileSelect(event,${w.id},'attendees')"/>
@@ -1627,7 +1629,7 @@ function renderAnalytics() {
         </div>
       </div>
 
-      <!-- New leads per webinar — loaded async -->
+      <!-- New leads per webinar - loaded async -->
       <div id="new-leads-chart-section" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px 28px;margin-bottom:24px">
         <div style="font-weight:700;font-size:15px;margin-bottom:4px;color:var(--text-primary)">New Leads per Webinar</div>
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">First-time email addresses seen in each webinar vs returning registrants</div>
@@ -1904,7 +1906,7 @@ async function renderRepeatAudience(container) {
       <tr>
         <td style="font-weight:600;color:var(--text-primary)">${i+1}. ${esc(r.name || r.email)}</td>
         <td style="font-family:var(--font-mono);text-align:center;font-weight:700;color:#6366f1">${r.webinar_count}</td>
-        <td style="font-size:12px;color:var(--text-muted)">${r.last_seen ? fmtDate(r.last_seen) : '—'}</td>
+        <td style="font-size:12px;color:var(--text-muted)">${r.last_seen ? fmtDate(r.last_seen) : ''}</td>
         <td><button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="openAddToPipelineModal('${esc(r.email)}','${esc(r.name||'')}')">Add to Pipeline</button></td>
       </tr>`).join('');
     container.innerHTML = `
@@ -1916,7 +1918,7 @@ async function renderRepeatAudience(container) {
         </div>
         ${(data.repeat_attendees_count||0) > 0 ? `
           <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">
-            <strong>${data.repeat_attendees_count}</strong> people have attended 2+ webinars. These are your warmest leads — prioritise them for follow-up.
+            <strong>${data.repeat_attendees_count}</strong> people have attended 2+ webinars. These are your most engaged attendees. Prioritise them for follow-up.
           </p>
           <div class="intel-table-wrap">
             <table class="intel-table">
@@ -2228,8 +2230,12 @@ function openWebinarModal(webinar) {
     if (dateInput && !dateInput.value) dateInput.value = today;
   }
 
+  // Close any stray overlays before opening
+  document.querySelectorAll('.modal-overlay.open').forEach(el => el.classList.remove('open'));
+  document.getElementById('confirm-overlay')?.remove();
+
   document.getElementById('modal-overlay').classList.add('open');
-  setTimeout(() => document.getElementById('nw-title').focus(), 80);
+  setTimeout(() => document.getElementById('nw-title')?.focus(), 80);
 }
 
 function closeWebinarModal() {
@@ -2989,7 +2995,7 @@ async function renderIntelligence() {
       <div class="page-hd">
         <div>
           <h1 class="page-title">Smart Recommendations</h1>
-          <p class="page-sub">Real data. Clear actions. No filler.</p>
+          <p class="page-sub">AI-powered insights from your webinar data.</p>
         </div>
         <button class="btn btn-ghost btn-sm" onclick="_intelCache=null;_intelHotLeadsCache=null;renderIntelligence()">Refresh</button>
       </div>
@@ -3124,7 +3130,7 @@ function _renderScoreboard(body) {
           </div>`).join('')}
       </div>
 
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:10px">All Webinars — Ranked by Performance Score</div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:10px">All Webinars, Ranked by Performance Score</div>
       <div style="border:1.5px solid var(--border);border-radius:14px;overflow:hidden">
         <table style="width:100%;border-collapse:collapse">
           <thead>
@@ -3185,7 +3191,7 @@ async function _renderHotLeads(body) {
         <span style="font-size:20px;font-weight:800;color:#6366f1">${l.webinar_count}</span>
         <div style="font-size:10px;color:var(--text-muted)">webinars</div>
       </td>
-      <td style="padding:11px 14px;font-size:12px;color:var(--text-secondary)">${esc(l.icps||'—')}</td>
+      <td style="padding:11px 14px;font-size:12px;color:var(--text-secondary)">${esc(l.icps||'')}</td>
       <td style="padding:11px 14px;text-align:center;font-weight:700;font-size:13px;color:${(l.max_duration||0)>=45?'#10b981':'#6366f1'}">${l.max_duration||0}m</td>
       <td style="padding:11px 14px">
         <span style="font-size:11px;font-weight:700;color:${l.pipeline_status==='not_added'?'#f43f5e':'#10b981'};background:${l.pipeline_status==='not_added'?'#fff1f2':'#f0fdf4'};border-radius:20px;padding:3px 10px">
@@ -3215,8 +3221,8 @@ async function _renderHotLeads(body) {
       </div>
 
       <div style="margin-bottom:32px">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:4px">🔥 High-Intent Leads — Stayed 30+ Minutes, Not Yet in Pipeline</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">These people invested 30+ minutes in your content. Call them first — they are your warmest leads.</div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:4px">High-Intent Contacts — Stayed 30+ Minutes, Not Yet in Pipeline</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">These people invested 30+ minutes in your content. Prioritise them for follow-up.</div>
         ${!hot.length ? `
           <div style="background:var(--surface);border:1.5px dashed var(--border);border-radius:14px;padding:32px;text-align:center;color:var(--text-muted)">
             <div style="font-size:28px;margin-bottom:8px">🎉</div>
@@ -3238,7 +3244,7 @@ async function _renderHotLeads(body) {
       </div>
 
       <div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:4px">🔁 Repeat Attendees — Came Back for 2+ Webinars</div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:4px">Repeat Attendees - Came Back for 2+ Webinars</div>
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Repeat attendance is the strongest buying signal. These contacts should be in active conversations.</div>
         ${!repeat.length ? `
           <div style="background:var(--surface);border:1.5px dashed var(--border);border-radius:14px;padding:32px;text-align:center;color:var(--text-muted)">
@@ -3263,7 +3269,7 @@ async function _renderHotLeads(body) {
 
 function addToPipelineFromIntel(email, name) {
   if (!email) return;
-  api('/api/pipeline/' + encodeURIComponent(email), 'PUT', { status: 'new', assigned_to: '', follow_up_date: null, notes: 'Added from Smart Recommendations Hot Leads' })
+  api('/api/pipeline/' + encodeURIComponent(email), 'PUT', { status: 'new', assigned_to: '', follow_up_date: null, notes: 'Added from Smart Recommendations' })
     .then(() => {
       showToast((name || email) + ' added to pipeline', 'success');
       _intelHotLeadsCache = null;
@@ -3418,7 +3424,7 @@ async function _renderAIInsights(body) {
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" class="spin"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg>
         </div>
         <div style="font-weight:700;font-size:16px;color:var(--text-primary)">Analysing your programme…</div>
-        <div style="font-size:13px;color:var(--text-muted);text-align:center;max-width:340px">Claude is reviewing all webinars, speaker performance, ICP patterns, and attendance trends</div>
+        <div style="font-size:13px;color:var(--text-muted);text-align:center;max-width:340px">AI is reviewing all webinars, speaker performance, ICP patterns, and attendance trends</div>
       </div>
     </div>`;
 
@@ -4133,7 +4139,7 @@ async function renderPipeline() {
       <div class="page-hd">
         <div>
           <h1 class="page-title">Follow-up Pipeline</h1>
-          <p class="page-sub">Track hot leads from webinar attendance through to booked meetings and conversions.</p>
+          <p class="page-sub">Track high-intent attendees from your webinars through to booked meetings and conversions.</p>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
           <button class="btn btn-ghost btn-sm" onclick="window.open('/api/pipeline/export','_blank')">
@@ -4971,10 +4977,10 @@ ${funnelStages.map((s,i) => {
 }).join('')}` : ''}
 
 ${aiData && typeof aiData === 'object' ? `
-<h2>AI Analysis (Claude)</h2>
+<h2>AI Analysis</h2>
 <div class="ai-box">
   <div class="ai-box-header">
-    <span class="ai-label">✦ AI Generated · Claude Sonnet</span>
+    <span class="ai-label">✦ AI Generated</span>
     ${aiData.grade ? `<span style="margin-left:auto;font-size:18px;font-weight:800;color:${aiData.grade==='A'?'#059669':aiData.grade==='B'?'#6366f1':aiData.grade==='C'?'#d97706':'#dc2626'};background:${aiData.grade==='A'?'#d1fae5':aiData.grade==='B'?'#dbeafe':aiData.grade==='C'?'#fef3c7':'#fee2e2'};border-radius:8px;padding:2px 12px">Grade ${aiData.grade}</span>` : ''}
   </div>
   ${aiData.score_summary ? `<div style="font-size:15px;font-weight:700;color:#111827;margin-bottom:16px;padding:12px 16px;background:#fff;border-radius:8px;border-left:4px solid #6366f1">${esc(aiData.score_summary)}</div>` : ''}
@@ -4998,9 +5004,9 @@ ${aiData && typeof aiData === 'object' ? `
   </div>` : ''}
   ${aiData.verdict ? `<div style="background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;padding:14px 16px;font-size:13.5px;line-height:1.7;color:#374151">${esc(aiData.verdict)}</div>` : ''}
 </div>` : aiText ? `
-<h2>AI Analysis (Claude)</h2>
+<h2>AI Analysis</h2>
 <div class="ai-box">
-  <div class="ai-box-header"><span class="ai-label">✦ AI Generated · Claude Sonnet</span></div>
+  <div class="ai-box-header"><span class="ai-label">✦ AI Generated</span></div>
   <div class="ai-content">${esc(aiText)}</div>
 </div>` : ''}
 
@@ -5009,7 +5015,7 @@ ${completed.length > 1 ? `
 <table><thead><tr><th>Metric</th><th>This Webinar</th><th>Programme Average</th><th>vs Average</th></tr></thead><tbody>
   <tr><td>Registrations</td><td>${fmt(w.total_registrations||0)}</td><td>${fmt(avgRegs)}</td><td><span class="badge ${(w.total_registrations||0)>=avgRegs?'badge-green':'badge-orange'}">${(w.total_registrations||0)>=avgRegs?'+':'-'}${Math.abs((w.total_registrations||0)-avgRegs)}</span></td></tr>
   <tr><td>Attendance Rate</td><td>${myRate.toFixed(1)}%</td><td>${avgRate}%</td><td><span class="badge ${myRate>=avgRate?'badge-green':'badge-red'}">${myRate>=avgRate?'+':''+(myRate-avgRate).toFixed(1)}%</span></td></tr>
-  <tr><td>Performance Score</td><td>${w.performance_score??'—'}</td><td>${Math.round(completed.reduce((s,x)=>s+(x.performance_score||0),0)/completed.length)||'—'}</td><td><span class="badge badge-blue">#${rank} of ${completed.length}</span></td></tr>
+  <tr><td>Performance Score</td><td>${w.performance_score??''}</td><td>${Math.round(completed.reduce((s,x)=>s+(x.performance_score||0),0)/completed.length)||''}</td><td><span class="badge badge-blue">#${rank} of ${completed.length}</span></td></tr>
 </tbody></table>` : ''}
 
 <div class="footer">WebinarIQ · Right Horizons Financial Services · AI-Powered Webinar Intelligence · Confidential · ${new Date().toLocaleDateString('en-IN')}</div>
