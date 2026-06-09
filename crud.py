@@ -557,14 +557,24 @@ def _dedup_df(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     return df.reset_index(drop=True), removed
 
 
+def _is_zoom_registration_csv(content: bytes) -> bool:
+    """Return True only if this looks like a Zoom Registration Report (not attendee)."""
+    first_line = content[:200].decode('utf-8', errors='replace').splitlines()[0].strip().lower()
+    return first_line.startswith('registration report')
+
+
+def _is_zoom_attendee_csv(content: bytes) -> bool:
+    """Return True only if this looks like a Zoom Attendee Report."""
+    first_line = content[:200].decode('utf-8', errors='replace').splitlines()[0].strip().lower()
+    return first_line.startswith('attendee report')
+
+
 def process_registration_upload(
     db: Session, webinar_id: int, content: bytes, filename: str
 ) -> schemas.UploadResult:
     try:
         if filename.lower().endswith('.csv'):
-            # Try Zoom format first (has metadata rows + section headers)
-            text_sample = content[:500].decode('utf-8', errors='replace').lower()
-            if 'registration report' in text_sample or 'attendee details' in text_sample or 'report generated' in text_sample:
+            if _is_zoom_registration_csv(content):
                 df = _parse_zoom_registration_csv(content)
             else:
                 df = pd.read_csv(io.BytesIO(content), sep=None, engine='python',
@@ -578,7 +588,16 @@ def process_registration_upload(
     original_count = len(df)
     df, dups_removed = _dedup_df(df)
 
-    # Raw SQL deletes — bypass ORM to avoid sequence cache issues
+    # Save existing attendance data before wiping registrations (preserve if attendees already uploaded)
+    existing_att = db.execute(
+        text("""SELECT a.joined_at, a.left_at, a.duration_minutes, a.attended, r.email
+                FROM attendances a
+                JOIN registrations r ON a.registration_id = r.id
+                WHERE a.webinar_id = :w"""),
+        {"w": webinar_id}
+    ).fetchall()
+
+    # Raw SQL deletes — FK order: attendances first, then registrations
     db.execute(text("DELETE FROM attendances   WHERE webinar_id = :w"), {"w": webinar_id})
     db.execute(text("DELETE FROM registrations WHERE webinar_id = :w"), {"w": webinar_id})
     db.execute(text("DELETE FROM upload_logs   WHERE webinar_id = :w AND file_type = 'registrations'"), {"w": webinar_id})
@@ -617,6 +636,27 @@ def process_registration_upload(
         {"w": webinar_id, "fn": filename, "oc": original_count,
          "fc": len(df), "dr": dups_removed, "ua": now},
     )
+
+    # Re-insert saved attendances matched against new registration IDs
+    if existing_att:
+        new_regs = db.execute(
+            text("SELECT id, email FROM registrations WHERE webinar_id = :w"), {"w": webinar_id}
+        ).fetchall()
+        new_reg_by_email = {r.email.lower().strip(): r.id for r in new_regs if r.email}
+        att_restore = []
+        for a in existing_att:
+            email_key = (a.email or '').lower().strip()
+            rid = new_reg_by_email.get(email_key)
+            if rid:
+                att_restore.append({"w": webinar_id, "rid": rid, "ja": a.joined_at,
+                                    "la": a.left_at, "dur": a.duration_minutes, "att": a.attended})
+        if att_restore:
+            db.execute(
+                text("INSERT INTO attendances (webinar_id, registration_id, joined_at, left_at, duration_minutes, attended)"
+                     " VALUES (:w, :rid, :ja, :la, :dur, :att)"),
+                att_restore,
+            )
+
     db.commit()
 
     return schemas.UploadResult(
@@ -633,8 +673,7 @@ def process_attendee_upload(
 ) -> schemas.UploadResult:
     try:
         if filename.lower().endswith('.csv'):
-            text_sample = content[:500].decode('utf-8', errors='replace').lower()
-            if 'attendee report' in text_sample or 'attendee details' in text_sample or 'report generated' in text_sample or 'host details' in text_sample:
+            if _is_zoom_attendee_csv(content):
                 df = _parse_zoom_attendee_csv(content)
                 # Already normalised inside _parse_zoom_attendee_csv — skip _normalise_cols
                 _zoom_parsed = True
