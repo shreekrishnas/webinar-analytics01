@@ -716,6 +716,9 @@ def process_attendee_upload(
 
     # Raw SQL deletes — bypass ORM to avoid sequence cache issues
     db.execute(text("DELETE FROM attendances WHERE webinar_id = :w"), {"w": webinar_id})
+    # Remove ghost registrations from previous attendee uploads (walk-in placeholders)
+    # so they don't pile up on re-upload — they'll be recreated if still needed
+    db.execute(text("DELETE FROM registrations WHERE webinar_id = :w AND source = 'attendee_upload'"), {"w": webinar_id})
     db.execute(text("DELETE FROM upload_logs  WHERE webinar_id = :w AND file_type = 'attendees'"), {"w": webinar_id})
     db.flush()
 
