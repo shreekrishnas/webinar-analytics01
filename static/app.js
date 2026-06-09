@@ -2974,14 +2974,15 @@ const INSIGHT_TYPE_META = {
 async function _renderAIInsights(body) {
   body.innerHTML = `
     <div class="intel-section">
-      <div class="insights-loading">
-        <div class="insights-loading-icon">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="spin" style="color:#6366f1"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg>
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 0;gap:14px">
+        <div style="width:56px;height:56px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:16px;display:flex;align-items:center;justify-content:center">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" class="spin"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg>
         </div>
-        <div style="font-weight:600;font-size:15px;color:var(--text-primary)">Analysing your programme data…</div>
-        <div style="font-size:13px;color:var(--text-muted);margin-top:4px">Claude is reviewing attendance, registrations and webinar patterns</div>
+        <div style="font-weight:700;font-size:16px;color:var(--text-primary)">Analysing your programme…</div>
+        <div style="font-size:13px;color:var(--text-muted);text-align:center;max-width:340px">Claude is reviewing all webinars, speaker performance, ICP patterns, and attendance trends</div>
       </div>
     </div>`;
+
   try {
     _intelInsightsCache = await api('/api/intelligence/insights');
     const insights = _intelInsightsCache.insights || [];
@@ -2990,49 +2991,126 @@ async function _renderAIInsights(body) {
       return;
     }
 
+    // Group insights by type for sectioned layout
+    const wins        = insights.filter(i => i.type === 'win');
+    const risks       = insights.filter(i => i.type === 'risk');
+    const actions     = insights.filter(i => i.type === 'action');
+    const opps        = insights.filter(i => i.type === 'opportunity');
+    const trends      = insights.filter(i => i.type === 'trend');
+    const rest        = insights.filter(i => !['win','risk','action','opportunity','trend'].includes(i.type));
+    const all         = [...wins, ...opps, ...actions, ...risks, ...trends, ...rest];
+
     const TYPE_CFG = {
-      win:         { emoji:'🏆', color:'#10b981', bg:'rgba(16,185,129,0.08)', border:'rgba(16,185,129,0.20)', label:'Win' },
-      risk:        { emoji:'⚠️', color:'#f43f5e', bg:'rgba(244,63,94,0.08)',  border:'rgba(244,63,94,0.22)',  label:'Risk' },
-      opportunity: { emoji:'🚀', color:'#6366f1', bg:'rgba(99,102,241,0.08)', border:'rgba(99,102,241,0.22)', label:'Opportunity' },
-      trend:       { emoji:'📈', color:'#f59e0b', bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.22)', label:'Trend' },
-      action:      { emoji:'⚡', color:'#0ea5e9', bg:'rgba(14,165,233,0.08)', border:'rgba(14,165,233,0.22)', label:'Action' },
+      win:         { color:'#10b981', bg:'#f0fdf4', border:'#bbf7d0', icon:'🏆', label:'WIN',         darkBg:'rgba(16,185,129,0.12)' },
+      risk:        { color:'#f43f5e', bg:'#fff1f2', border:'#fecdd3', icon:'⚠️', label:'RISK',        darkBg:'rgba(244,63,94,0.12)'  },
+      opportunity: { color:'#6366f1', bg:'#eef2ff', border:'#c7d2fe', icon:'🚀', label:'OPPORTUNITY', darkBg:'rgba(99,102,241,0.12)' },
+      trend:       { color:'#f59e0b', bg:'#fffbeb', border:'#fde68a', icon:'📈', label:'TREND',       darkBg:'rgba(245,158,11,0.12)' },
+      action:      { color:'#0ea5e9', bg:'#f0f9ff', border:'#bae6fd', icon:'⚡', label:'ACTION NOW',  darkBg:'rgba(14,165,233,0.12)' },
     };
 
-    const cards = insights.map((ins, i) => {
+    const renderCard = (ins, i, featured=false) => {
       const cfg = TYPE_CFG[ins.type] || TYPE_CFG.trend;
+      if (featured) {
+        return `
+        <div style="background:${cfg.bg};border:1.5px solid ${cfg.border};border-radius:16px;padding:24px 28px;position:relative;overflow:hidden;animation:fadeSlideUp .4s ease both;animation-delay:${i*60}ms">
+          <div style="position:absolute;top:0;left:0;right:0;height:4px;background:${cfg.color};border-radius:16px 16px 0 0"></div>
+          <div style="display:flex;align-items:flex-start;gap:14px">
+            <div style="width:42px;height:42px;border-radius:12px;background:${cfg.color};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${cfg.icon}</div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+                <span style="font-size:10px;font-weight:800;letter-spacing:1px;color:${cfg.color};background:${cfg.color}18;border:1px solid ${cfg.color}30;border-radius:20px;padding:2px 10px">${cfg.label}</span>
+                ${ins.metric ? `<span style="font-size:12px;font-weight:700;color:${cfg.color};background:${cfg.color}15;border-radius:20px;padding:2px 10px">${esc(ins.metric)}</span>` : ''}
+              </div>
+              <div style="font-weight:800;font-size:16px;color:var(--text-primary);margin-bottom:8px;line-height:1.35">${esc(ins.headline)}</div>
+              <div style="font-size:13.5px;color:var(--text-secondary);line-height:1.65;margin-bottom:14px">${esc(ins.detail)}</div>
+              <div style="display:flex;align-items:flex-start;gap:8px;background:${cfg.color}10;border-left:3px solid ${cfg.color};border-radius:0 8px 8px 0;padding:10px 14px">
+                <span style="font-size:14px;flex-shrink:0">→</span>
+                <span style="font-size:13px;font-weight:600;color:var(--text-primary)">${esc(ins.action)}</span>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      }
       return `
-      <div class="insight-card-v2" style="animation-delay:${i*70}ms">
-        <div class="insight-v2-stripe" style="background:${cfg.color}"></div>
-        <div class="insight-v2-body">
-          <div class="insight-v2-top">
-            <span class="insight-v2-badge" style="color:${cfg.color};background:${cfg.bg};border-color:${cfg.border}">
-              ${cfg.emoji}&nbsp;${cfg.label}
-            </span>
-            ${ins.metric ? `<span class="insight-v2-kpi" style="color:${cfg.color}">${esc(ins.metric)}</span>` : ''}
+        <div style="background:var(--surface);border:1.5px solid ${cfg.border};border-radius:14px;padding:18px 20px;position:relative;overflow:hidden;animation:fadeSlideUp .4s ease both;animation-delay:${i*60}ms">
+          <div style="position:absolute;top:0;left:0;bottom:0;width:4px;background:${cfg.color};border-radius:14px 0 0 14px"></div>
+          <div style="padding-left:12px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+              <span style="font-size:16px">${cfg.icon}</span>
+              <span style="font-size:10px;font-weight:800;letter-spacing:1px;color:${cfg.color}">${cfg.label}</span>
+              ${ins.metric ? `<span style="font-size:11px;font-weight:700;color:${cfg.color};margin-left:auto">${esc(ins.metric)}</span>` : ''}
+            </div>
+            <div style="font-weight:700;font-size:14px;color:var(--text-primary);margin-bottom:6px;line-height:1.35">${esc(ins.headline)}</div>
+            <div style="font-size:12.5px;color:var(--text-muted);line-height:1.6;margin-bottom:10px">${esc(ins.detail)}</div>
+            <div style="font-size:12px;font-weight:600;color:${cfg.color};border-top:1px solid ${cfg.border};padding-top:8px">→ ${esc(ins.action)}</div>
           </div>
-          <div class="insight-v2-headline">${esc(ins.headline)}</div>
-          <div class="insight-v2-detail">${esc(ins.detail)}</div>
-          <div class="insight-v2-action" style="border-color:${cfg.border}">
-            <span style="color:${cfg.color};font-size:13px">→</span>
-            <span>${esc(ins.action)}</span>
-          </div>
-        </div>
-      </div>`;
-    }).join('');
+        </div>`;
+    };
+
+    // Pull live stats for the dashboard header
+    const completed = (S.webinars||[]).filter(w=>w.status==='completed');
+    const totalReg  = completed.reduce((s,w)=>s+(w.total_registrations||0),0);
+    const totalAtt  = completed.reduce((s,w)=>s+(w.total_attendees||0),0);
+    const avgRate   = totalReg>0 ? Math.round(totalAtt/totalReg*100) : 0;
+    const topWin    = wins[0] || all[0];
+    const topRisk   = risks[0];
+    const topAction = actions[0];
 
     body.innerHTML = `
       <div class="intel-section">
-        <div class="insights-header-row">
+
+        <!-- Header with live stats -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px">
           <div>
-            <h3 class="intel-h3" style="margin:0">AI Intelligence Report</h3>
-            <p class="intel-p" style="margin:4px 0 0">Generated from your actual registration, attendance and webinar data.</p>
+            <h2 style="font-size:20px;font-weight:800;margin:0;color:var(--text-primary)">Smart Recommendations</h2>
+            <p style="font-size:13px;color:var(--text-muted);margin:4px 0 0">AI analysis of ${completed.length} completed webinars · ${fmt(totalReg)} registrations · ${fmt(totalAtt)} attendees</p>
           </div>
-          <button class="btn btn-ghost btn-sm" onclick="_intelInsightsCache=null;_renderAIInsights(document.getElementById('intel-body'))">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-            Regenerate
+          <button class="btn btn-ghost btn-sm" style="display:flex;align-items:center;gap:6px" onclick="_intelInsightsCache=null;_renderAIInsights(document.getElementById('intel-body'))">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Refresh Analysis
           </button>
         </div>
-        <div class="insights-grid-v2">${cards}</div>
+
+        <!-- Programme scorecard strip -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px">
+          ${[
+            { label:'Webinars Analysed', val:completed.length, color:'#6366f1', sub:'completed' },
+            { label:'Total Registrations', val:fmt(totalReg), color:'#6366f1', sub:'across all webinars' },
+            { label:'Total Attendees', val:fmt(totalAtt), color:'#10b981', sub:'actual attendance' },
+            { label:'Avg Attendance Rate', val:avgRate+'%', color:avgRate>=40?'#10b981':avgRate>=25?'#f59e0b':'#f43f5e', sub:avgRate>=40?'Above average ✓':avgRate>=25?'Room to grow':'Needs attention ⚠' },
+          ].map(k=>`
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;border-top:3px solid ${k.color}">
+              <div style="font-size:22px;font-weight:800;color:${k.color}">${k.val}</div>
+              <div style="font-size:11px;font-weight:600;color:var(--text-primary);margin-top:2px">${k.label}</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${k.sub}</div>
+            </div>`).join('')}
+        </div>
+
+        <!-- Critical alerts row -->
+        ${(topRisk || topAction) ? `
+        <div style="margin-bottom:24px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:12px">⚡ Requires Attention</div>
+          <div style="display:grid;grid-template-columns:${topRisk && topAction ? '1fr 1fr' : '1fr'};gap:14px">
+            ${topRisk ? renderCard(topRisk, 0, true) : ''}
+            ${topAction ? renderCard(topAction, 1, true) : ''}
+          </div>
+        </div>` : ''}
+
+        <!-- Top win featured -->
+        ${topWin && topWin.type === 'win' ? `
+        <div style="margin-bottom:24px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:12px">🏆 Top Performer</div>
+          ${renderCard(topWin, 0, true)}
+        </div>` : ''}
+
+        <!-- All insights grid -->
+        <div style="margin-bottom:8px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:12px">📋 Full Intelligence Report</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
+            ${all.map((ins,i) => renderCard(ins, i, false)).join('')}
+          </div>
+        </div>
+
       </div>`;
   } catch(e) {
     body.innerHTML = `<div class="intel-section"><div class="empty-state"><div class="empty-title">Failed to generate insights</div><div class="empty-sub">${esc(e.message)}</div></div></div>`;
@@ -4649,83 +4727,126 @@ function filterExportWebinars() {
 
 async function exportWebinarReport(webinarId, title) {
   const btn = event?.target?.closest('button');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="spin"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg> Generating…'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="spin"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg> Running AI analysis…'; }
   try {
-    const [webinar, funnel, lq] = await Promise.all([
+    // Run AI analysis + fetch data in parallel
+    const [webinar, funnel, aiAnalysis] = await Promise.all([
       api(`/api/webinars/${webinarId}`).catch(()=>null),
       api(`/api/webinar-funnel/${webinarId}`).catch(()=>null),
-      api(`/api/lead-quality`).catch(()=>null),
+      api(`/api/webinars/${webinarId}/analyze`, 'POST', {}).catch(()=>null),
     ]);
 
     const w = webinar || S.webinars.find(x => x.id === webinarId) || {};
     const funnelStages = funnel?.stages || [];
-    const topLeads = (lq?.leads || []).filter(l => l.webinar_id === webinarId || !l.webinar_id).slice(0,10);
+    const aiText = aiAnalysis?.summary || aiAnalysis?.analysis || w.ai_summary || '';
+
+    // Compare against all completed webinars for context
+    const completed = (S.webinars||[]).filter(x=>x.status==='completed'&&x.total_registrations>0);
+    const avgRate   = completed.length ? Math.round(completed.reduce((s,x)=>s+(x.attendance_rate||0),0)/completed.length) : 0;
+    const avgRegs   = completed.length ? Math.round(completed.reduce((s,x)=>s+(x.total_registrations||0),0)/completed.length) : 0;
+    const rank      = completed.filter(x=>(x.attendance_rate||0) > (w.attendance_rate||0)).length + 1;
+    const myRate    = w.attendance_rate || 0;
+    const rateColor = myRate >= 40 ? '#059669' : myRate >= 25 ? '#d97706' : '#dc2626';
 
     const reportHtml = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"/>
-<title>Webinar Analysis Report - ${esc(w.title||title)}</title>
+<title>Webinar Report — ${esc(w.title||title)}</title>
 <style>
-  body{font-family:Georgia,serif;max-width:900px;margin:40px auto;padding:0 30px;color:#1a1a2e;line-height:1.6}
-  h1{font-size:28px;color:#6366f1;border-bottom:3px solid #6366f1;padding-bottom:12px;margin-bottom:8px}
-  h2{font-size:18px;color:#374151;margin-top:32px;margin-bottom:10px;border-left:4px solid #6366f1;padding-left:12px}
-  .meta{color:#6b7280;font-size:14px;margin-bottom:28px}
-  .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:20px 0}
-  .kpi-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;text-align:center}
-  .kpi-val{font-size:28px;font-weight:800;color:#6366f1}
-  .kpi-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-top:4px}
-  table{width:100%;border-collapse:collapse;margin:12px 0}
-  th{background:#6366f1;color:#fff;padding:10px 12px;text-align:left;font-size:12px;font-weight:700;text-transform:uppercase}
-  td{padding:9px 12px;border-bottom:1px solid #e2e8f0;font-size:13px}
-  tr:nth-child(even) td{background:#f8fafc}
-  .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700}
-  .badge-green{background:#d1fae5;color:#059669}
-  .badge-orange{background:#fef3c7;color:#d97706}
-  .badge-red{background:#fee2e2;color:#dc2626}
-  .funnel-bar{height:24px;border-radius:6px;background:#6366f1;margin:4px 0;display:flex;align-items:center;padding:0 10px;color:#fff;font-size:12px;font-weight:700;min-width:60px}
-  .print-footer{margin-top:48px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:11px;color:#9ca3af;text-align:center}
-  @media print{body{margin:20px}.kpi-row{grid-template-columns:repeat(4,1fr)}}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',Arial,sans-serif;max-width:860px;margin:0 auto;padding:32px 40px;color:#111827;line-height:1.65;font-size:14px}
+  .cover{text-align:center;padding:48px 0 36px;border-bottom:2px solid #6366f1;margin-bottom:32px}
+  .cover-logo{font-size:13px;font-weight:700;color:#6366f1;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px}
+  .cover-title{font-size:24px;font-weight:800;color:#111827;margin-bottom:6px;line-height:1.3}
+  .cover-meta{font-size:13px;color:#6b7280;margin-top:8px}
+  h2{font-size:16px;font-weight:700;color:#111827;margin:28px 0 12px;padding:8px 14px;background:#f3f4f6;border-left:4px solid #6366f1;border-radius:0 6px 6px 0}
+  h3{font-size:14px;font-weight:700;color:#374151;margin:20px 0 8px}
+  .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0 24px}
+  .kpi-box{background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;padding:16px;text-align:center;border-top:3px solid #6366f1}
+  .kpi-val{font-size:26px;font-weight:800;color:#6366f1;line-height:1}
+  .kpi-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#9ca3af;margin-top:6px}
+  .kpi-sub{font-size:11px;color:#9ca3af;margin-top:3px}
+  table{width:100%;border-collapse:collapse;margin:12px 0 20px;font-size:13px}
+  th{background:#6366f1;color:#fff;padding:9px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+  td{padding:9px 12px;border-bottom:1px solid #e5e7eb}
+  tr:nth-child(even) td{background:#f9fafb}
+  .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+  .badge-green{background:#d1fae5;color:#059669} .badge-orange{background:#fef3c7;color:#d97706} .badge-red{background:#fee2e2;color:#dc2626} .badge-blue{background:#dbeafe;color:#1d4ed8}
+  .ai-box{background:#f5f3ff;border:1.5px solid #c4b5fd;border-radius:10px;padding:20px 24px;margin:16px 0 24px}
+  .ai-box-header{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .ai-label{font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:1px;background:#ede9fe;border-radius:20px;padding:3px 10px}
+  .ai-content{font-size:13.5px;line-height:1.75;color:#374151;white-space:pre-wrap;word-break:break-word}
+  .funnel-row{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+  .funnel-fill{height:20px;border-radius:4px;display:flex;align-items:center;padding:0 8px;color:#fff;font-size:11px;font-weight:700;min-width:80px;transition:width .6s}
+  .comp-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #e5e7eb;font-size:13px}
+  .comp-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  .footer{margin-top:40px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;text-align:center}
+  @media print{
+    body{padding:20px 24px}
+    .kpi-grid{grid-template-columns:repeat(4,1fr)}
+    h2{break-after:avoid}
+    .ai-box{break-inside:avoid}
+  }
 </style></head><body>
-<h1>Webinar Analysis Report</h1>
-<div class="meta">
-  <strong>${esc(w.title||title)}</strong> &nbsp;·&nbsp; ${fmtDate(w.date||'')} &nbsp;·&nbsp;
-  Speaker: ${esc(w.speaker_name||'—')} &nbsp;·&nbsp; ICP: ${esc(w.icp||'—')} &nbsp;·&nbsp;
-  Status: <strong>${(w.status||'').replace(/_/g,' ')}</strong> &nbsp;·&nbsp;
-  Generated: ${new Date().toLocaleString('en-IN')}
+
+<div class="cover">
+  <div class="cover-logo">WebinarIQ · Right Horizons</div>
+  <div class="cover-title">${esc(w.title||title)}</div>
+  <div class="cover-meta">
+    ${fmtDate(w.date||'')} &nbsp;·&nbsp; Speaker: <strong>${esc(w.speaker_name||'—')}</strong> &nbsp;·&nbsp;
+    ICP: <strong>${esc(w.icp||'—')}</strong> &nbsp;·&nbsp; Status: <strong>${(w.status||'').replace(/_/g,' ')}</strong>
+    <br>Generated: ${new Date().toLocaleString('en-IN')} &nbsp;·&nbsp; Confidential
+  </div>
 </div>
 
-<h2>Key Performance Indicators</h2>
-<div class="kpi-row">
-  <div class="kpi-box"><div class="kpi-val">${fmt(w.total_registrations||0)}</div><div class="kpi-lbl">Registrations</div></div>
-  <div class="kpi-box"><div class="kpi-val">${fmt(w.total_attendees||0)}</div><div class="kpi-lbl">Attendees</div></div>
-  <div class="kpi-box"><div class="kpi-val">${w.attendance_rate ? w.attendance_rate.toFixed(1)+'%' : '—'}</div><div class="kpi-lbl">Attendance Rate</div></div>
-  <div class="kpi-box"><div class="kpi-val">${w.performance_score ?? '—'}</div><div class="kpi-lbl">Performance Score</div></div>
+<h2>Performance Summary</h2>
+<div class="kpi-grid">
+  <div class="kpi-box"><div class="kpi-val">${fmt(w.total_registrations||0)}</div><div class="kpi-lbl">Registrations</div><div class="kpi-sub">vs avg ${fmt(avgRegs)}</div></div>
+  <div class="kpi-box"><div class="kpi-val">${fmt(w.total_attendees||0)}</div><div class="kpi-lbl">Attendees</div><div class="kpi-sub">${w.total_registrations>0?Math.round((w.total_attendees||0)/(w.total_registrations||1)*100)+'% show-up':''}</div></div>
+  <div class="kpi-box" style="border-top-color:${rateColor}"><div class="kpi-val" style="color:${rateColor}">${myRate.toFixed(1)}%</div><div class="kpi-lbl">Attendance Rate</div><div class="kpi-sub">Prog avg: ${avgRate}%</div></div>
+  <div class="kpi-box" style="border-top-color:${w.performance_score>=80?'#059669':w.performance_score>=60?'#6366f1':w.performance_score>=40?'#d97706':'#dc2626'}"><div class="kpi-val" style="color:${w.performance_score>=80?'#059669':w.performance_score>=60?'#6366f1':w.performance_score>=40?'#d97706':'#dc2626'}">${w.performance_score ?? '—'}</div><div class="kpi-lbl">Performance Score</div><div class="kpi-sub">${w.score_label||''}</div></div>
 </div>
+
+<h2>Webinar Details</h2>
+<table><tbody>
+  <tr><td style="width:160px;color:#6b7280;font-weight:600">Title</td><td>${esc(w.title||'')}</td></tr>
+  <tr><td style="color:#6b7280;font-weight:600">Date</td><td>${fmtDate(w.date||'')}</td></tr>
+  <tr><td style="color:#6b7280;font-weight:600">Speaker</td><td>${esc(w.speaker_name||'—')}</td></tr>
+  <tr><td style="color:#6b7280;font-weight:600">ICP Target</td><td>${esc(w.icp||'—')}</td></tr>
+  <tr><td style="color:#6b7280;font-weight:600">Programme Rank</td><td><span class="badge badge-blue">#${rank} of ${completed.length}</span></td></tr>
+  <tr><td style="color:#6b7280;font-weight:600">No-shows</td><td>${fmt(Math.max(0,(w.total_registrations||0)-(w.total_attendees||0)))} (${w.total_registrations>0?Math.round(Math.max(0,(w.total_registrations||0)-(w.total_attendees||0))/(w.total_registrations||1)*100):'0'}% of registered)</td></tr>
+  ${w.description ? `<tr><td style="color:#6b7280;font-weight:600">Description</td><td>${esc(w.description)}</td></tr>` : ''}
+</tbody></table>
 
 ${funnelStages.length ? `
 <h2>Conversion Funnel</h2>
-<table><thead><tr><th>Stage</th><th>Count</th><th>Conversion</th><th>Drop-off</th></tr></thead><tbody>
-${funnelStages.map((s,i) => `<tr>
-  <td><strong>${esc(s.label)}</strong></td>
-  <td>${fmt(s.count)}</td>
-  <td>${s.pct}%</td>
-  <td>${i===0?'—':`<span class="badge badge-${s.drop>30?'red':s.drop>15?'orange':'green'}">${s.drop}% drop</span>`}</td>
-</tr>`).join('')}
+${funnelStages.map((s,i) => {
+  const clr = i===0?'#6366f1':s.pct>=50?'#10b981':s.pct>=30?'#f59e0b':'#f43f5e';
+  return `<div class="funnel-row">
+    <div style="width:90px;font-size:12px;color:#6b7280;font-weight:600;flex-shrink:0">${esc(s.label)}</div>
+    <div class="funnel-fill" style="width:${Math.max(s.pct,10)}%;background:${clr}">${s.pct}%</div>
+    <div style="font-size:13px;font-weight:700;min-width:60px">${fmt(s.count)}</div>
+    <div style="font-size:11px;color:${i===0?'#6b7280':'#dc2626'}">${i===0?'base':s.drop!==undefined?s.drop+'% drop-off':''}</div>
+  </div>`;
+}).join('')}` : ''}
+
+${aiText ? `
+<h2>AI Analysis (Claude)</h2>
+<div class="ai-box">
+  <div class="ai-box-header">
+    <span class="ai-label">✦ AI Generated · Claude Sonnet</span>
+  </div>
+  <div class="ai-content">${esc(aiText)}</div>
+</div>` : ''}
+
+${completed.length > 1 ? `
+<h2>Programme Context</h2>
+<table><thead><tr><th>Metric</th><th>This Webinar</th><th>Programme Average</th><th>vs Average</th></tr></thead><tbody>
+  <tr><td>Registrations</td><td>${fmt(w.total_registrations||0)}</td><td>${fmt(avgRegs)}</td><td><span class="badge ${(w.total_registrations||0)>=avgRegs?'badge-green':'badge-orange'}">${(w.total_registrations||0)>=avgRegs?'+':'-'}${Math.abs((w.total_registrations||0)-avgRegs)}</span></td></tr>
+  <tr><td>Attendance Rate</td><td>${myRate.toFixed(1)}%</td><td>${avgRate}%</td><td><span class="badge ${myRate>=avgRate?'badge-green':'badge-red'}">${myRate>=avgRate?'+':''+(myRate-avgRate).toFixed(1)}%</span></td></tr>
+  <tr><td>Performance Score</td><td>${w.performance_score??'—'}</td><td>${Math.round(completed.reduce((s,x)=>s+(x.performance_score||0),0)/completed.length)||'—'}</td><td><span class="badge badge-blue">#${rank} of ${completed.length}</span></td></tr>
 </tbody></table>` : ''}
 
-<h2>Webinar Overview</h2>
-<table><tbody>
-  <tr><td><strong>Topic / Title</strong></td><td>${esc(w.title||'')}</td></tr>
-  <tr><td><strong>Date</strong></td><td>${fmtDate(w.date||'')}</td></tr>
-  <tr><td><strong>Speaker</strong></td><td>${esc(w.speaker_name||'—')}</td></tr>
-  <tr><td><strong>ICP Target</strong></td><td>${esc(w.icp||'—')}</td></tr>
-  <tr><td><strong>Status</strong></td><td>${(w.status||'').replace(/_/g,' ')}</td></tr>
-  <tr><td><strong>Score Label</strong></td><td>${esc(w.score_label||'—')}</td></tr>
-  <tr><td><strong>Description</strong></td><td>${esc(w.description||'—')}</td></tr>
-</tbody></table>
-
-${w.ai_summary ? `<h2>AI Analysis</h2><p style="background:#f8fafc;border-left:4px solid #6366f1;padding:14px 18px;border-radius:0 10px 10px 0;font-size:14px">${esc(w.ai_summary)}</p>` : ''}
-
-<div class="print-footer">WebinarIQ · Right Horizons Financial Services · Confidential · Generated ${new Date().toLocaleDateString('en-IN')}</div>
+<div class="footer">WebinarIQ · Right Horizons Financial Services · AI-Powered Webinar Intelligence · Confidential · ${new Date().toLocaleDateString('en-IN')}</div>
 </body></html>`;
 
     const blob = new Blob([reportHtml], { type: 'text/html' });
@@ -4733,11 +4854,11 @@ ${w.ai_summary ? `<h2>AI Analysis</h2><p style="background:#f8fafc;border-left:4
     const win  = window.open(url, '_blank');
     if (win) {
       win.addEventListener('load', () => {
-        setTimeout(() => { try { win.print(); } catch(e) {} }, 500);
+        setTimeout(() => { try { win.print(); } catch(e) {} }, 800);
       });
     }
     URL.revokeObjectURL(url);
-    showToast('Report opened — use browser Print → Save as PDF', 'success');
+    showToast('Report ready — use Print → Save as PDF to download', 'success');
   } catch(e) {
     showToast('Failed to generate report: ' + e.message, 'error');
   } finally {

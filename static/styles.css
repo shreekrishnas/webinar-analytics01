@@ -1812,11 +1812,14 @@ html.dark .skel {
   margin-bottom: 14px;
 }
 .kpi-card-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-2);
   text-transform: uppercase;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.5px;
+  line-height: 1.4;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 .kpi-card-icon {
   width: 34px; height: 34px;
