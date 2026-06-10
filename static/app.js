@@ -5324,16 +5324,7 @@ function toggleMobileSidebar() { toggleMobileNav(); }
    CURSOR GLOW
 ══════════════════════════════════════════════════════════════════════════ */
 function initCursorGlow() {
-  const glow = document.getElementById('cursor-glow');
-  if (!glow || window.matchMedia('(pointer: coarse)').matches) return; // skip touch
-  document.addEventListener('mousemove', e => {
-    glow.style.left = e.clientX + 'px';
-    glow.style.top  = e.clientY + 'px';
-  });
-  document.addEventListener('mouseleave', () => {
-    glow.style.left = '-600px';
-    glow.style.top  = '-600px';
-  });
+  // Disabled — cursor glow is hidden via CSS and the mousemove listener wastes CPU
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -5370,21 +5361,7 @@ function initNavbarScroll() {
    3D CARD TILT on webinar cards
 ══════════════════════════════════════════════════════════════════════════ */
 function initCardTilt() {
-  document.querySelectorAll('.wb-card, .spk-card').forEach(card => {
-    if (card._tiltInit) return;
-    card._tiltInit = true;
-    card.addEventListener('mousemove', e => {
-      const r  = card.getBoundingClientRect();
-      const x  = (e.clientX - r.left) / r.width  - 0.5; // -0.5 to 0.5
-      const y  = (e.clientY - r.top)  / r.height - 0.5;
-      const rx =  y * -8;  // rotate X (pitch)
-      const ry =  x *  8;  // rotate Y (yaw)
-      card.style.transform = `perspective(900px) rotateX(${rx}deg) rotateY(${ry}deg) translateY(-6px) scale(1.02)`;
-    });
-    card.addEventListener('mouseleave', () => {
-      card.style.transform = '';
-    });
-  });
+  // Disabled — 3D tilt conflicts with CSS hover transitions causing cursor flicker
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
