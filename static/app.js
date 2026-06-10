@@ -444,18 +444,12 @@ function nav(page, sub) {
 
 function setContent(html) {
   const el = document.getElementById('content');
-  el.style.opacity = '0';
   el.innerHTML = html;
-  requestAnimationFrame(() => {
-    el.style.opacity = '1';
-    animateCards('.wb-card, .spk-card');
-    animateBars();
-    runCountUps();
-    decorateLeaderboardRows();
-    initScrollReveal();
-    // Only run expensive tilt on desktop
-    if (window.innerWidth >= 768) initCardTilt();
-  });
+  animateCards('.wb-card, .spk-card');
+  animateBars();
+  runCountUps();
+  decorateLeaderboardRows();
+  initScrollReveal();
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -5629,7 +5623,7 @@ const COMM_WA = [
 let _mlResults  = {};
 let _commResults = {};
 let _mlTopic    = '';
-let _mlOrg      = '';
+let _mlOrg      = 'Right Horizons Financial Services';
 let _mlDate     = '';
 let _mlSpeaker  = '';
 let _aiTab      = 'analysis'; // 'analysis' | 'emails' | 'whatsapp'
@@ -5644,18 +5638,12 @@ function renderMLAnalysis() {
     </div>
 
     <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px;">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
         <div>
           <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Webinar Topic *</label>
           <input id="ml-topic-input" type="text" placeholder="e.g. How to Build a Passive Income Portfolio"
             style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;box-sizing:border-box;"
             value="${esc(_mlTopic)}" oninput="_mlTopic=this.value" />
-        </div>
-        <div>
-          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Organisation / Brand</label>
-          <input id="ml-org-input" type="text" placeholder="e.g. Right Horizons Financial Services"
-            style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;box-sizing:border-box;"
-            value="${esc(_mlOrg)}" oninput="_mlOrg=this.value" />
         </div>
         <div>
           <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Date &amp; Time</label>
@@ -5674,7 +5662,7 @@ function renderMLAnalysis() {
 
     <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;">
       ${['analysis','emails','whatsapp'].map(t => `
-        <button onclick="_aiSetTab('${t}')" id="ai-tab-${t}"
+        <button onclick="_aiSetTab('${t}')" class="aitab-btn" data-tab="${t}"
           style="padding:10px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid ${_aiTab===t?'var(--accent)':'transparent'};color:${_aiTab===t?'var(--accent)':'var(--text-muted)'};margin-bottom:-2px;">
           ${{analysis:'🧠 Intelligence',emails:'📧 Zoho Emails',whatsapp:'💬 WhatsApp'}[t]}
         </button>`).join('')}
@@ -5685,16 +5673,16 @@ function renderMLAnalysis() {
 
 function _aiSetTab(t) {
   _mlTopic   = document.getElementById('ml-topic-input')?.value  || _mlTopic;
-  _mlOrg     = document.getElementById('ml-org-input')?.value    || _mlOrg;
   _mlDate    = document.getElementById('ml-date-input')?.value   || _mlDate;
   _mlSpeaker = document.getElementById('ml-speaker-input')?.value|| _mlSpeaker;
   _aiTab = t;
-  document.querySelectorAll('[id^="ai-tab-"]').forEach(b => {
-    const active = b.id === `ai-tab-${t}`;
+  document.querySelectorAll('.aitab-btn').forEach(b => {
+    const active = b.dataset.tab === t;
     b.style.borderBottomColor = active ? 'var(--accent)' : 'transparent';
     b.style.color = active ? 'var(--accent)' : 'var(--text-muted)';
   });
-  document.getElementById('ai-tab-content').innerHTML = _aiTabContent();
+  const container = document.getElementById('ai-tab-content');
+  if (container) container.innerHTML = _aiTabContent();
 }
 
 function _aiTabContent() {
@@ -5745,22 +5733,20 @@ function _aiTabContent() {
 
 async function _loadIQDashboard() {
   _iqLoading = true; _iqData = null;
-  const el = document.getElementById('iq-dashboard');
-  if (el) el.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;">
-    <span class="spinner" style="width:36px;height:36px;border-width:3px;"></span>
-    <div style="font-size:15px;font-weight:600;color:var(--text);">AI is analyzing your webinar data…</div>
-    <div style="font-size:13px;color:var(--text-muted);">Running ML models, forecasting, anomaly detection &amp; generating insights</div>
-  </div>`;
+  // Show loading in the tab content area
+  const container = document.getElementById('ai-tab-content');
+  if (container) container.innerHTML = _aiTabContent();
   try {
     const res = await fetch('/api/ai-intelligence');
     if (!res.ok) { const t = await res.text(); throw new Error(`HTTP ${res.status}: ${t.slice(0,200)}`); }
     _iqData = await res.json();
   } catch(e) { _iqData = { error: 'Analysis failed', error_detail: e.message }; }
   _iqLoading = false;
-  if (el) el.innerHTML = _iqData.error ? `<div style="padding:24px;text-align:center;">
-    <div style="color:#ef4444;font-size:14px;margin-bottom:16px;">⚠ ${esc(_iqData.error_detail || _iqData.error)}</div>
-    <button onclick="_loadIQDashboard()" class="btn-primary">Retry Analysis</button>
-  </div>` : _renderIQDashboard(_iqData);
+  // Only update if still on the analysis tab
+  if (_aiTab === 'analysis') {
+    const c2 = document.getElementById('ai-tab-content');
+    if (c2) c2.innerHTML = _aiTabContent();
+  }
 }
 
 function _iqGauge(score) {
@@ -6119,7 +6105,7 @@ async function _commRunModule(moduleId) {
 
 async function _mlRunAll() {
   _mlTopic   = document.getElementById('ml-topic-input')?.value   || _mlTopic;
-  _mlOrg     = document.getElementById('ml-org-input')?.value     || _mlOrg;
+
   _mlDate    = document.getElementById('ml-date-input')?.value    || _mlDate;
   _mlSpeaker = document.getElementById('ml-speaker-input')?.value || _mlSpeaker;
   await Promise.all(ML_MODULES.map(m => _mlRunModule(m.id)));
@@ -6127,7 +6113,7 @@ async function _mlRunAll() {
 
 async function _commRunAll(type) {
   _mlTopic   = document.getElementById('ml-topic-input')?.value   || _mlTopic;
-  _mlOrg     = document.getElementById('ml-org-input')?.value     || _mlOrg;
+
   _mlDate    = document.getElementById('ml-date-input')?.value    || _mlDate;
   _mlSpeaker = document.getElementById('ml-speaker-input')?.value || _mlSpeaker;
   const modules = type === 'email' ? COMM_EMAILS : COMM_WA;
