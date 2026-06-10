@@ -6167,10 +6167,9 @@ function _copyComm(moduleId) {
   if (!r) return;
   const text = r.body || r.message || JSON.stringify(r, null, 2);
   const full = r.subject ? `Subject: ${r.subject}\n\n${text}${r.cta_text ? '\n\n[' + r.cta_text + ']' : ''}${r.ps_line ? '\n\nP.S. ' + r.ps_line : ''}` : text;
+  const btn = document.querySelector(`#ml-card-${moduleId} button[onclick*="_copyComm"]`);
   navigator.clipboard.writeText(full).then(() => {
-    const btn = event.target;
-    btn.textContent = '✅ Copied!';
-    setTimeout(() => btn.textContent = '📋 Copy', 1500);
+    if (btn) { btn.textContent = '✅ Copied!'; setTimeout(() => btn.textContent = '📋 Copy', 1500); }
   });
 }
 
