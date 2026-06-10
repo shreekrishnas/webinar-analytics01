@@ -438,6 +438,7 @@ function nav(page, sub) {
     case 'upload':      renderUpload();             break;
     case 'webinar':     renderWebinarDetail(sub);   break;
     case 'speaker':     renderSpeakerDetail(sub);   break;
+    case 'ml':          renderMLAnalysis();          break;
   }
 }
 
@@ -830,7 +831,7 @@ function renderHome() {
     `<option value="${sp.id}" ${S.filterSpeaker==sp.id?'selected':''}>${esc(sp.name)}</option>`
   ).join('');
 
-  const ICP_LIST = ['PMS', 'Retirement Planning', 'NRI', 'ESOPs', 'Family Office', 'Others'];
+  const ICP_LIST = ['PMS', 'Retirement Planning', 'NRI', 'ESOPs', 'Family Office', 'AIF', 'Others'];
   const icpOptions = ICP_LIST.map(icp =>
     `<option value="${icp}" ${S.filterICP===icp?'selected':''}>${icp}</option>`
   ).join('');
@@ -5614,3 +5615,107 @@ async function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
+// ─── ML ANALYSIS ──────────────────────────────────────────────────────────────
+
+const ML_MODULES = [
+  { id: 'topic_prediction',    label: 'Topic Prediction',       icon: '🎯', desc: 'Predict best-performing webinar topics' },
+  { id: 'topic_quality',       label: 'Topic Quality Score',    icon: '⭐', desc: 'Score topic quality and audience fit' },
+  { id: 'pattern_detection',   label: 'Pattern Detection',      icon: '🔍', desc: 'Detect engagement and drop-off patterns' },
+  { id: 'forecasting',         label: 'Registration Forecast',  icon: '📈', desc: 'Forecast registrations and attendance' },
+  { id: 'market_intelligence', label: 'Market Intelligence',    icon: '🌐', desc: 'Analyse HNI market trends and signals' },
+  { id: 'algorithm_impact',    label: 'Algorithm Impact',       icon: '⚙️', desc: 'Assess platform algorithm effects' },
+  { id: 'audience_psychology', label: 'Audience Psychology',    icon: '🧠', desc: 'Understand HNI decision psychology' },
+  { id: 'content_intelligence',label: 'Content Intelligence',   icon: '📝', desc: 'Optimise content for conversion' },
+  { id: 'similarity_engine',   label: 'Similarity Engine',      icon: '🔗', desc: 'Find high-affinity audience clusters' },
+  { id: 'opportunity_risk',    label: 'Opportunity & Risk',     icon: '⚖️', desc: 'Surface opportunities and risk flags' },
+];
+
+let _mlResults = {};
+let _mlTopic   = '';
+
+function renderMLAnalysis() {
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <div class="page-header">
+      <h1 class="page-title">🤖 ML Analysis</h1>
+      <p class="page-subtitle">AI-powered predictive intelligence across 10 modules</p>
+    </div>
+    <div class="ml-controls" style="display:flex;gap:12px;align-items:center;margin-bottom:24px;flex-wrap:wrap;">
+      <input id="ml-topic-input" type="text" placeholder="Enter webinar topic (e.g. PMS Alpha Strategies for HNIs)"
+        style="flex:1;min-width:260px;padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:var(--card-bg);color:var(--text);font-size:14px;"
+        value="${_mlTopic}" oninput="_mlTopic=this.value" />
+      <button onclick="_mlRunAll()" class="btn-primary" style="white-space:nowrap;">▶ Run All Modules</button>
+    </div>
+    <div class="ml-grid" id="ml-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;">
+      ${ML_MODULES.map(m => _mlModuleCard(m)).join('')}
+    </div>`;
+}
+
+function _mlModuleCard(m) {
+  const r = _mlResults[m.id];
+  let body = `<p style="color:var(--text-muted);font-size:13px;margin:0 0 12px;">${m.desc}</p>
+    <button onclick="_mlRunModule('${m.id}')" class="btn-secondary" style="font-size:12px;">Run</button>`;
+  if (r === 'loading') {
+    body = `<div style="display:flex;align-items:center;gap:8px;color:var(--text-muted);font-size:13px;"><span class="spinner" style="width:16px;height:16px;border-width:2px;"></span> Analysing…</div>`;
+  } else if (r && r.error) {
+    body = `<p style="color:#ef4444;font-size:13px;">⚠ ${r.error}</p><button onclick="_mlRunModule('${m.id}')" class="btn-secondary" style="font-size:12px;">Retry</button>`;
+  } else if (r) {
+    body = _mlRenderResult(m.id, r);
+  }
+  return `<div class="card ml-card" id="ml-card-${m.id}" style="padding:16px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+      <span style="font-size:20px;">${m.icon}</span>
+      <strong style="font-size:14px;">${m.label}</strong>
+    </div>
+    ${body}
+  </div>`;
+}
+
+function _mlRenderResult(moduleId, r) {
+  let html = '';
+  if (r.score !== undefined)      html += `<div style="margin-bottom:6px;font-size:13px;">Score: <strong>${r.score}/100</strong></div>`;
+  if (r.confidence !== undefined) html += `<div style="margin-bottom:6px;font-size:13px;">Confidence: <strong>${Math.round(r.confidence*100)}%</strong></div>`;
+  if (r.summary)   html += `<p style="font-size:13px;color:var(--text-muted);margin:6px 0;">${r.summary}</p>`;
+  if (Array.isArray(r.predictions) && r.predictions.length) {
+    html += `<ul style="margin:6px 0 0;padding-left:16px;font-size:12px;color:var(--text-muted);">${r.predictions.slice(0,4).map(p=>`<li>${p}</li>`).join('')}</ul>`;
+  }
+  if (Array.isArray(r.insights) && r.insights.length) {
+    html += `<ul style="margin:6px 0 0;padding-left:16px;font-size:12px;color:var(--text-muted);">${r.insights.slice(0,4).map(p=>`<li>${p}</li>`).join('')}</ul>`;
+  }
+  if (Array.isArray(r.recommendations) && r.recommendations.length) {
+    html += `<ul style="margin:6px 0 0;padding-left:16px;font-size:12px;color:var(--text-muted);">${r.recommendations.slice(0,3).map(p=>`<li>${p}</li>`).join('')}</ul>`;
+  }
+  if (!html) html = `<pre style="font-size:11px;white-space:pre-wrap;color:var(--text-muted);">${JSON.stringify(r,null,2).slice(0,400)}</pre>`;
+  html += `<button onclick="_mlRunModule('${moduleId}')" class="btn-secondary" style="font-size:11px;margin-top:8px;">Refresh</button>`;
+  return html;
+}
+
+async function _mlRunModule(moduleId) {
+  _mlResults[moduleId] = 'loading';
+  _mlUpdateCard(moduleId);
+  try {
+    const res = await fetch('/api/ml-analysis', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ module: moduleId, topic: _mlTopic || 'General HNI Wealth Advisory' }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    _mlResults[moduleId] = await res.json();
+  } catch(e) {
+    _mlResults[moduleId] = { error: e.message };
+  }
+  _mlUpdateCard(moduleId);
+}
+
+async function _mlRunAll() {
+  _mlTopic = document.getElementById('ml-topic-input')?.value || _mlTopic;
+  await Promise.all(ML_MODULES.map(m => _mlRunModule(m.id)));
+}
+
+function _mlUpdateCard(moduleId) {
+  const m = ML_MODULES.find(x => x.id === moduleId);
+  if (!m) return;
+  const el = document.getElementById(`ml-card-${moduleId}`);
+  if (el) el.outerHTML = _mlModuleCard(m);
+}

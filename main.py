@@ -21,7 +21,7 @@ def _compute_perf_score(regs: int, att_rate: float, icp: str, has_ads: bool = Fa
     # Attendance rate score (35 pts): 60%+ = full
     att_score = min(35, round(att_rate / 60 * 35))
     # ICP relevance score (20 pts): premium ICPs score higher
-    icp_scores = {'Family Office': 20, 'PMS': 18, 'NRI': 16, 'ESOPs': 15, 'Retirement Planning': 14, 'Others': 8}
+    icp_scores = {'Family Office': 20, 'AIF': 20, 'PMS': 18, 'NRI': 16, 'ESOPs': 15, 'Retirement Planning': 14, 'Others': 8}
     icp_score = icp_scores.get(icp or 'Others', 8)
     # Speaker-topic fit (15 pts): give 10 pts baseline (no data to distinguish)
     fit_score = 10
@@ -697,7 +697,7 @@ def get_lead_quality(db: Session = Depends(get_db)):
         pl_rows = db.execute(_t(f"SELECT email, status FROM pipeline_contacts WHERE email IN ({placeholders})")).fetchall()
         pipeline_map = {r.email: r.status for r in pl_rows}
 
-    premium_icps = {'Family Office', 'PMS', 'NRI', 'ESOPs'}
+    premium_icps = {'Family Office', 'AIF', 'PMS', 'NRI', 'ESOPs'}
     leads = []
     for r in rows:
         webinar_count = int(r.webinar_count or 0)
@@ -2843,6 +2843,55 @@ def get_new_registrants_per_webinar(db: Session = Depends(get_db)):
 
     result = sorted(webinar_map.values(), key=lambda x: x["date"] or "")
     return {"webinars": result}
+
+
+# ── ML Analysis Endpoint ──────────────────────────────────────────────────────
+
+ML_MODULE_PROMPTS = {
+    "topic_prediction": "Predict the top 5 best-performing webinar topics for HNI wealth advisory in India. Score each 0-100 for predicted registration pull, attendance rate, and conversion potential. Return JSON with keys: score, confidence, summary, predictions (array of strings).",
+    "topic_quality": "Evaluate the given webinar topic for quality, relevance to Indian HNIs, and differentiation from competitors. Return JSON with keys: score (0-100), confidence (0-1), summary, insights (array of strings).",
+    "pattern_detection": "Analyse engagement patterns for Indian HNI wealth webinars. Identify drop-off points, peak engagement windows, and optimal duration. Return JSON with keys: score, confidence, summary, insights (array of strings), recommendations (array of strings).",
+    "forecasting": "Forecast registration and attendance numbers for the given webinar topic targeting Indian HNIs. Consider seasonality, market conditions, and topic appeal. Return JSON with keys: score, confidence, summary, predictions (array of strings).",
+    "market_intelligence": "Provide market intelligence on the Indian HNI wealth advisory space. Cover trends in PMS, AIF, Family Office, and NRI segments. Return JSON with keys: score, confidence, summary, insights (array of strings).",
+    "algorithm_impact": "Assess how platform algorithms (LinkedIn, email, WhatsApp) affect webinar reach for Indian HNI audiences. Return JSON with keys: score, confidence, summary, insights (array of strings), recommendations (array of strings).",
+    "audience_psychology": "Analyse the psychology of Indian HNI investors when deciding to attend wealth advisory webinars. Cover trust factors, FOMO triggers, and credibility signals. Return JSON with keys: score, confidence, summary, insights (array of strings).",
+    "content_intelligence": "Optimise webinar content structure for maximum conversion among Indian HNIs. Cover title framing, agenda design, and CTA placement. Return JSON with keys: score, confidence, summary, recommendations (array of strings).",
+    "similarity_engine": "Identify audience segments with high affinity for the given webinar topic. Cluster by ICP (PMS, AIF, Family Office, NRI, ESOPs), geography, and investment size. Return JSON with keys: score, confidence, summary, insights (array of strings).",
+    "opportunity_risk": "Surface opportunities and risk flags for the given webinar topic in the Indian HNI space. Cover timing risks, competitor overlap, and market saturation. Return JSON with keys: score, confidence, summary, predictions (array of strings), recommendations (array of strings).",
+}
+
+@app.post("/api/ml-analysis")
+async def ml_analysis(payload: dict):
+    import aiohttp, json as _json
+    module = payload.get("module", "")
+    topic = payload.get("topic", "General HNI Wealth Advisory")
+    if module not in ML_MODULE_PROMPTS:
+        raise HTTPException(status_code=400, detail=f"Unknown module: {module}")
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="OPENROUTER_API_KEY not configured")
+    system_prompt = f"You are an expert AI analyst for Right Horizons Financial Services, specialising in Indian HNI wealth advisory webinars. The user topic is: {topic}. Respond ONLY with valid JSON, no markdown."
+    user_prompt = ML_MODULE_PROMPTS[module]
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={"model": "anthropic/claude-sonnet-4-5", "max_tokens": 2000, "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ]},
+        ) as resp:
+            if resp.status != 200:
+                raise HTTPException(status_code=502, detail=f"OpenRouter returned {resp.status}")
+            data = await resp.json()
+    text = data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    try:
+        return _json.loads(text)
+    except _json.JSONDecodeError:
+        return {"summary": text, "score": 0, "confidence": 0}
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
