@@ -2845,53 +2845,286 @@ def get_new_registrants_per_webinar(db: Session = Depends(get_db)):
     return {"webinars": result}
 
 
-# ── ML Analysis Endpoint ──────────────────────────────────────────────────────
+# ── AI Intelligence Modules (real ML + AI) ────────────────────────────────────
 
-ML_MODULE_PROMPTS = {
-    "topic_prediction": "Predict the top 5 best-performing webinar topics for HNI wealth advisory in India. Score each 0-100 for predicted registration pull, attendance rate, and conversion potential. Return JSON with keys: score, confidence, summary, predictions (array of strings).",
-    "topic_quality": "Evaluate the given webinar topic for quality, relevance to Indian HNIs, and differentiation from competitors. Return JSON with keys: score (0-100), confidence (0-1), summary, insights (array of strings).",
-    "pattern_detection": "Analyse engagement patterns for Indian HNI wealth webinars. Identify drop-off points, peak engagement windows, and optimal duration. Return JSON with keys: score, confidence, summary, insights (array of strings), recommendations (array of strings).",
-    "forecasting": "Forecast registration and attendance numbers for the given webinar topic targeting Indian HNIs. Consider seasonality, market conditions, and topic appeal. Return JSON with keys: score, confidence, summary, predictions (array of strings).",
-    "market_intelligence": "Provide market intelligence on the Indian HNI wealth advisory space. Cover trends in PMS, AIF, Family Office, and NRI segments. Return JSON with keys: score, confidence, summary, insights (array of strings).",
-    "algorithm_impact": "Assess how platform algorithms (LinkedIn, email, WhatsApp) affect webinar reach for Indian HNI audiences. Return JSON with keys: score, confidence, summary, insights (array of strings), recommendations (array of strings).",
-    "audience_psychology": "Analyse the psychology of Indian HNI investors when deciding to attend wealth advisory webinars. Cover trust factors, FOMO triggers, and credibility signals. Return JSON with keys: score, confidence, summary, insights (array of strings).",
-    "content_intelligence": "Optimise webinar content structure for maximum conversion among Indian HNIs. Cover title framing, agenda design, and CTA placement. Return JSON with keys: score, confidence, summary, recommendations (array of strings).",
-    "similarity_engine": "Identify audience segments with high affinity for the given webinar topic. Cluster by ICP (PMS, AIF, Family Office, NRI, ESOPs), geography, and investment size. Return JSON with keys: score, confidence, summary, insights (array of strings).",
-    "opportunity_risk": "Surface opportunities and risk flags for the given webinar topic in the Indian HNI space. Cover timing risks, competitor overlap, and market saturation. Return JSON with keys: score, confidence, summary, predictions (array of strings), recommendations (array of strings).",
-}
+def _ml_fetch_webinar_stats(db):
+    """Return list of dicts with title, icp, regs, att_rate for completed webinars."""
+    rows = db.execute(_t("""
+        SELECT w.title, w.icp, w.total_registrations, w.total_attendees
+        FROM webinars w
+        WHERE w.status = 'completed' AND w.total_registrations > 0
+    """)).fetchall()
+    results = []
+    for r in rows:
+        att_rate = (r.total_attendees / r.total_registrations * 100) if r.total_registrations else 0
+        results.append({
+            "title": r.title or "",
+            "icp": r.icp or "Others",
+            "regs": r.total_registrations or 0,
+            "att_rate": round(att_rate, 1),
+        })
+    return results
 
-@app.post("/api/ml-analysis")
-async def ml_analysis(payload: dict):
+
+def _ml_tfidf_similarity(query: str, corpus: list[str]):
+    """Return cosine similarity scores between query and each corpus item."""
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+    import numpy as np
+    if not corpus:
+        return []
+    vec = TfidfVectorizer(ngram_range=(1, 2), stop_words="english")
+    try:
+        tfidf = vec.fit_transform([query] + corpus)
+        sims = cosine_similarity(tfidf[0:1], tfidf[1:]).flatten()
+        return sims.tolist()
+    except Exception:
+        return [0.0] * len(corpus)
+
+
+def _ml_topic_advisor(db, topic: str):
+    """TF-IDF clustering to identify high-performing topic clusters and gaps."""
+    import numpy as np
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.cluster import KMeans
+    stats = _ml_fetch_webinar_stats(db)
+    if len(stats) < 3:
+        return {"score": 0, "confidence": 0.0, "method": "insufficient_data",
+                "summary": "Not enough completed webinars to run topic modelling. Need at least 3.",
+                "insights": [], "recommendations": ["Run more webinars to build training data."]}
+    titles = [s["title"] for s in stats]
+    vec = TfidfVectorizer(ngram_range=(1, 2), stop_words="english", max_features=200)
+    X = vec.fit_transform(titles)
+    n_clusters = min(4, len(titles))
+    km = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+    labels = km.fit_predict(X)
+    # Score each cluster by average attendance rate
+    cluster_stats = {}
+    for i, s in enumerate(stats):
+        c = int(labels[i])
+        if c not in cluster_stats:
+            cluster_stats[c] = {"att_rates": [], "regs": [], "titles": []}
+        cluster_stats[c]["att_rates"].append(s["att_rate"])
+        cluster_stats[c]["regs"].append(s["regs"])
+        cluster_stats[c]["titles"].append(s["title"])
+    # Find which cluster the input topic belongs to
+    sims = _ml_tfidf_similarity(topic, titles)
+    best_match_idx = int(np.argmax(sims)) if sims else 0
+    matched_cluster = int(labels[best_match_idx]) if sims else 0
+    mc = cluster_stats.get(matched_cluster, {})
+    avg_att = round(float(np.mean(mc["att_rates"])), 1) if mc.get("att_rates") else 0
+    avg_regs = int(np.mean(mc["regs"])) if mc.get("regs") else 0
+    score = min(100, int(avg_att * 1.2 + min(avg_regs / 2, 40)))
+    # Best performing cluster
+    best_cluster = max(cluster_stats, key=lambda c: np.mean(cluster_stats[c]["att_rates"]))
+    best_titles = cluster_stats[best_cluster]["titles"][:3]
+    insights = [
+        f"Your topic matches a cluster with avg {avg_att}% attendance rate across {len(mc.get('titles', []))} webinars.",
+        f"Avg registrations in this topic cluster: {avg_regs}.",
+        f"Best-performing cluster includes: {', '.join(best_titles)}.",
+        f"Total webinars analysed: {len(stats)}.",
+    ]
+    return {
+        "score": score, "confidence": round(min(sims) + 0.5, 2) if sims else 0.5,
+        "method": "TF-IDF + K-Means clustering on historical webinar titles",
+        "summary": f"Topic clusters into a group averaging {avg_att}% attendance. Score based on historical cluster performance.",
+        "insights": insights,
+    }
+
+
+def _ml_topic_critique(db, topic: str):
+    """Cosine similarity to top-performing webinars as a quality signal."""
+    import numpy as np
+    stats = _ml_fetch_webinar_stats(db)
+    if len(stats) < 2:
+        return {"score": 50, "confidence": 0.3, "method": "insufficient_data",
+                "summary": "Not enough data for similarity scoring.", "insights": []}
+    titles = [s["title"] for s in stats]
+    sims = _ml_tfidf_similarity(topic, titles)
+    sim_arr = np.array(sims)
+    att_arr = np.array([s["att_rate"] for s in stats])
+    # Weighted score: high similarity to high-attendance webinars = good
+    weighted_score = float(np.dot(sim_arr, att_arr) / (np.sum(sim_arr) + 1e-9))
+    score = min(100, int(weighted_score * 1.5))
+    top3_idx = sim_arr.argsort()[-3:][::-1]
+    similar = [f"\"{stats[i]['title']}\" ({stats[i]['att_rate']}% att)" for i in top3_idx]
+    return {
+        "score": score,
+        "confidence": round(float(sim_arr.max()), 2),
+        "method": "TF-IDF cosine similarity weighted by historical attendance rates",
+        "summary": f"Topic similarity score vs historical webinars: {score}/100. Higher means it resembles your best performers.",
+        "insights": [f"Most similar past webinar: {similar[0] if similar else 'N/A'}"] + similar[1:],
+    }
+
+
+def _ml_engagement_patterns(db, topic: str):
+    """Statistical analysis of attendance patterns from actual data."""
+    import numpy as np
+    stats = _ml_fetch_webinar_stats(db)
+    if len(stats) < 3:
+        return {"score": 0, "confidence": 0.3, "method": "insufficient_data",
+                "summary": "Need at least 3 completed webinars.", "insights": []}
+    att_rates = np.array([s["att_rate"] for s in stats])
+    mean_att = round(float(att_rates.mean()), 1)
+    std_att = round(float(att_rates.std()), 1)
+    median_att = round(float(np.median(att_rates)), 1)
+    top_webinar = max(stats, key=lambda x: x["att_rate"])
+    bottom_webinar = min(stats, key=lambda x: x["att_rate"])
+    # ICP breakdown
+    icp_groups = {}
+    for s in stats:
+        icp = s["icp"]
+        if icp not in icp_groups:
+            icp_groups[icp] = []
+        icp_groups[icp].append(s["att_rate"])
+    icp_avgs = {icp: round(float(np.mean(rates)), 1) for icp, rates in icp_groups.items()}
+    best_icp = max(icp_avgs, key=icp_avgs.get)
+    insights = [
+        f"Mean attendance rate across {len(stats)} webinars: {mean_att}% (std dev: {std_att}%)",
+        f"Median attendance rate: {median_att}%",
+        f"Best performer: \"{top_webinar['title']}\" at {top_webinar['att_rate']}%",
+        f"Lowest performer: \"{bottom_webinar['title']}\" at {bottom_webinar['att_rate']}%",
+        f"Best-performing ICP: {best_icp} (avg {icp_avgs[best_icp]}%)",
+    ]
+    score = min(100, int(mean_att * 1.4))
+    return {
+        "score": score, "confidence": round(1 - std_att / (mean_att + 1), 2),
+        "method": "Descriptive statistics on historical attendance data",
+        "summary": f"Your webinars average {mean_att}% attendance. {best_icp} ICPs engage best.",
+        "insights": insights,
+        "icp_breakdown": icp_avgs,
+    }
+
+
+def _ml_registration_forecast(db, topic: str):
+    """Linear regression forecast based on historical ICP + topic performance."""
+    import numpy as np
+    from sklearn.linear_model import LinearRegression
+    stats = _ml_fetch_webinar_stats(db)
+    if len(stats) < 3:
+        return {"score": 0, "confidence": 0.3, "method": "insufficient_data",
+                "summary": "Need at least 3 completed webinars to train the model.", "predictions": []}
+    titles = [s["title"] for s in stats]
+    sims = np.array(_ml_tfidf_similarity(topic, titles))
+    regs = np.array([s["regs"] for s in stats])
+    att_rates = np.array([s["att_rate"] for s in stats])
+    # Features: similarity score + index (proxy for recency)
+    X = np.column_stack([sims, np.arange(len(sims))])
+    reg_model = LinearRegression().fit(X, regs)
+    att_model = LinearRegression().fit(X, att_rates)
+    # Predict for a "new" webinar (most similar = high sim, latest = last index)
+    X_pred = np.array([[float(sims.max()), len(sims)]])
+    pred_regs = max(0, int(reg_model.predict(X_pred)[0]))
+    pred_att = min(100, max(0, round(float(att_model.predict(X_pred)[0]), 1)))
+    pred_attendees = int(pred_regs * pred_att / 100)
+    r2_regs = round(float(reg_model.score(X, regs)), 2)
+    r2_att = round(float(att_model.score(X, att_rates)), 2)
+    return {
+        "score": min(100, int(pred_att * 1.2)),
+        "confidence": round((r2_regs + r2_att) / 2, 2),
+        "method": "Linear Regression trained on historical registrations and attendance rates",
+        "summary": f"Model predicts ~{pred_regs} registrations and ~{pred_att}% attendance ({pred_attendees} live attendees).",
+        "predictions": [
+            f"Predicted registrations: {pred_regs}",
+            f"Predicted attendance rate: {pred_att}%",
+            f"Predicted live attendees: {pred_attendees}",
+            f"Regression R² (registrations): {r2_regs} | Regression R² (attendance): {r2_att}",
+        ],
+    }
+
+
+def _ml_icp_targeting(db, topic: str):
+    """Find which ICPs have historically performed best and match this topic."""
+    import numpy as np
+    stats = _ml_fetch_webinar_stats(db)
+    if len(stats) < 2:
+        return {"score": 0, "confidence": 0.3, "method": "insufficient_data",
+                "summary": "Need more data.", "insights": []}
+    titles = [s["title"] for s in stats]
+    sims = np.array(_ml_tfidf_similarity(topic, titles))
+    # For each ICP, weight attendance rate by similarity score
+    icp_weighted = {}
+    icp_count = {}
+    for i, s in enumerate(stats):
+        icp = s["icp"]
+        w = sims[i]
+        if icp not in icp_weighted:
+            icp_weighted[icp] = 0.0
+            icp_count[icp] = 0
+        icp_weighted[icp] += s["att_rate"] * w
+        icp_count[icp] += 1
+    icp_scores = {icp: round(icp_weighted[icp] / icp_count[icp], 1) for icp in icp_weighted}
+    ranked = sorted(icp_scores.items(), key=lambda x: x[1], reverse=True)
+    best_icp, best_score = ranked[0]
+    score = min(100, int(best_score * 1.5))
+    insights = [f"{icp}: weighted score {sc}" for icp, sc in ranked]
+    return {
+        "score": score, "confidence": round(float(sims.max()), 2),
+        "method": "TF-IDF similarity-weighted ICP attendance scoring",
+        "summary": f"Best ICP match for this topic: {best_icp} (weighted score: {best_score}). Based on how similar ICPs performed on similar webinars.",
+        "insights": insights,
+        "icp_rankings": dict(ranked),
+    }
+
+
+async def _ml_ai_module(topic: str, system_msg: str, user_msg: str) -> dict:
+    """Call AI for modules that genuinely need external knowledge."""
     import httpx, json as _json
-    module = payload.get("module", "")
-    topic = payload.get("topic", "General HNI Wealth Advisory")
-    if module not in ML_MODULE_PROMPTS:
-        raise HTTPException(status_code=400, detail=f"Unknown module: {module}")
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=503, detail="OPENROUTER_API_KEY not configured")
-    system_prompt = f"You are an expert AI analyst for Right Horizons Financial Services, specialising in Indian HNI wealth advisory webinars. The user topic is: {topic}. Respond ONLY with valid JSON, no markdown."
-    user_prompt = ML_MODULE_PROMPTS[module]
+        return {"score": 0, "confidence": 0, "summary": "OPENROUTER_API_KEY not set.", "insights": []}
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": "anthropic/claude-sonnet-4-5", "max_tokens": 2000, "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
+            json={"model": "anthropic/claude-sonnet-4-5", "max_tokens": 1500, "messages": [
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg},
             ]},
         )
-        if resp.status_code != 200:
-            raise HTTPException(status_code=502, detail=f"OpenRouter returned {resp.status_code}")
-        data = resp.json()
-    text = data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+    if resp.status_code != 200:
+        return {"score": 0, "confidence": 0, "summary": f"AI call failed: {resp.status_code}", "insights": []}
+    text = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "{}")
     text = text.strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
     try:
         return _json.loads(text)
-    except _json.JSONDecodeError:
-        return {"summary": text, "score": 0, "confidence": 0}
+    except Exception:
+        return {"score": 0, "confidence": 0, "summary": text, "insights": []}
+
+
+@app.post("/api/ml-analysis")
+async def ml_analysis(payload: dict, db: Session = Depends(get_db)):
+    module = payload.get("module", "")
+    topic = payload.get("topic", "General HNI Wealth Advisory")
+    ai_system = (
+        "You are a specialist in Indian HNI wealth advisory marketing. "
+        f"The webinar topic is: \"{topic}\". "
+        "Reply ONLY with valid JSON (no markdown). Keys: score (0-100), confidence (0.0-1.0), summary (string), insights or recommendations (array of strings)."
+    )
+    # ── Data-driven ML modules ──
+    if module == "topic_prediction":
+        return _ml_topic_advisor(db, topic)
+    if module == "topic_quality":
+        return _ml_topic_critique(db, topic)
+    if module == "pattern_detection":
+        return _ml_engagement_patterns(db, topic)
+    if module == "forecasting":
+        return _ml_registration_forecast(db, topic)
+    if module == "similarity_engine":
+        return _ml_icp_targeting(db, topic)
+    # ── AI modules (need external world knowledge) ──
+    ai_prompts = {
+        "market_intelligence": "Summarise the current Indian HNI wealth advisory market landscape relevant to this topic. Cover PMS, AIF, Family Office, NRI trends. JSON keys: score, confidence, summary, insights.",
+        "algorithm_impact": "Advise on the best channels (LinkedIn, email, WhatsApp) and timing to promote this webinar to HNI audiences. Include what works and what to avoid. JSON keys: score, confidence, summary, recommendations.",
+        "audience_psychology": "Explain the psychological triggers that make Indian HNI investors attend and convert at wealth advisory webinars on this topic. JSON keys: score, confidence, summary, insights.",
+        "content_intelligence": "Build a content playbook for this webinar: title variations, agenda structure, speaker positioning, CTA. JSON keys: score, confidence, summary, recommendations.",
+        "opportunity_risk": "Identify strategic opportunities and risks for running this webinar in the current Indian HNI market. JSON keys: score, confidence, summary, predictions, recommendations.",
+    }
+    if module not in ai_prompts:
+        raise HTTPException(status_code=400, detail=f"Unknown module: {module}")
+    return await _ml_ai_module(topic, ai_system, ai_prompts[module])
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
