@@ -2,7 +2,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from starlette.responses import Response as StarletteResponse
 import csv, io
 from sqlalchemy.orm import Session
@@ -3067,7 +3067,7 @@ def _ml_icp_targeting(db, topic: str):
     }
 
 
-async def _ml_ai_module(topic: str, system_msg: str, user_msg: str) -> dict:
+async def _ml_ai_module(topic: str, system_msg: str, user_msg: str, max_tokens: int = 1500) -> dict:
     """Call AI for modules that genuinely need external knowledge."""
     import httpx, json as _json
     api_key = os.environ.get("OPENROUTER_API_KEY")
@@ -3077,7 +3077,7 @@ async def _ml_ai_module(topic: str, system_msg: str, user_msg: str) -> dict:
         resp = await client.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": "anthropic/claude-sonnet-4-5", "max_tokens": 1500, "messages": [
+            json={"model": "anthropic/claude-sonnet-4-5", "max_tokens": max_tokens, "messages": [
                 {"role": "system", "content": system_msg},
                 {"role": "user", "content": user_msg},
             ]},
@@ -3102,12 +3102,18 @@ async def ml_analysis(payload: dict, db: Session = Depends(get_db)):
     date  = payload.get("date", "")
     speaker = payload.get("speaker", "")
 
+    ctx_parts = [f'Webinar topic: "{topic}"']
+    if org:     ctx_parts.append(f"Organisation: {org}")
+    if date:    ctx_parts.append(f"Date & Time: {date}")
+    if speaker: ctx_parts.append(f"Speaker: {speaker}")
+    ctx = ". ".join(ctx_parts) + "."
+
     ai_sys = (
-        f"You are a webinar marketing specialist. Webinar topic: \"{topic}\"."
-        + (f" Organisation: {org}." if org else "")
-        + (f" Date: {date}." if date else "")
-        + (f" Speaker: {speaker}." if speaker else "")
-        + " Reply ONLY with valid JSON (no markdown)."
+        "You are an elite webinar marketing copywriter with 10+ years experience in financial services, "
+        "B2B SaaS, and professional events. You write copy that converts. "
+        f"{ctx} "
+        "Reply ONLY with valid JSON (no markdown, no code fences). Every piece of copy must be polished, "
+        "specific to the topic, and ready to deploy without editing."
     )
 
     # ── Data-driven ML modules ──
@@ -3128,62 +3134,128 @@ async def ml_analysis(payload: dict, db: Session = Depends(get_db)):
 
     # ── Communications modules ──
     comm_prompts = {
-        # Zoho email drafts
         "email_invite": (
-            "Write a professional webinar invite email for Zoho Campaigns. "
-            "Include: compelling subject line, preview text, short hook (2 sentences), what attendees will learn (3 bullet points), speaker bio snippet, registration CTA button text, and a P.S. line. "
-            "JSON keys: subject, preview_text, body (full HTML-ready plain text), cta_text, ps_line."
+            "Write a HIGH-CONVERTING webinar invitation email for Zoho Campaigns deployment. "
+            "This must feel like it was written by a top-tier marketing team, not a template.\n\n"
+            "Requirements:\n"
+            "- Subject line: curiosity-driven, under 50 chars, avoid spam words. Write 1 primary + 1 A/B variant.\n"
+            "- Preview text: compelling 60-90 char snippet that complements (not repeats) the subject.\n"
+            "- Body structure: personal greeting → 2-sentence hook that identifies the reader's pain point → "
+            "\"Here's what you'll walk away with:\" section with 4 specific, outcome-focused bullet points (not vague promises) → "
+            "speaker credibility line (use their name/title if provided, or placeholder [SPEAKER_NAME]) → "
+            "clear date/time or [DATE] [TIME] placeholders → scarcity/urgency element → CTA.\n"
+            "- Tone: authoritative yet conversational, like a trusted advisor sharing something valuable.\n"
+            "- P.S. line: add a bonus reason to attend or social proof element.\n\n"
+            "JSON keys: subject, subject_variant, preview_text, body (full formatted text with line breaks), cta_text, ps_line."
         ),
         "email_reminder_1week": (
-            "Write a '1 week to go' reminder email for registered attendees. "
-            "Keep it short, build excitement, include a calendar-add CTA. "
+            "Write a '1 week countdown' email for REGISTERED attendees. They already signed up — don't re-sell, build anticipation.\n\n"
+            "Requirements:\n"
+            "- Subject: create excitement, reference the countdown.\n"
+            "- Body: acknowledge their registration → build curiosity about what they'll learn → "
+            "include 1 surprising stat or insight related to the topic as a teaser → "
+            "\"Add to Calendar\" CTA → mention they can reply with questions for the speaker.\n"
+            "- Tone: warm, insider-access feeling.\n\n"
             "JSON keys: subject, preview_text, body, cta_text."
         ),
         "email_reminder_1day": (
-            "Write a '1 day to go' reminder email. Urgent tone, include the join link placeholder [JOIN_LINK], time and date. "
+            "Write a 'TOMORROW' reminder email. Create genuine urgency without being pushy.\n\n"
+            "Requirements:\n"
+            "- Subject: tomorrow-focused, creates FOMO.\n"
+            "- Body: \"This time tomorrow...\" opening → quick recap of what they'll gain → "
+            "exact date/time (use [DATE] [TIME] placeholders) → join link [JOIN_LINK] prominently placed → "
+            "\"Pro tip: block your calendar now\" → one-line teaser of exclusive content.\n"
+            "- Keep under 120 words.\n\n"
             "JSON keys: subject, preview_text, body, cta_text."
         ),
         "email_reminder_1hr": (
-            "Write a '1 hour to go' final reminder email. Very short, punchy, just the essentials — topic, time, join link [JOIN_LINK]. "
+            "Write a FINAL 1-hour reminder. This is the last touchpoint — make it count.\n\n"
+            "Requirements:\n"
+            "- Subject: 🔴 or ⏰ emoji, \"Starting in 60 minutes\" energy.\n"
+            "- Body: 3 lines MAX. Topic name → \"Join now\" with [JOIN_LINK] → \"See you inside.\"\n"
+            "- No fluff, no re-selling. Just the essentials.\n\n"
             "JSON keys: subject, preview_text, body, cta_text."
         ),
         "email_followup_attended": (
-            "Write a post-webinar follow-up email for people who attended. "
-            "Thank them, include 3 key takeaways, offer a next step (e.g. book a call, download resource), add a soft CTA. "
+            "Write a post-webinar follow-up for ATTENDEES. This is your conversion email.\n\n"
+            "Requirements:\n"
+            "- Subject: gratitude + value continuation.\n"
+            "- Body: genuine thank-you (reference the webinar by name) → "
+            "\"3 Key Takeaways\" section with specific, actionable insights from the topic (not generic — think about what this topic would actually teach) → "
+            "\"Your Next Step\" section: offer a 1-on-1 consultation or relevant resource download → "
+            "include recording link [RECORDING_LINK] for review → "
+            "soft CTA: \"Reply to this email if you'd like to explore [topic outcome] further.\"\n"
+            "- Tone: helpful expert, not salesy.\n\n"
             "JSON keys: subject, preview_text, body, cta_text."
         ),
         "email_followup_noshow": (
-            "Write a post-webinar follow-up for people who registered but did NOT attend. "
-            "Empathetic tone, offer the recording [RECORDING_LINK], 2 key highlights they missed, soft re-engagement CTA. "
+            "Write a follow-up for NO-SHOWS. Win them back without guilt-tripping.\n\n"
+            "Requirements:\n"
+            "- Subject: \"You missed something good\" energy, no guilt.\n"
+            "- Body: empathetic opening (\"We know schedules get crazy\") → "
+            "\"Here's what people loved\" section with 2 specific highlights from the topic → "
+            "recording link [RECORDING_LINK] prominently → "
+            "\"Watch in 30 minutes\" positioning → re-engagement CTA for the next event.\n"
+            "- Tone: understanding, not passive-aggressive.\n\n"
             "JSON keys: subject, preview_text, body, cta_text."
         ),
-        # WhatsApp community messages
         "wa_announcement": (
-            "Write a WhatsApp community announcement message for this webinar. "
-            "Conversational, emoji-friendly, max 5 lines. Include topic, date placeholder [DATE], time placeholder [TIME], and registration link [REG_LINK]. "
-            "JSON keys: message (plain text with emojis), char_count (int)."
+            "Write a WhatsApp community ANNOUNCEMENT that stops the scroll.\n\n"
+            "Requirements:\n"
+            "- Hook line with emoji that grabs attention (not generic 📢)\n"
+            "- What the webinar covers in 1 punchy sentence\n"
+            "- Who should attend (describe the ideal attendee persona)\n"
+            "- Date: [DATE] | Time: [TIME]\n"
+            "- 👉 Register: [REG_LINK]\n"
+            "- Limited spots / early bird element\n"
+            "- Max 8 lines, each line impactful. Use line breaks, not paragraphs.\n"
+            "- Emojis: strategic, not cluttered (max 6 emojis total).\n\n"
+            "JSON keys: message (plain text with emojis and line breaks), char_count (int)."
         ),
         "wa_reminder_1day": (
-            "Write a WhatsApp reminder message for 1 day before the webinar. "
-            "Short, punchy, create urgency. Include [DATE], [TIME], [REG_LINK]. Max 4 lines. "
+            "Write a WhatsApp '1 DAY TO GO' reminder that re-ignites excitement.\n\n"
+            "Requirements:\n"
+            "- ⏳ countdown energy\n"
+            "- 1 teaser insight they'll learn\n"
+            "- Date: [DATE] | Time: [TIME]\n"
+            "- \"See you tomorrow\" warmth\n"
+            "- Max 5 lines.\n\n"
             "JSON keys: message, char_count."
         ),
         "wa_reminder_morning": (
-            "Write a WhatsApp 'happening today' morning reminder. Max 3 lines. Include [TIME] and [JOIN_LINK]. "
+            "Write a 'TODAY IS THE DAY' WhatsApp morning reminder.\n\n"
+            "Requirements:\n"
+            "- ☀️ morning energy\n"
+            "- Reference the topic excitement\n"
+            "- Time: [TIME] | 👉 Join: [JOIN_LINK]\n"
+            "- Max 4 lines, punchy.\n\n"
             "JSON keys: message, char_count."
         ),
         "wa_reminder_1hr": (
-            "Write a WhatsApp '1 hour to go!' message. Max 2 lines, very punchy. Include [JOIN_LINK]. "
+            "Write a '60 MINUTES TO GO' WhatsApp alert.\n\n"
+            "Requirements:\n"
+            "- 🔴 LIVE in 1 hour energy\n"
+            "- Topic name + join link [JOIN_LINK]\n"
+            "- Max 2-3 lines. Pure urgency.\n\n"
             "JSON keys: message, char_count."
         ),
         "wa_postwebinar": (
-            "Write a WhatsApp post-webinar thank-you message for attendees. "
-            "Include gratitude, 2 key takeaways, next step CTA, recording link placeholder [RECORDING_LINK]. Max 6 lines. "
+            "Write a WhatsApp POST-WEBINAR thank you for attendees.\n\n"
+            "Requirements:\n"
+            "- Genuine gratitude (not corporate)\n"
+            "- 2 specific takeaways from the topic\n"
+            "- Recording: [RECORDING_LINK]\n"
+            "- Next step CTA (book a call, explore further)\n"
+            "- Max 7 lines.\n\n"
             "JSON keys: message, char_count."
         ),
         "wa_noshow_followup": (
-            "Write a WhatsApp follow-up for people who missed the webinar. "
-            "Friendly tone, share recording [RECORDING_LINK], 1 key highlight. Max 4 lines. "
+            "Write a WhatsApp message for people who MISSED the webinar.\n\n"
+            "Requirements:\n"
+            "- No guilt, just value: \"We saved the best parts for you\"\n"
+            "- 1 key highlight / mind-blowing stat from the topic\n"
+            "- Watch recording: [RECORDING_LINK]\n"
+            "- Max 5 lines.\n\n"
             "JSON keys: message, char_count."
         ),
     }
@@ -3191,7 +3263,7 @@ async def ml_analysis(payload: dict, db: Session = Depends(get_db)):
     if module in ai_analysis:
         return await _ml_ai_module(topic, ai_sys, ai_analysis[module])
     if module in comm_prompts:
-        return await _ml_ai_module(topic, ai_sys, comm_prompts[module])
+        return await _ml_ai_module(topic, ai_sys, comm_prompts[module], max_tokens=2000)
 
     raise HTTPException(status_code=400, detail=f"Unknown module: {module}")
 
@@ -3201,13 +3273,20 @@ async def ml_analysis(payload: dict, db: Session = Depends(get_db)):
 def _iq_lead_quality(data):
     qs = {'Family Office':20,'AIF':20,'PMS':18,'NRI':16,'ESOPs':15,'Retirement Planning':14,'Others':8}
     buckets = {'high':0,'medium':0,'low':0}
+    icp_regs = {}
     for d in data:
         s = qs.get(d['icp'], 10)
+        icp_regs[d['icp']] = icp_regs.get(d['icp'], 0) + d['regs']
         if s >= 18:   buckets['high']   += d['regs']
         elif s >= 14: buckets['medium'] += d['regs']
         else:         buckets['low']    += d['regs']
     total = sum(buckets.values()) or 1
-    return {k: {'count': v, 'pct': round(v/total*100, 1)} for k, v in buckets.items()}
+    high_pct = buckets['high'] / total * 100
+    score = min(100, int(high_pct * 1.2 + buckets['medium'] / total * 40))
+    top_icp = max(icp_regs, key=icp_regs.get) if icp_regs else "N/A"
+    return {"score": score, "confidence": round(min(0.95, 0.5 + len(data)*0.03), 2),
+            "top_icp": top_icp, "method": "ICP quality scoring weighted by registration volume",
+            "breakdown": {k: {'count': v, 'pct': round(v/total*100, 1)} for k, v in buckets.items()}}
 
 
 async def _iq_ai_narrative(stats: dict) -> dict:
@@ -3221,8 +3300,8 @@ async def _iq_ai_narrative(stats: dict) -> dict:
         "2. Exactly 5 prioritised actionable recommendations.\n\n"
         f"Data: {_j.dumps(stats)}\n\n"
         'Reply ONLY with JSON:\n'
-        '{"executive_summary":{"headline":"...","bullets":["..."]},'
-        '"recommendations":[{"action":"...","reason":"...","impact":"high|medium|low","confidence":0.0,"expected_result":"..."}]}'
+        '{"executive_summary":{"headline":"...","bullets":["..."],"sentiment":"Positive|Neutral|Cautious"},'
+        '"recommendations":[{"title":"Short title","action":"Detailed action step","impact":"high|medium|low","confidence":0.8}]}'
     )
     async with httpx.AsyncClient(timeout=30) as c:
         r = await c.post("https://openrouter.ai/api/v1/chat/completions",
@@ -3239,6 +3318,14 @@ async def _iq_ai_narrative(stats: dict) -> dict:
 
 @app.get("/api/ai-intelligence")
 async def ai_intelligence_dashboard(db: Session = Depends(get_db)):
+    import traceback
+    try:
+        return await _ai_intelligence_impl(db)
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": str(e), "detail": traceback.format_exc()[-500:]})
+
+async def _ai_intelligence_impl(db):
     import numpy as np
     from sklearn.linear_model import LinearRegression
     from sklearn.ensemble import IsolationForest
