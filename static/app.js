@@ -5619,107 +5619,276 @@ document.addEventListener('DOMContentLoaded', init);
 // ─── AI INTELLIGENCE ──────────────────────────────────────────────────────────
 
 const ML_MODULES = [
-  { id: 'topic_prediction',    label: 'Topic Cluster Analysis', icon: '🎯', desc: 'TF-IDF + K-Means clustering on your historical webinar titles to find which topic cluster performs best', tag: 'ML' },
-  { id: 'topic_quality',       label: 'Topic Similarity Score', icon: '⭐', desc: 'Cosine similarity vs your top-performing webinars — scored by historical attendance rate', tag: 'ML' },
-  { id: 'pattern_detection',   label: 'Engagement Patterns',    icon: '🔍', desc: 'Descriptive statistics on your real attendance data — mean, std dev, ICP breakdown', tag: 'Stats' },
-  { id: 'forecasting',         label: 'Registration Forecast',  icon: '📈', desc: 'Linear regression trained on your historical registrations and attendance rates', tag: 'ML' },
-  { id: 'market_intelligence', label: 'Market Intelligence',    icon: '🌐', desc: 'AI-powered briefing on current HNI wealth advisory market landscape and trends', tag: 'AI' },
-  { id: 'algorithm_impact',    label: 'Channel Strategy',       icon: '⚙️', desc: 'AI-powered advice on best channels and timing to reach HNI audiences for this topic', tag: 'AI' },
-  { id: 'audience_psychology', label: 'HNI Mindset',            icon: '🧠', desc: 'AI-powered analysis of psychological triggers that drive HNI attendance and conversion', tag: 'AI' },
-  { id: 'content_intelligence',label: 'Content Playbook',       icon: '📝', desc: 'AI-generated content framework: title variants, agenda, speaker positioning, CTAs', tag: 'AI' },
-  { id: 'similarity_engine',   label: 'ICP Targeting',          icon: '🔗', desc: 'TF-IDF similarity-weighted ICP scoring — which segment historically converts best for this topic', tag: 'ML' },
-  { id: 'opportunity_risk',    label: 'Opportunity & Risk',     icon: '⚖️', desc: 'AI-powered strategic analysis of opportunities and risks for this topic in the HNI market', tag: 'AI' },
+  { id:'topic_prediction',     label:'Topic Cluster Analysis',  icon:'🎯', tag:'ML',    desc:'TF-IDF + K-Means clustering on your historical webinar titles' },
+  { id:'topic_quality',        label:'Topic Similarity Score',  icon:'⭐', tag:'ML',    desc:'Cosine similarity vs your top-performing webinars, weighted by attendance' },
+  { id:'pattern_detection',    label:'Engagement Patterns',     icon:'🔍', tag:'Stats', desc:'Descriptive stats on your real attendance data — mean, std dev, segment breakdown' },
+  { id:'forecasting',          label:'Registration Forecast',   icon:'📈', tag:'ML',    desc:'Linear regression trained on your historical registrations and attendance rates' },
+  { id:'similarity_engine',    label:'Audience Segment Match',  icon:'🔗', tag:'ML',    desc:'TF-IDF similarity-weighted segment scoring — who converts best for this topic' },
+  { id:'market_intelligence',  label:'Market Intelligence',     icon:'🌐', tag:'AI',    desc:'Market landscape, demand trends, and what angles drive registrations for this topic' },
+  { id:'algorithm_impact',     label:'Channel Strategy',        icon:'⚙️', tag:'AI',    desc:'Best channels (LinkedIn, email, WhatsApp) and timing to promote this webinar' },
+  { id:'audience_psychology',  label:'Audience Psychology',     icon:'🧠', tag:'AI',    desc:'Psychological triggers that drive registration and attendance for this topic' },
+  { id:'content_intelligence', label:'Content Playbook',        icon:'📝', tag:'AI',    desc:'Title variants, agenda outline, speaker angle, and CTA recommendations' },
+  { id:'opportunity_risk',     label:'Opportunity & Risk',      icon:'⚖️', tag:'AI',    desc:'Strategic opportunities and risks for running this webinar right now' },
 ];
 
-let _mlResults = {};
-let _mlTopic   = '';
+const COMM_EMAILS = [
+  { id:'email_invite',           label:'Webinar Invite',          icon:'✉️',  desc:'Full invite email — subject, hook, key learnings, CTA' },
+  { id:'email_reminder_1week',   label:'1 Week Reminder',         icon:'📅',  desc:'Build excitement for registered attendees' },
+  { id:'email_reminder_1day',    label:'1 Day Reminder',          icon:'⏰',  desc:'Urgency reminder with join link' },
+  { id:'email_reminder_1hr',     label:'1 Hour Reminder',         icon:'🚨',  desc:'Final short reminder before it starts' },
+  { id:'email_followup_attended',label:'Follow-up: Attended',     icon:'🙏',  desc:'Thank you + key takeaways + next step CTA' },
+  { id:'email_followup_noshow',  label:'Follow-up: No-show',      icon:'🎬',  desc:'Recording + key highlights + re-engagement' },
+];
+
+const COMM_WA = [
+  { id:'wa_announcement',    label:'Announcement',        icon:'📢', desc:'Initial community announcement with registration link' },
+  { id:'wa_reminder_1day',   label:'1 Day Reminder',      icon:'📅', desc:'Build urgency the day before' },
+  { id:'wa_reminder_morning',label:'Morning of Webinar',  icon:'☀️', desc:'"Happening today" reminder' },
+  { id:'wa_reminder_1hr',    label:'1 Hour to Go',        icon:'⚡', desc:'Punchy final push with join link' },
+  { id:'wa_postwebinar',     label:'Post-Webinar Thanks', icon:'🎉', desc:'Thank attendees + share recording' },
+  { id:'wa_noshow_followup', label:'Missed It? Catch Up', icon:'🎬', desc:'Send recording to those who missed it' },
+];
+
+let _mlResults  = {};
+let _commResults = {};
+let _mlTopic    = '';
+let _mlOrg      = '';
+let _mlDate     = '';
+let _mlSpeaker  = '';
+let _aiTab      = 'analysis'; // 'analysis' | 'emails' | 'whatsapp'
 
 function renderMLAnalysis() {
   setContent(`
-    <div class="page-header">
+    <div class="page-header" style="margin-bottom:8px;">
       <h1 class="page-title">✨ AI Intelligence</h1>
-      <p class="page-subtitle">10 AI-powered advisory modules for your HNI webinar strategy</p>
+      <p class="page-subtitle">Analysis, email drafts &amp; WhatsApp messages — all from your webinar topic</p>
     </div>
-    <div class="ml-controls" style="display:flex;gap:12px;align-items:center;margin-bottom:24px;flex-wrap:wrap;">
-      <input id="ml-topic-input" type="text" placeholder="Enter webinar topic (e.g. PMS Alpha Strategies for HNIs)"
-        style="flex:1;min-width:260px;padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:var(--card-bg);color:var(--text);font-size:14px;"
-        value="${_mlTopic}" oninput="_mlTopic=this.value" />
-      <button onclick="_mlRunAll()" class="btn-primary" style="white-space:nowrap;">&#9654; Run All Modules</button>
+
+    <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Webinar Topic *</label>
+          <input id="ml-topic-input" type="text" placeholder="e.g. How to Build a Passive Income Portfolio"
+            style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;box-sizing:border-box;"
+            value="${esc(_mlTopic)}" oninput="_mlTopic=this.value" />
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Organisation / Brand</label>
+          <input id="ml-org-input" type="text" placeholder="e.g. Right Horizons Financial Services"
+            style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;box-sizing:border-box;"
+            value="${esc(_mlOrg)}" oninput="_mlOrg=this.value" />
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Date &amp; Time</label>
+          <input id="ml-date-input" type="text" placeholder="e.g. 20 June 2025, 4:00 PM IST"
+            style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;box-sizing:border-box;"
+            value="${esc(_mlDate)}" oninput="_mlDate=this.value" />
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Speaker Name &amp; Title</label>
+          <input id="ml-speaker-input" type="text" placeholder="e.g. Raj Mehta, CFA — Portfolio Manager"
+            style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;box-sizing:border-box;"
+            value="${esc(_mlSpeaker)}" oninput="_mlSpeaker=this.value" />
+        </div>
+      </div>
     </div>
-    <div class="ml-grid" id="ml-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;">
-      ${ML_MODULES.map(m => _mlModuleCard(m)).join('')}
-    </div>`);
+
+    <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;">
+      ${['analysis','emails','whatsapp'].map(t => `
+        <button onclick="_aiSetTab('${t}')" id="ai-tab-${t}"
+          style="padding:10px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid ${_aiTab===t?'var(--accent)':'transparent'};color:${_aiTab===t?'var(--accent)':'var(--text-muted)'};margin-bottom:-2px;">
+          ${{analysis:'📊 Analysis',emails:'📧 Zoho Emails',whatsapp:'💬 WhatsApp'}[t]}
+        </button>`).join('')}
+    </div>
+
+    <div id="ai-tab-content">${_aiTabContent()}</div>`);
 }
 
-function _mlModuleCard(m) {
-  const r = _mlResults[m.id];
-  const tagColor = m.tag === 'ML' ? '#6366f1' : m.tag === 'Stats' ? '#059669' : '#d97706';
-  const tagBg = m.tag === 'ML' ? '#eef2ff' : m.tag === 'Stats' ? '#ecfdf5' : '#fffbeb';
+function _aiSetTab(t) {
+  _mlTopic   = document.getElementById('ml-topic-input')?.value  || _mlTopic;
+  _mlOrg     = document.getElementById('ml-org-input')?.value    || _mlOrg;
+  _mlDate    = document.getElementById('ml-date-input')?.value   || _mlDate;
+  _mlSpeaker = document.getElementById('ml-speaker-input')?.value|| _mlSpeaker;
+  _aiTab = t;
+  document.querySelectorAll('[id^="ai-tab-"]').forEach(b => {
+    const active = b.id === `ai-tab-${t}`;
+    b.style.borderBottomColor = active ? 'var(--accent)' : 'transparent';
+    b.style.color = active ? 'var(--accent)' : 'var(--text-muted)';
+  });
+  document.getElementById('ai-tab-content').innerHTML = _aiTabContent();
+}
+
+function _aiTabContent() {
+  if (_aiTab === 'analysis') {
+    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;">
+      ${ML_MODULES.map(m => _mlModuleCard(m, _mlResults)).join('')}
+    </div>
+    <div style="margin-top:16px;text-align:right;">
+      <button onclick="_mlRunAll()" class="btn-primary">&#9654; Run All Analysis</button>
+    </div>`;
+  }
+  if (_aiTab === 'emails') {
+    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;">
+      ${COMM_EMAILS.map(m => _commCard(m, _commResults)).join('')}
+    </div>
+    <div style="margin-top:16px;text-align:right;">
+      <button onclick="_commRunAll('email')" class="btn-primary">&#9654; Generate All Emails</button>
+    </div>`;
+  }
+  if (_aiTab === 'whatsapp') {
+    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;">
+      ${COMM_WA.map(m => _commCard(m, _commResults)).join('')}
+    </div>
+    <div style="margin-top:16px;text-align:right;">
+      <button onclick="_commRunAll('wa')" class="btn-primary">&#9654; Generate All Messages</button>
+    </div>`;
+  }
+  return '';
+}
+
+function _mlModuleCard(m, results) {
+  const r = results[m.id];
+  const tagColor = m.tag==='ML' ? '#6366f1' : m.tag==='Stats' ? '#059669' : '#d97706';
+  const tagBg    = m.tag==='ML' ? '#eef2ff' : m.tag==='Stats' ? '#ecfdf5' : '#fffbeb';
   const tagEl = `<span style="font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:${tagBg};color:${tagColor};">${m.tag}</span>`;
   let body = `<p style="color:var(--text-muted);font-size:12px;margin:0 0 12px;line-height:1.4;">${m.desc}</p>
     <button onclick="_mlRunModule('${m.id}')" class="btn-secondary" style="font-size:12px;">Run</button>`;
   if (r === 'loading') {
-    body = `<div style="display:flex;align-items:center;gap:8px;color:var(--text-muted);font-size:13px;"><span class="spinner" style="width:16px;height:16px;border-width:2px;"></span> Running…</div>`;
+    body = `<div style="display:flex;align-items:center;gap:8px;color:var(--text-muted);font-size:13px;"><span class="spinner" style="width:14px;height:14px;border-width:2px;"></span> Running…</div>`;
   } else if (r && r.error) {
-    body = `<p style="color:#ef4444;font-size:13px;">⚠ ${r.error}</p><button onclick="_mlRunModule('${m.id}')" class="btn-secondary" style="font-size:12px;">Retry</button>`;
+    body = `<p style="color:#ef4444;font-size:12px;">⚠ ${r.error}</p><button onclick="_mlRunModule('${m.id}')" class="btn-secondary" style="font-size:12px;">Retry</button>`;
   } else if (r) {
     body = _mlRenderResult(m.id, r);
   }
-  return `<div class="card ml-card" id="ml-card-${m.id}" style="padding:16px;">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-      <span style="font-size:18px;">${m.icon}</span>
-      <strong style="font-size:13px;flex:1;">${m.label}</strong>
-      ${tagEl}
-    </div>
-    ${body}
-  </div>`;
+  return `<div class="card" id="ml-card-${m.id}" style="padding:14px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <span style="font-size:16px;">${m.icon}</span>
+      <strong style="font-size:13px;flex:1;">${m.label}</strong>${tagEl}
+    </div>${body}</div>`;
+}
+
+function _commCard(m, results) {
+  const r = results[m.id];
+  let body = `<p style="color:var(--text-muted);font-size:12px;margin:0 0 12px;line-height:1.4;">${m.desc}</p>
+    <button onclick="_commRunModule('${m.id}')" class="btn-secondary" style="font-size:12px;">Generate</button>`;
+  if (r === 'loading') {
+    body = `<div style="display:flex;align-items:center;gap:8px;color:var(--text-muted);font-size:13px;"><span class="spinner" style="width:14px;height:14px;border-width:2px;"></span> Generating…</div>`;
+  } else if (r && r.error) {
+    body = `<p style="color:#ef4444;font-size:12px;">⚠ ${r.error}</p><button onclick="_commRunModule('${m.id}')" class="btn-secondary" style="font-size:12px;">Retry</button>`;
+  } else if (r) {
+    body = _commRenderResult(m.id, r);
+  }
+  return `<div class="card" id="ml-card-${m.id}" style="padding:14px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <span style="font-size:16px;">${m.icon}</span>
+      <strong style="font-size:13px;">${m.label}</strong>
+    </div>${body}</div>`;
+}
+
+function _commRenderResult(moduleId, r) {
+  let html = '';
+  // Email result
+  if (r.subject) {
+    html += `<div style="margin-bottom:8px;">
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">Subject Line</div>
+      <div style="font-size:13px;font-weight:600;">${esc(r.subject)}</div>
+    </div>`;
+  }
+  if (r.preview_text) {
+    html += `<div style="margin-bottom:8px;">
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">Preview Text</div>
+      <div style="font-size:12px;color:var(--text-muted);font-style:italic;">${esc(r.preview_text)}</div>
+    </div>`;
+  }
+  if (r.body) {
+    html += `<div style="margin-bottom:8px;">
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Email Body</div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:12px;line-height:1.6;white-space:pre-wrap;max-height:200px;overflow-y:auto;">${esc(r.body)}</div>
+    </div>`;
+  }
+  if (r.cta_text) {
+    html += `<div style="margin-bottom:8px;">
+      <span style="font-size:11px;color:var(--text-muted);">CTA Button: </span>
+      <strong style="font-size:12px;">[ ${esc(r.cta_text)} ]</strong>
+    </div>`;
+  }
+  if (r.ps_line) {
+    html += `<div style="margin-bottom:8px;font-size:12px;color:var(--text-muted);font-style:italic;">P.S. ${esc(r.ps_line)}</div>`;
+  }
+  // WhatsApp result
+  if (r.message) {
+    html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:13px;line-height:1.6;white-space:pre-wrap;margin-bottom:8px;">${esc(r.message)}</div>`;
+    if (r.char_count) html += `<div style="font-size:11px;color:var(--text-muted);">${r.char_count} chars</div>`;
+  }
+  if (!html) html = `<pre style="font-size:11px;white-space:pre-wrap;color:var(--text-muted);max-height:200px;overflow:auto;">${esc(JSON.stringify(r,null,2).slice(0,600))}</pre>`;
+  html += `<button onclick="_commRunModule('${moduleId}')" class="btn-secondary" style="font-size:11px;margin-top:8px;">Regenerate</button>`;
+  return html;
 }
 
 function _mlRenderResult(moduleId, r) {
   let html = '';
-  if (r.method) html += `<div style="margin-bottom:8px;font-size:11px;color:#6366f1;font-style:italic;">Model: ${r.method}</div>`;
-  if (r.score !== undefined)      html += `<div style="margin-bottom:4px;font-size:13px;">Score: <strong>${r.score}/100</strong></div>`;
-  if (r.confidence !== undefined) html += `<div style="margin-bottom:6px;font-size:13px;">Confidence: <strong>${Math.round(r.confidence*100)}%</strong></div>`;
-  if (r.summary)   html += `<p style="font-size:13px;color:var(--text-muted);margin:6px 0;">${r.summary}</p>`;
-  if (Array.isArray(r.predictions) && r.predictions.length) {
-    html += `<ul style="margin:6px 0 0;padding-left:16px;font-size:12px;color:var(--text-muted);">${r.predictions.slice(0,4).map(p=>`<li>${p}</li>`).join('')}</ul>`;
-  }
-  if (Array.isArray(r.insights) && r.insights.length) {
-    html += `<ul style="margin:6px 0 0;padding-left:16px;font-size:12px;color:var(--text-muted);">${r.insights.slice(0,4).map(p=>`<li>${p}</li>`).join('')}</ul>`;
-  }
-  if (Array.isArray(r.recommendations) && r.recommendations.length) {
-    html += `<ul style="margin:6px 0 0;padding-left:16px;font-size:12px;color:var(--text-muted);">${r.recommendations.slice(0,3).map(p=>`<li>${p}</li>`).join('')}</ul>`;
-  }
+  if (r.method)     html += `<div style="margin-bottom:6px;font-size:11px;color:#6366f1;font-style:italic;">Model: ${r.method}</div>`;
+  if (r.score !== undefined)      html += `<div style="margin-bottom:3px;font-size:13px;">Score: <strong>${r.score}/100</strong></div>`;
+  if (r.confidence !== undefined) html += `<div style="margin-bottom:6px;font-size:12px;color:var(--text-muted);">Confidence: ${Math.round(r.confidence*100)}%</div>`;
+  if (r.summary)    html += `<p style="font-size:12px;color:var(--text-muted);margin:6px 0;line-height:1.5;">${r.summary}</p>`;
+  const list = (arr) => `<ul style="margin:4px 0 0;padding-left:16px;font-size:12px;color:var(--text-muted);">${arr.slice(0,4).map(p=>`<li style="margin-bottom:3px;">${p}</li>`).join('')}</ul>`;
+  if (Array.isArray(r.predictions)     && r.predictions.length)     html += list(r.predictions);
+  if (Array.isArray(r.insights)        && r.insights.length)        html += list(r.insights);
+  if (Array.isArray(r.recommendations) && r.recommendations.length) html += list(r.recommendations);
   if (!html) html = `<pre style="font-size:11px;white-space:pre-wrap;color:var(--text-muted);">${JSON.stringify(r,null,2).slice(0,400)}</pre>`;
   html += `<button onclick="_mlRunModule('${moduleId}')" class="btn-secondary" style="font-size:11px;margin-top:8px;">Refresh</button>`;
   return html;
 }
 
+function _aiPayload(moduleId) {
+  return { module: moduleId, topic: _mlTopic || 'General Webinar', org: _mlOrg, date: _mlDate, speaker: _mlSpeaker };
+}
+
 async function _mlRunModule(moduleId) {
   _mlResults[moduleId] = 'loading';
-  _mlUpdateCard(moduleId);
+  _refreshCard(moduleId);
   try {
-    const res = await fetch('/api/ml-analysis', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ module: moduleId, topic: _mlTopic || 'General HNI Wealth Advisory' }),
-    });
+    const res = await fetch('/api/ml-analysis', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(_aiPayload(moduleId)) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     _mlResults[moduleId] = await res.json();
-  } catch(e) {
-    _mlResults[moduleId] = { error: e.message };
-  }
-  _mlUpdateCard(moduleId);
+  } catch(e) { _mlResults[moduleId] = { error: e.message }; }
+  _refreshCard(moduleId);
+}
+
+async function _commRunModule(moduleId) {
+  _commResults[moduleId] = 'loading';
+  _refreshCard(moduleId);
+  try {
+    const res = await fetch('/api/ml-analysis', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(_aiPayload(moduleId)) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    _commResults[moduleId] = await res.json();
+  } catch(e) { _commResults[moduleId] = { error: e.message }; }
+  _refreshCard(moduleId);
 }
 
 async function _mlRunAll() {
-  _mlTopic = document.getElementById('ml-topic-input')?.value || _mlTopic;
+  _mlTopic   = document.getElementById('ml-topic-input')?.value   || _mlTopic;
+  _mlOrg     = document.getElementById('ml-org-input')?.value     || _mlOrg;
+  _mlDate    = document.getElementById('ml-date-input')?.value    || _mlDate;
+  _mlSpeaker = document.getElementById('ml-speaker-input')?.value || _mlSpeaker;
   await Promise.all(ML_MODULES.map(m => _mlRunModule(m.id)));
 }
 
-function _mlUpdateCard(moduleId) {
-  const m = ML_MODULES.find(x => x.id === moduleId);
-  if (!m) return;
+async function _commRunAll(type) {
+  _mlTopic   = document.getElementById('ml-topic-input')?.value   || _mlTopic;
+  _mlOrg     = document.getElementById('ml-org-input')?.value     || _mlOrg;
+  _mlDate    = document.getElementById('ml-date-input')?.value    || _mlDate;
+  _mlSpeaker = document.getElementById('ml-speaker-input')?.value || _mlSpeaker;
+  const modules = type === 'email' ? COMM_EMAILS : COMM_WA;
+  await Promise.all(modules.map(m => _commRunModule(m.id)));
+}
+
+function _refreshCard(moduleId) {
   const el = document.getElementById(`ml-card-${moduleId}`);
-  if (el) el.outerHTML = _mlModuleCard(m);
+  if (!el) return;
+  const mAll = [...ML_MODULES, ...COMM_EMAILS, ...COMM_WA];
+  const m = mAll.find(x => x.id === moduleId);
+  if (!m) return;
+  const isComm = COMM_EMAILS.concat(COMM_WA).some(x => x.id === moduleId);
+  el.outerHTML = isComm ? _commCard(m, _commResults) : _mlModuleCard(m, _mlResults);
 }
