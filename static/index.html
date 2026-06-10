@@ -11,11 +11,11 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800;9..144,900&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
 
   <!-- Preload critical assets so they start downloading immediately -->
-  <link rel="preload" href="/static/styles.css?v=200" as="style" />
-  <link rel="preload" href="/static/trilliant.css?v=200" as="style" />
-  <link rel="preload" href="/static/app.js?v=200" as="script" />
-  <link rel="stylesheet" href="/static/styles.css?v=200" />
-  <link rel="stylesheet" href="/static/trilliant.css?v=200" />
+  <link rel="preload" href="/static/styles.css?v=201" as="style" />
+  <link rel="preload" href="/static/trilliant.css?v=201" as="style" />
+  <link rel="preload" href="/static/app.js?v=201" as="script" />
+  <link rel="stylesheet" href="/static/styles.css?v=201" />
+  <link rel="stylesheet" href="/static/trilliant.css?v=201" />
   <!-- Inline loader: visible instantly, removed by JS once data loads -->
   <style>
     #page-loader{position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:99999;transition:opacity .35s ease}
@@ -63,44 +63,141 @@
       <span class="nav-brand-name">Webinar<em class="brand-iq">IQ</em></span>
     </div>
 
-    <!-- Desktop nav links -->
-    <nav class="nav-links" id="nav-links">
-      <button class="nav-link active" data-page="home" onclick="nav('home')">
+    <!-- Desktop mega-menu nav -->
+    <nav class="mega-nav" id="nav-links">
+
+      <!-- Dashboard (direct link, no dropdown) -->
+      <button class="mega-trigger nav-link active" data-page="home" onclick="nav('home')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
         Dashboard
       </button>
-      <button class="nav-link" data-page="analytics" onclick="nav('analytics')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
-        Funnel Analytics
-      </button>
-      <button class="nav-link" data-page="speakers" onclick="nav('speakers')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-        Speakers
-      </button>
-      <button class="nav-link" data-page="leaderboard" onclick="nav('leaderboard')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
-        Leaderboard
-      </button>
-      <button class="nav-link" data-page="topics" onclick="nav('topics')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
-        Topic Planner
-      </button>
-      <button class="nav-link" data-page="intelligence" onclick="nav('intelligence')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        Smart Recs
-      </button>
-      <button class="nav-link" data-page="pipeline" onclick="nav('pipeline')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-        Follow-up
-      </button>
-      <button class="nav-link" data-page="ml" onclick="nav('ml')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4c0 1.5-.8 2.8-2 3.4V12h2a2 2 0 0 1 2 2v1a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3v-1a2 2 0 0 1 2-2h2V9.4C8.8 8.8 8 7.5 8 6a4 4 0 0 1 4-4z"/></svg>
-        ML Analysis
-      </button>
-      <button class="nav-link" data-page="upload" onclick="nav('upload')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Reports
-      </button>
+
+      <!-- Analytics dropdown -->
+      <div class="mega-group" data-mega="analytics">
+        <button class="mega-trigger" data-pages="analytics,speakers,leaderboard">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+          Analytics
+          <svg class="mega-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="mega-panel">
+          <div class="mega-panel-inner">
+            <div class="mega-col">
+              <div class="mega-col-label">Data & Metrics</div>
+              <a class="mega-item" onclick="nav('analytics')" data-page="analytics">
+                <div class="mega-item-icon" style="background:rgba(99,102,241,0.12);color:#6366f1">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+                </div>
+                <div>
+                  <div class="mega-item-title">Funnel Analytics</div>
+                  <div class="mega-item-desc">Registration-to-attendance conversion funnels</div>
+                </div>
+              </a>
+              <a class="mega-item" onclick="nav('leaderboard')" data-page="leaderboard">
+                <div class="mega-item-icon" style="background:rgba(245,158,11,0.12);color:#f59e0b">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+                </div>
+                <div>
+                  <div class="mega-item-title">Leaderboard</div>
+                  <div class="mega-item-desc">Top-performing webinars ranked by engagement</div>
+                </div>
+              </a>
+            </div>
+            <div class="mega-col">
+              <div class="mega-col-label">People</div>
+              <a class="mega-item" onclick="nav('speakers')" data-page="speakers">
+                <div class="mega-item-icon" style="background:rgba(16,185,129,0.12);color:#10b981">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                </div>
+                <div>
+                  <div class="mega-item-title">Speakers</div>
+                  <div class="mega-item-desc">Speaker performance and engagement profiles</div>
+                </div>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Planning dropdown -->
+      <div class="mega-group" data-mega="planning">
+        <button class="mega-trigger" data-pages="topics,intelligence">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+          Planning
+          <svg class="mega-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="mega-panel">
+          <div class="mega-panel-inner">
+            <div class="mega-col">
+              <div class="mega-col-label">Content Strategy</div>
+              <a class="mega-item" onclick="nav('topics')" data-page="topics">
+                <div class="mega-item-icon" style="background:rgba(168,85,247,0.12);color:#a855f7">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+                </div>
+                <div>
+                  <div class="mega-item-title">Topic Planner</div>
+                  <div class="mega-item-desc">Plan upcoming webinar topics based on ICP demand</div>
+                </div>
+              </a>
+              <a class="mega-item" onclick="nav('intelligence')" data-page="intelligence">
+                <div class="mega-item-icon" style="background:rgba(236,72,153,0.12);color:#ec4899">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </div>
+                <div>
+                  <div class="mega-item-title">Smart Recs</div>
+                  <div class="mega-item-desc">AI-powered topic and speaker recommendations</div>
+                </div>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI & Ops dropdown -->
+      <div class="mega-group" data-mega="ai">
+        <button class="mega-trigger" data-pages="ml,pipeline,upload">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4c0 1.5-.8 2.8-2 3.4V12h2a2 2 0 0 1 2 2v1a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3v-1a2 2 0 0 1 2-2h2V9.4C8.8 8.8 8 7.5 8 6a4 4 0 0 1 4-4z"/></svg>
+          AI & Ops
+          <svg class="mega-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="mega-panel">
+          <div class="mega-panel-inner">
+            <div class="mega-col">
+              <div class="mega-col-label">AI Intelligence</div>
+              <a class="mega-item" onclick="nav('ml')" data-page="ml">
+                <div class="mega-item-icon" style="background:rgba(14,165,233,0.12);color:#0ea5e9">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4c0 1.5-.8 2.8-2 3.4V12h2a2 2 0 0 1 2 2v1a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3v-1a2 2 0 0 1 2-2h2V9.4C8.8 8.8 8 7.5 8 6a4 4 0 0 1 4-4z"/></svg>
+                </div>
+                <div>
+                  <div class="mega-item-title">ML Analysis</div>
+                  <div class="mega-item-desc">AI email drafts, WhatsApp copy, and intelligence</div>
+                </div>
+              </a>
+            </div>
+            <div class="mega-col">
+              <div class="mega-col-label">Operations</div>
+              <a class="mega-item" onclick="nav('pipeline')" data-page="pipeline">
+                <div class="mega-item-icon" style="background:rgba(239,68,68,0.12);color:#ef4444">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                </div>
+                <div>
+                  <div class="mega-item-title">Follow-up Pipeline</div>
+                  <div class="mega-item-desc">Track post-webinar follow-ups and conversions</div>
+                </div>
+              </a>
+              <a class="mega-item" onclick="nav('upload')" data-page="upload">
+                <div class="mega-item-icon" style="background:rgba(107,114,128,0.12);color:#6b7280">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                </div>
+                <div>
+                  <div class="mega-item-title">Reports</div>
+                  <div class="mega-item-desc">Upload data and export analytics reports</div>
+                </div>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </nav>
 
     <!-- Right-side controls -->
@@ -509,6 +606,6 @@
 <!-- ── TOAST ──────────────────────────────────────────────── -->
 <div class="toast" id="toast"></div>
 
-<script src="/static/app.js?v=200"></script>
+<script src="/static/app.js?v=201"></script>
 </body>
 </html>
