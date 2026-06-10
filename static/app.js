@@ -1178,19 +1178,7 @@ function _drawWebinarDetail(w) {
   }).join('');
 
 
-  // Upload logs
-  const logsHTML = (w.upload_logs || []).length ? `
-    <div class="upload-log-section">
-      <div class="upload-log-title">Upload History</div>
-      ${(w.upload_logs||[]).map(l => `
-        <div class="log-row">
-          <span class="log-tag ${l.file_type==='registrations'?'reg':'att'}">${l.file_type}</span>
-          <span class="log-file">${esc(l.filename||'N/A')}</span>
-          <span class="log-stat">${l.original_count} → ${l.final_count} rows</span>
-          ${l.duplicates_removed ? `<span class="log-stat" style="color:#d97706">${l.duplicates_removed} dupes removed</span>` : ''}
-          <span class="log-stat">${fmtDateTime(l.uploaded_at)}</span>
-        </div>`).join('')}
-    </div>` : '';
+  const logsHTML = '';
 
   const safeTitle = esc(w.title).replace(/'/g,"\\'");
 
