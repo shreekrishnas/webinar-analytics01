@@ -5660,19 +5660,19 @@ function updateMegaActive(page) {
 
 document.addEventListener('DOMContentLoaded', init);
 
-// ─── ML ANALYSIS ──────────────────────────────────────────────────────────────
+// ─── AI INTELLIGENCE ──────────────────────────────────────────────────────────
 
 const ML_MODULES = [
-  { id: 'topic_prediction',    label: 'Topic Prediction',       icon: '🎯', desc: 'Predict best-performing webinar topics' },
-  { id: 'topic_quality',       label: 'Topic Quality Score',    icon: '⭐', desc: 'Score topic quality and audience fit' },
-  { id: 'pattern_detection',   label: 'Pattern Detection',      icon: '🔍', desc: 'Detect engagement and drop-off patterns' },
-  { id: 'forecasting',         label: 'Registration Forecast',  icon: '📈', desc: 'Forecast registrations and attendance' },
-  { id: 'market_intelligence', label: 'Market Intelligence',    icon: '🌐', desc: 'Analyse HNI market trends and signals' },
-  { id: 'algorithm_impact',    label: 'Algorithm Impact',       icon: '⚙️', desc: 'Assess platform algorithm effects' },
-  { id: 'audience_psychology', label: 'Audience Psychology',    icon: '🧠', desc: 'Understand HNI decision psychology' },
-  { id: 'content_intelligence',label: 'Content Intelligence',   icon: '📝', desc: 'Optimise content for conversion' },
-  { id: 'similarity_engine',   label: 'Similarity Engine',      icon: '🔗', desc: 'Find high-affinity audience clusters' },
-  { id: 'opportunity_risk',    label: 'Opportunity & Risk',     icon: '⚖️', desc: 'Surface opportunities and risk flags' },
+  { id: 'topic_prediction',    label: 'Topic Cluster Analysis', icon: '🎯', desc: 'TF-IDF + K-Means clustering on your historical webinar titles to find which topic cluster performs best', tag: 'ML' },
+  { id: 'topic_quality',       label: 'Topic Similarity Score', icon: '⭐', desc: 'Cosine similarity vs your top-performing webinars — scored by historical attendance rate', tag: 'ML' },
+  { id: 'pattern_detection',   label: 'Engagement Patterns',    icon: '🔍', desc: 'Descriptive statistics on your real attendance data — mean, std dev, ICP breakdown', tag: 'Stats' },
+  { id: 'forecasting',         label: 'Registration Forecast',  icon: '📈', desc: 'Linear regression trained on your historical registrations and attendance rates', tag: 'ML' },
+  { id: 'market_intelligence', label: 'Market Intelligence',    icon: '🌐', desc: 'AI-powered briefing on current HNI wealth advisory market landscape and trends', tag: 'AI' },
+  { id: 'algorithm_impact',    label: 'Channel Strategy',       icon: '⚙️', desc: 'AI-powered advice on best channels and timing to reach HNI audiences for this topic', tag: 'AI' },
+  { id: 'audience_psychology', label: 'HNI Mindset',            icon: '🧠', desc: 'AI-powered analysis of psychological triggers that drive HNI attendance and conversion', tag: 'AI' },
+  { id: 'content_intelligence',label: 'Content Playbook',       icon: '📝', desc: 'AI-generated content framework: title variants, agenda, speaker positioning, CTAs', tag: 'AI' },
+  { id: 'similarity_engine',   label: 'ICP Targeting',          icon: '🔗', desc: 'TF-IDF similarity-weighted ICP scoring — which segment historically converts best for this topic', tag: 'ML' },
+  { id: 'opportunity_risk',    label: 'Opportunity & Risk',     icon: '⚖️', desc: 'AI-powered strategic analysis of opportunities and risks for this topic in the HNI market', tag: 'AI' },
 ];
 
 let _mlResults = {};
@@ -5681,8 +5681,8 @@ let _mlTopic   = '';
 function renderMLAnalysis() {
   setContent(`
     <div class="page-header">
-      <h1 class="page-title">🤖 ML Analysis</h1>
-      <p class="page-subtitle">AI-powered predictive intelligence across 10 modules</p>
+      <h1 class="page-title">✨ AI Intelligence</h1>
+      <p class="page-subtitle">10 AI-powered advisory modules for your HNI webinar strategy</p>
     </div>
     <div class="ml-controls" style="display:flex;gap:12px;align-items:center;margin-bottom:24px;flex-wrap:wrap;">
       <input id="ml-topic-input" type="text" placeholder="Enter webinar topic (e.g. PMS Alpha Strategies for HNIs)"
@@ -5697,19 +5697,23 @@ function renderMLAnalysis() {
 
 function _mlModuleCard(m) {
   const r = _mlResults[m.id];
-  let body = `<p style="color:var(--text-muted);font-size:13px;margin:0 0 12px;">${m.desc}</p>
+  const tagColor = m.tag === 'ML' ? '#6366f1' : m.tag === 'Stats' ? '#059669' : '#d97706';
+  const tagBg = m.tag === 'ML' ? '#eef2ff' : m.tag === 'Stats' ? '#ecfdf5' : '#fffbeb';
+  const tagEl = `<span style="font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:${tagBg};color:${tagColor};">${m.tag}</span>`;
+  let body = `<p style="color:var(--text-muted);font-size:12px;margin:0 0 12px;line-height:1.4;">${m.desc}</p>
     <button onclick="_mlRunModule('${m.id}')" class="btn-secondary" style="font-size:12px;">Run</button>`;
   if (r === 'loading') {
-    body = `<div style="display:flex;align-items:center;gap:8px;color:var(--text-muted);font-size:13px;"><span class="spinner" style="width:16px;height:16px;border-width:2px;"></span> Analysing…</div>`;
+    body = `<div style="display:flex;align-items:center;gap:8px;color:var(--text-muted);font-size:13px;"><span class="spinner" style="width:16px;height:16px;border-width:2px;"></span> Running…</div>`;
   } else if (r && r.error) {
     body = `<p style="color:#ef4444;font-size:13px;">⚠ ${r.error}</p><button onclick="_mlRunModule('${m.id}')" class="btn-secondary" style="font-size:12px;">Retry</button>`;
   } else if (r) {
     body = _mlRenderResult(m.id, r);
   }
   return `<div class="card ml-card" id="ml-card-${m.id}" style="padding:16px;">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-      <span style="font-size:20px;">${m.icon}</span>
-      <strong style="font-size:14px;">${m.label}</strong>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <span style="font-size:18px;">${m.icon}</span>
+      <strong style="font-size:13px;flex:1;">${m.label}</strong>
+      ${tagEl}
     </div>
     ${body}
   </div>`;
@@ -5717,7 +5721,8 @@ function _mlModuleCard(m) {
 
 function _mlRenderResult(moduleId, r) {
   let html = '';
-  if (r.score !== undefined)      html += `<div style="margin-bottom:6px;font-size:13px;">Score: <strong>${r.score}/100</strong></div>`;
+  if (r.method) html += `<div style="margin-bottom:8px;font-size:11px;color:#6366f1;font-style:italic;">Model: ${r.method}</div>`;
+  if (r.score !== undefined)      html += `<div style="margin-bottom:4px;font-size:13px;">Score: <strong>${r.score}/100</strong></div>`;
   if (r.confidence !== undefined) html += `<div style="margin-bottom:6px;font-size:13px;">Confidence: <strong>${Math.round(r.confidence*100)}%</strong></div>`;
   if (r.summary)   html += `<p style="font-size:13px;color:var(--text-muted);margin:6px 0;">${r.summary}</p>`;
   if (Array.isArray(r.predictions) && r.predictions.length) {
