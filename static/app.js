@@ -5656,6 +5656,8 @@ let _mlOrg      = '';
 let _mlDate     = '';
 let _mlSpeaker  = '';
 let _aiTab      = 'analysis'; // 'analysis' | 'emails' | 'whatsapp'
+let _iqData     = null;
+let _iqLoading  = false;
 
 function renderMLAnalysis() {
   setContent(`
@@ -5697,7 +5699,7 @@ function renderMLAnalysis() {
       ${['analysis','emails','whatsapp'].map(t => `
         <button onclick="_aiSetTab('${t}')" id="ai-tab-${t}"
           style="padding:10px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid ${_aiTab===t?'var(--accent)':'transparent'};color:${_aiTab===t?'var(--accent)':'var(--text-muted)'};margin-bottom:-2px;">
-          ${{analysis:'📊 Analysis',emails:'📧 Zoho Emails',whatsapp:'💬 WhatsApp'}[t]}
+          ${{analysis:'🧠 Intelligence',emails:'📧 Zoho Emails',whatsapp:'💬 WhatsApp'}[t]}
         </button>`).join('')}
     </div>
 
@@ -5720,11 +5722,29 @@ function _aiSetTab(t) {
 
 function _aiTabContent() {
   if (_aiTab === 'analysis') {
-    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;">
-      ${ML_MODULES.map(m => _mlModuleCard(m, _mlResults)).join('')}
-    </div>
-    <div style="margin-top:16px;text-align:right;">
-      <button onclick="_mlRunAll()" class="btn-primary">&#9654; Run All Analysis</button>
+    if (_iqLoading) {
+      return `<div id="iq-dashboard">
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;">
+          <span class="spinner" style="width:36px;height:36px;border-width:3px;"></span>
+          <div style="font-size:15px;font-weight:600;color:var(--text);">AI is analyzing your webinar data…</div>
+          <div style="font-size:13px;color:var(--text-muted);">Running ML models, forecasting, anomaly detection &amp; generating insights</div>
+        </div>
+      </div>`;
+    }
+    if (_iqData && !_iqData.error) {
+      return `<div id="iq-dashboard">${_renderIQDashboard(_iqData)}</div>`;
+    }
+    if (_iqData && _iqData.error) {
+      return `<div id="iq-dashboard" style="padding:24px;text-align:center;">
+        <div style="color:#ef4444;font-size:14px;margin-bottom:16px;">⚠ ${esc(_iqData.error_detail || _iqData.error)}</div>
+        <button onclick="_loadIQDashboard()" class="btn-primary">Retry Analysis</button>
+      </div>`;
+    }
+    return `<div id="iq-dashboard" style="text-align:center;padding:48px 20px;">
+      <div style="font-size:48px;margin-bottom:12px;">🧠</div>
+      <div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:6px;">AI Intelligence Dashboard</div>
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:24px;max-width:420px;margin-left:auto;margin-right:auto;">Analyze all your completed webinars with real ML — regression forecasts, anomaly detection, pattern recognition, and AI-generated executive insights.</div>
+      <button onclick="_loadIQDashboard()" class="btn-primary" style="font-size:14px;padding:12px 28px;">&#9654; Run Intelligence Analysis</button>
     </div>`;
   }
   if (_aiTab === 'emails') {
@@ -5744,6 +5764,243 @@ function _aiTabContent() {
     </div>`;
   }
   return '';
+}
+
+async function _loadIQDashboard() {
+  _iqLoading = true; _iqData = null;
+  const el = document.getElementById('iq-dashboard');
+  if (el) el.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;">
+    <span class="spinner" style="width:36px;height:36px;border-width:3px;"></span>
+    <div style="font-size:15px;font-weight:600;color:var(--text);">AI is analyzing your webinar data…</div>
+    <div style="font-size:13px;color:var(--text-muted);">Running ML models, forecasting, anomaly detection &amp; generating insights</div>
+  </div>`;
+  try {
+    const res = await fetch('/api/ai-intelligence');
+    if (!res.ok) { const t = await res.text(); throw new Error(`HTTP ${res.status}: ${t.slice(0,200)}`); }
+    _iqData = await res.json();
+  } catch(e) { _iqData = { error: 'Analysis failed', error_detail: e.message }; }
+  _iqLoading = false;
+  if (el) el.innerHTML = _iqData.error ? `<div style="padding:24px;text-align:center;">
+    <div style="color:#ef4444;font-size:14px;margin-bottom:16px;">⚠ ${esc(_iqData.error_detail || _iqData.error)}</div>
+    <button onclick="_loadIQDashboard()" class="btn-primary">Retry Analysis</button>
+  </div>` : _renderIQDashboard(_iqData);
+}
+
+function _iqGauge(score) {
+  const pct = score / 100;
+  const r = 54, cx = 64, cy = 64;
+  const full = 2 * Math.PI * r;
+  const dash = pct * full * 0.75;
+  const gap  = full - dash;
+  const rot  = -225;
+  const col  = score >= 80 ? '#10b981' : score >= 65 ? '#6366f1' : score >= 45 ? '#f59e0b' : '#ef4444';
+  return `<svg width="128" height="96" viewBox="0 0 128 96">
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--border)" stroke-width="10"
+      stroke-dasharray="${full * 0.75} ${full * 0.25}" stroke-linecap="round"
+      transform="rotate(${rot} ${cx} ${cy})"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col}" stroke-width="10"
+      stroke-dasharray="${dash} ${gap + full * 0.25}" stroke-linecap="round"
+      transform="rotate(${rot} ${cx} ${cy})"/>
+    <text x="${cx}" y="${cy + 4}" text-anchor="middle" font-size="22" font-weight="700" fill="${col}">${score}</text>
+    <text x="${cx}" y="${cy + 20}" text-anchor="middle" font-size="10" fill="var(--text-muted)">/ 100</text>
+  </svg>`;
+}
+
+function _iqBar(score, max, color) {
+  const pct = Math.min(100, Math.round(score / max * 100));
+  return `<div style="background:var(--border);border-radius:4px;height:6px;width:100%;overflow:hidden;">
+    <div style="width:${pct}%;height:100%;background:${color};border-radius:4px;transition:width .6s;"></div>
+  </div>`;
+}
+
+function _iqSparkline(points) {
+  if (!points || points.length < 2) return '';
+  const vals = points.map(p => p.avg_att_rate || 0);
+  const mn = Math.min(...vals), mx = Math.max(...vals);
+  const range = mx - mn || 1;
+  const w = 120, h = 36, pad = 4;
+  const xs = vals.map((_, i) => pad + (i / (vals.length-1)) * (w - pad*2));
+  const ys = vals.map(v => h - pad - ((v - mn) / range) * (h - pad*2));
+  const d  = xs.map((x, i) => `${i===0?'M':'L'}${x},${ys[i]}`).join(' ');
+  const fill = xs.map((x, i) => `${i===0?'M':'L'}${x},${ys[i]}`).join(' ') + ` L${xs[xs.length-1]},${h} L${xs[0]},${h} Z`;
+  return `<svg width="${w}" height="${h}" style="display:block;">
+    <path d="${fill}" fill="rgba(99,102,241,0.12)"/>
+    <path d="${d}" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+function _renderIQDashboard(d) {
+  const iq = d.intelligence_score || {};
+  const ex = d.executive_summary || {};
+  const pr = d.predictive_analytics || {};
+  const pts = d.patterns || [];
+  const anoms = d.anomalies || [];
+  const segs = d.audience_segments || [];
+  const recs = d.recommendations || [];
+  const trends = d.trends || [];
+  const rs = d.raw_stats || {};
+
+  const gradeColor = {'Excellent':'#10b981','Good':'#6366f1','Average':'#f59e0b','Needs Work':'#ef4444'}[iq.grade] || '#6366f1';
+  const sevColor = {critical:'#ef4444',high:'#f97316',medium:'#f59e0b',low:'#10b981'};
+  const impColor = {high:'#10b981',medium:'#6366f1',low:'#94a3b8'};
+
+  const bd = iq.breakdown || {};
+  const bdKeys = Object.keys(bd);
+
+  const confBar = (c) => {
+    const pct = Math.round((c || 0) * 100);
+    const col = pct >= 75 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444';
+    return `<span style="font-size:11px;color:${col};font-weight:600;">${pct}% conf.</span>`;
+  };
+
+  // ── Section builder ───────────────────────────────────────────────────────
+  const section = (title, content, extra='') =>
+    `<div class="card" style="padding:20px;margin-bottom:16px;">${title ? `<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px;display:flex;align-items:center;gap:8px;">${title}</div>` : ''}${content}</div>`;
+
+  const chip = (label, color='#6366f1', bg='#eef2ff') =>
+    `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;background:${bg};color:${color};">${label}</span>`;
+
+  // ── 1. Header row: Score + Data Basis ─────────────────────────────────────
+  const s1 = `<div style="display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center;margin-bottom:16px;">
+    <div class="card" style="padding:16px 20px;text-align:center;min-width:180px;">
+      <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px;">Intelligence Score</div>
+      ${_iqGauge(iq.overall || 0)}
+      <div style="font-size:15px;font-weight:700;color:${gradeColor};">${iq.grade || '—'}</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Trend: ${iq.trend || 'stable'} ${iq.trend==='improving'?'↑':iq.trend==='declining'?'↓':'→'}</div>
+    </div>
+    <div class="card" style="padding:16px 20px;">
+      <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px;">Score Breakdown</div>
+      ${bdKeys.map(k => { const b = bd[k]; const col = b.score/b.max >= 0.7 ? '#10b981' : b.score/b.max >= 0.4 ? '#6366f1' : '#ef4444';
+        return `<div style="margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">
+            <span style="color:var(--text);">${b.label}</span>
+            <span style="color:${col};font-weight:600;">${b.score}/${b.max}</span>
+          </div>
+          ${_iqBar(b.score, b.max, col)}
+        </div>`;
+      }).join('')}
+      <div style="margin-top:10px;font-size:11px;color:var(--text-muted);">Based on ${d.data_basis || 'your data'}</div>
+    </div>
+  </div>`;
+
+  // ── 2. Executive Summary ───────────────────────────────────────────────────
+  const bullets = ex.bullets || [];
+  const s2 = section(`🎯 Executive Summary`,
+    `<div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:10px;line-height:1.4;">${esc(ex.headline || 'AI-powered analysis of your webinar performance')}</div>
+    ${bullets.length ? `<ul style="margin:0;padding-left:18px;">${bullets.map(b=>`<li style="font-size:13px;color:var(--text-muted);margin-bottom:5px;line-height:1.5;">${esc(b)}</li>`).join('')}</ul>` : ''}
+    ${ex.sentiment ? `<div style="margin-top:10px;">${chip(ex.sentiment, gradeColor, gradeColor+'22')}</div>` : ''}`);
+
+  // ── 3. Predictive Analytics ────────────────────────────────────────────────
+  const predCards = [
+    { key:'attendance', icon:'👥', label:'Next Attendance', val: pr.attendance ? `${pr.attendance.predicted_attendees || 0} people` : '—', sub: pr.attendance ? `${pr.attendance.predicted_rate || 0}% rate · R²=${pr.attendance.r2 || 0}` : '', conf: pr.attendance?.confidence },
+    { key:'registrations', icon:'📝', label:'Next Registrations', val: pr.registrations ? `${pr.registrations.predicted || 0}` : '—', sub: pr.registrations ? `±${Math.round(pr.registrations.range ? (pr.registrations.range[1]-pr.registrations.range[0])/2 : 0)} range · ${pr.registrations.growth_per_webinar > 0 ? '↑' : '↓'}${Math.abs(pr.registrations.growth_per_webinar||0)}/webinar` : '', conf: pr.registrations?.confidence },
+    { key:'lead_quality', icon:'⭐', label:'Lead Quality', val: pr.lead_quality ? `${pr.lead_quality.score || 0}/100` : '—', sub: pr.lead_quality ? `Top ICP: ${pr.lead_quality.top_icp || 'N/A'}` : '', conf: pr.lead_quality?.confidence },
+    { key:'conversion', icon:'🎯', label:'Conversion Rate', val: pr.conversion ? `${pr.conversion.predicted_rate || 0}%` : '—', sub: pr.conversion?.method ? pr.conversion.method.split(' ').slice(0,4).join(' ')+'…' : '', conf: pr.conversion?.confidence },
+  ];
+  const s3 = section(`📈 Predictive Analytics`,
+    `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;">
+      ${predCards.map(pc => `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;">
+        <div style="font-size:18px;margin-bottom:6px;">${pc.icon}</div>
+        <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;">${pc.label}</div>
+        <div style="font-size:22px;font-weight:700;color:var(--text);margin:4px 0;">${pc.val}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">${esc(pc.sub)}</div>
+        ${pc.conf != null ? confBar(pc.conf) : ''}
+      </div>`).join('')}
+    </div>`);
+
+  // ── 4. Patterns ────────────────────────────────────────────────────────────
+  const s4 = pts.length ? section(`🔍 Pattern Detection`,
+    `<div style="display:flex;flex-direction:column;gap:10px;">
+      ${pts.slice(0,6).map(p => `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;">
+        <span style="font-size:18px;flex-shrink:0;">${p.icon||'🔍'}</span>
+        <div style="flex:1;">
+          <div style="font-size:13px;color:var(--text);line-height:1.5;">${esc(p.insight||'')}</div>
+          <div style="display:flex;gap:8px;margin-top:5px;">
+            ${chip(p.impact||'medium', impColor[p.impact]||'#6366f1', (impColor[p.impact]||'#6366f1')+'22')}
+            ${confBar(p.confidence)}
+          </div>
+        </div>
+      </div>`).join('')}
+    </div>`) : '';
+
+  // ── 5. Anomalies ───────────────────────────────────────────────────────────
+  const s5 = anoms.length ? section(`⚠️ Anomaly Detection`,
+    `<div style="display:flex;flex-direction:column;gap:8px;">
+      ${anoms.slice(0,5).map(a => `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-left:3px solid ${sevColor[a.severity]||'#94a3b8'};background:${(sevColor[a.severity]||'#94a3b8')}11;border-radius:0 8px 8px 0;">
+        <div style="flex:1;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
+            ${chip(a.severity?.toUpperCase()||'INFO', sevColor[a.severity]||'#94a3b8', (sevColor[a.severity]||'#94a3b8')+'22')}
+            <span style="font-size:12px;font-weight:600;color:var(--text);">${esc(a.webinar||'')}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);">${esc(a.description||'')}</div>
+          ${a.date ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${a.date}</div>` : ''}
+        </div>
+      </div>`).join('')}
+    </div>`)
+    : section(`⚠️ Anomaly Detection`, `<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px;">✅ No significant anomalies detected in your webinar data</div>`);
+
+  // ── 6. Audience Segments ───────────────────────────────────────────────────
+  const s6 = segs.length ? section(`👥 Audience Intelligence`,
+    `<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">
+      <thead><tr style="border-bottom:1px solid var(--border);">
+        ${['Segment','Webinars','Avg Attendance','Avg Regs','Engagement','Conversion','Quality'].map(h=>
+          `<th style="padding:6px 10px;text-align:left;color:var(--text-muted);font-weight:600;white-space:nowrap;">${h}</th>`).join('')}
+      </tr></thead>
+      <tbody>${segs.map((s,i) => {
+        const ec = s.engagement_level==='High'?'#10b981':s.engagement_level==='Medium'?'#f59e0b':'#94a3b8';
+        const cc = s.conversion_likelihood==='High'?'#10b981':s.conversion_likelihood==='Medium'?'#6366f1':'#94a3b8';
+        return `<tr style="border-bottom:1px solid var(--border);${i%2===1?'background:var(--bg);':''}">
+          <td style="padding:8px 10px;font-weight:600;">${esc(s.name)}</td>
+          <td style="padding:8px 10px;text-align:center;">${s.webinar_count}</td>
+          <td style="padding:8px 10px;">${s.avg_attendance_rate}%</td>
+          <td style="padding:8px 10px;">${s.avg_registrations}</td>
+          <td style="padding:8px 10px;">${chip(s.engagement_level, ec, ec+'22')}</td>
+          <td style="padding:8px 10px;">${chip(s.conversion_likelihood, cc, cc+'22')}</td>
+          <td style="padding:8px 10px;font-weight:700;color:${s.quality_score>=18?'#10b981':s.quality_score>=14?'#6366f1':'#94a3b8'};">${s.quality_score}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`) : '';
+
+  // ── 7. Recommendations ─────────────────────────────────────────────────────
+  const s7 = recs.length ? section(`💡 Recommendations Engine`,
+    `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;">
+      ${recs.slice(0,6).map((r,i) => `<div style="padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--bg);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+          <span style="font-size:12px;font-weight:700;color:var(--text);">${i+1}. ${esc(r.title||r)}</span>
+          ${r.impact ? chip(r.impact+' impact', impColor[r.impact?.toLowerCase()]||'#6366f1', (impColor[r.impact?.toLowerCase()]||'#6366f1')+'22') : ''}
+        </div>
+        ${r.action ? `<div style="font-size:12px;color:var(--text-muted);line-height:1.5;">${esc(r.action)}</div>` : ''}
+        ${r.confidence != null ? `<div style="margin-top:6px;">${confBar(r.confidence)}</div>` : ''}
+      </div>`).join('')}
+    </div>`) : '';
+
+  // ── 8. Trend Sparklines ────────────────────────────────────────────────────
+  const s8 = trends.length >= 2 ? section(`📊 Trend Intelligence`,
+    `<div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-end;">
+      <div>
+        <div style="font-size:11px;color:var(--text-muted);font-weight:600;margin-bottom:4px;">Attendance Rate Trend</div>
+        ${_iqSparkline(trends)}
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-top:2px;">
+          <span>${trends[0]?.month||''}</span><span>${trends[trends.length-1]?.month||''}</span>
+        </div>
+      </div>
+      <div style="flex:1;min-width:200px;">
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${trends.slice(-4).map(t => `<div style="display:flex;align-items:center;gap:10px;font-size:12px;">
+            <span style="color:var(--text-muted);min-width:56px;">${t.month}</span>
+            <span style="font-weight:600;color:var(--text);min-width:36px;">${t.avg_att_rate}%</span>
+            <div style="flex:1;">${_iqBar(t.avg_att_rate, 100, '#6366f1')}</div>
+            <span style="color:var(--text-muted);font-size:11px;">${t.count} webinar${t.count!==1?'s':''}</span>
+          </div>`).join('')}
+        </div>
+      </div>
+    </div>`) : '';
+
+  const refreshBtn = `<div style="text-align:right;margin-top:8px;">
+    <button onclick="_loadIQDashboard()" class="btn-secondary" style="font-size:12px;">↻ Refresh Analysis</button>
+  </div>`;
+
+  return s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8 + refreshBtn;
 }
 
 function _mlModuleCard(m, results) {
