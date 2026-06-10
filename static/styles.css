@@ -3272,15 +3272,12 @@ html.dark .nav-mobile-menu {
    SCROLL REVEAL
    ════════════════════ */
 .reveal {
-  opacity: 0;
-  transform: translateY(32px);
-  transition: opacity 0.70s cubic-bezier(0.22, 1, 0.36, 1),
-              transform 0.70s cubic-bezier(0.22, 1, 0.36, 1);
+  opacity: 1 !important;
+  transform: none !important;
+  transition: none !important;
 }
 .reveal.visible { opacity: 1; transform: none; }
-.rd1 { transition-delay: 0.08s; }
-.rd2 { transition-delay: 0.16s; }
-.rd3 { transition-delay: 0.24s; }
+.rd1, .rd2, .rd3 { transition-delay: 0s; }
 .rd4 { transition-delay: 0.32s; }
 .rd5 { transition-delay: 0.40s; }
 
@@ -5108,12 +5105,9 @@ html.dark .an-bar-fill, html.dark .progress-fill, html.dark .bar-fill { backgrou
 .dash-hero { display: flex !important; align-items: flex-end !important; justify-content: space-between !important; gap: 32px !important; }
 .dash-hero-actions { flex-shrink: 0 !important; }
 
-/* Reveal animation - subtle fade-in only */
-.reveal { opacity: 0; transform: translateY(8px); animation: rh-reveal 0.4s ease forwards; }
-.rd1 { animation-delay: 0.08s; }
-.rd2 { animation-delay: 0.16s; }
-.rd3 { animation-delay: 0.24s; }
-@keyframes rh-reveal { to { opacity: 1; transform: translateY(0); } }
+/* Reveal animation - disabled to prevent flicker */
+.reveal { opacity: 1 !important; transform: none !important; animation: none !important; }
+.rd1, .rd2, .rd3 { animation-delay: 0s !important; }
 
 /* Make sure dark mode hero gradient is gone */
 html.dark .dash-hero::before { display: none !important; }

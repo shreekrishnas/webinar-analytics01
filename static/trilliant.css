@@ -1308,12 +1308,9 @@ html.dark .nav-chips { background: rgba(30,41,59,0.40) !important; }
 .ad-card { border-radius: 1.25rem !important; }
 .ad-card-title { font-family: var(--font-serif) !important; font-weight: 700 !important; color: var(--text-primary) !important; }
 
-/* ── 34. PAGE ANIMATIONS ── */
-.reveal { opacity: 0; transform: translateY(8px); animation: trl-reveal 0.35s ease-out forwards; }
-.rd1 { animation-delay: 0.08s; }
-.rd2 { animation-delay: 0.16s; }
-.rd3 { animation-delay: 0.24s; }
-@keyframes trl-reveal { to { opacity: 1; transform: translateY(0); } }
+/* ── 34. PAGE ANIMATIONS ── (disabled to prevent flicker) */
+.reveal { opacity: 1 !important; transform: none !important; animation: none !important; }
+.rd1, .rd2, .rd3 { animation-delay: 0s !important; }
 
 @media (prefers-reduced-motion: reduce) {
   .reveal, .wb-card, .spk-card, .att-wb-card, .topic-card { animation: none !important; transition: none !important; }
