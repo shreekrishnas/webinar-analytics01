@@ -5679,8 +5679,7 @@ let _mlResults = {};
 let _mlTopic   = '';
 
 function renderMLAnalysis() {
-  const main = document.getElementById('main');
-  main.innerHTML = `
+  setContent(`
     <div class="page-header">
       <h1 class="page-title">🤖 ML Analysis</h1>
       <p class="page-subtitle">AI-powered predictive intelligence across 10 modules</p>
@@ -5689,11 +5688,11 @@ function renderMLAnalysis() {
       <input id="ml-topic-input" type="text" placeholder="Enter webinar topic (e.g. PMS Alpha Strategies for HNIs)"
         style="flex:1;min-width:260px;padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:var(--card-bg);color:var(--text);font-size:14px;"
         value="${_mlTopic}" oninput="_mlTopic=this.value" />
-      <button onclick="_mlRunAll()" class="btn-primary" style="white-space:nowrap;">▶ Run All Modules</button>
+      <button onclick="_mlRunAll()" class="btn-primary" style="white-space:nowrap;">&#9654; Run All Modules</button>
     </div>
     <div class="ml-grid" id="ml-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;">
       ${ML_MODULES.map(m => _mlModuleCard(m)).join('')}
-    </div>`;
+    </div>`);
 }
 
 function _mlModuleCard(m) {
