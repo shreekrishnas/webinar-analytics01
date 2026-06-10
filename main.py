@@ -15,17 +15,11 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def _compute_perf_score(regs: int, att_rate: float, icp: str, has_ads: bool = False) -> int:
-    """Compute 0-100 performance score. No ads: reg vol 25%, att rate 35%, ICP 20%, speaker-topic fit 15%, follow-up 5%."""
-    # Registration volume score (25 pts): benchmark 150 regs = full score
     reg_score = min(25, round(regs / 150 * 25))
-    # Attendance rate score (35 pts): 60%+ = full
     att_score = min(35, round(att_rate / 60 * 35))
-    # ICP relevance score (20 pts): premium ICPs score higher
     icp_scores = {'Family Office': 20, 'AIF': 20, 'PMS': 18, 'NRI': 16, 'ESOPs': 15, 'Retirement Planning': 14, 'Others': 8}
     icp_score = icp_scores.get(icp or 'Others', 8)
-    # Speaker-topic fit (15 pts): give 10 pts baseline (no data to distinguish)
     fit_score = 10
-    # Follow-up completion (5 pts): give 3 pts baseline
     followup_score = 3
     return min(100, reg_score + att_score + icp_score + fit_score + followup_score)
 

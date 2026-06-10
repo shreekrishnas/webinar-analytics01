@@ -3400,7 +3400,7 @@ html.dark .dash-hero-sub   { color: var(--text-2) !important; }
   .dash-hero-title { font-size: 28px !important; }
 }
 @media (max-width: 768px) {
-  .nav-links      { display: none !important; }
+  .nav-links, .mega-nav { display: none !important; }
   .nav-chips      { display: none !important; }
   .nav-hamburger  { display: flex !important; }
   .site-container { padding: 20px 16px 48px; }
@@ -3552,11 +3552,7 @@ html.dark .navbar { background: #000000 !important; border-bottom-color: rgba(25
   letter-spacing: -0.5px !important;
 }
 
-/* Nav segmented control on black navbar */
-.nav-links {
-  background: rgba(255,255,255,0.06) !important;
-  border: 1px solid rgba(255,255,255,0.12) !important;
-}
+/* Nav links (mobile menu) on black navbar */
 .nav-link {
   color: rgba(255,255,255,0.62) !important;
   border: none !important;
@@ -3570,7 +3566,6 @@ html.dark .navbar { background: #000000 !important; border-bottom-color: rgba(25
   color: #34d399 !important;
   background: rgba(52,211,153,0.18) !important;
   font-weight: 700 !important;
-  box-shadow: 0 0 0 1px rgba(52,211,153,0.35), 0 2px 12px rgba(52,211,153,0.15) !important;
 }
 .nav-link.active svg { opacity: 1 !important; color: #34d399 !important; }
 .nav-link::before { display: none !important; }
@@ -4477,33 +4472,41 @@ html.dark .nav-logo-mark { background: var(--rh-ink) !important; }
 html.dark .nav-logo-mark svg polyline,
 html.dark .nav-logo-mark svg circle { stroke: #000 !important; fill: #000 !important; }
 
-/* Nav segmented pill */
-.nav-links {
-  background: transparent !important;
-  border: 1px solid var(--rh-border) !important;
-  border-radius: 8px !important;
-  padding: 3px !important;
-  gap: 0 !important;
+/* Mega menu RH overrides */
+.mega-nav {
+  gap: 2px !important;
 }
+.mega-trigger {
+  font-family: var(--rh-sans) !important;
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+  color: var(--rh-text-2) !important;
+  border-radius: 6px !important;
+  padding: 7px 14px !important;
+}
+.mega-trigger:hover { background: var(--rh-surface) !important; color: var(--rh-text-1) !important; }
+.mega-trigger.active {
+  background: var(--rh-ink) !important;
+  color: var(--rh-bg) !important;
+  font-weight: 600 !important;
+}
+.mega-trigger.active svg { opacity: 1 !important; color: var(--rh-bg) !important; }
+html.dark .mega-trigger.active { background: #fafafa !important; color: #000 !important; }
+html.dark .mega-trigger.active svg { color: #000 !important; }
+/* Mobile nav links still use old styling */
 .nav-link {
   font-family: var(--rh-sans) !important;
   font-size: 12.5px !important;
   font-weight: 500 !important;
   color: var(--rh-text-2) !important;
-  background: transparent !important;
-  border: none !important;
   border-radius: 6px !important;
   padding: 7px 14px !important;
-  letter-spacing: 0 !important;
-  box-shadow: none !important;
 }
-.nav-link svg { width: 13px !important; height: 13px !important; opacity: 0.55 !important; }
 .nav-link:hover { background: var(--rh-surface) !important; color: var(--rh-text-1) !important; }
 .nav-link.active {
   background: var(--rh-ink) !important;
   color: var(--rh-bg) !important;
   font-weight: 600 !important;
-  box-shadow: none !important;
 }
 .nav-link.active svg { opacity: 1 !important; color: var(--rh-bg) !important; }
 html.dark .nav-link.active { background: #fafafa !important; color: #000 !important; }
@@ -5858,3 +5861,233 @@ html:not(.dark) .card-body span:not([class]) { color: var(--rh-text-1) !importan
 /* ── wb-badge extras ───────────────────────────────────────────────────── */
 .wb-badge.follow-up-pending { background: rgba(244,63,94,0.12); color: #f43f5e; border: 1px solid rgba(244,63,94,0.3); }
 .wb-badge.follow-up-done { background: rgba(16,185,129,0.12); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MEGA MENU
+   ══════════════════════════════════════════════════════════════════════════ */
+.mega-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+}
+
+.mega-group {
+  position: relative;
+}
+
+.mega-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--rh-sans, 'Inter', system-ui, sans-serif);
+  color: rgba(255,255,255,0.62);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.2s, background 0.2s;
+  position: relative;
+  letter-spacing: 0.01em;
+}
+.mega-trigger svg:not(.mega-chevron) {
+  width: 14px; height: 14px;
+  opacity: 0.55;
+  transition: opacity 0.2s;
+}
+.mega-chevron {
+  opacity: 0.4;
+  transition: transform 0.25s, opacity 0.2s;
+  margin-left: -2px;
+}
+.mega-trigger:hover {
+  color: rgba(255,255,255,0.92);
+  background: rgba(255,255,255,0.08);
+}
+.mega-trigger:hover svg { opacity: 1; }
+.mega-group.open .mega-chevron {
+  transform: rotate(180deg);
+  opacity: 0.8;
+}
+
+/* Active state for triggers (when child page is active) */
+.mega-trigger.active,
+.mega-trigger.nav-link.active {
+  color: #34d399 !important;
+  background: rgba(52,211,153,0.15) !important;
+  font-weight: 600;
+}
+.mega-trigger.active svg,
+.mega-trigger.nav-link.active svg { opacity: 1 !important; color: #34d399 !important; }
+
+/* ── Dropdown Panel ── */
+.mega-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-6px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0s 0.2s;
+  z-index: 999;
+  min-width: 420px;
+}
+.mega-group.open .mega-panel {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0s 0s;
+}
+
+.mega-panel-inner {
+  background: #111110;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04) inset;
+  padding: 20px;
+  display: flex;
+  gap: 20px;
+}
+
+/* Pointer arrow */
+.mega-panel::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 12px;
+  height: 12px;
+  background: #111110;
+  border-top: 1px solid rgba(255,255,255,0.10);
+  border-left: 1px solid rgba(255,255,255,0.10);
+}
+
+/* Bridge gap so hover doesn't break */
+.mega-panel::after {
+  content: '';
+  position: absolute;
+  top: -14px;
+  left: 0;
+  right: 0;
+  height: 14px;
+}
+
+/* ── Columns inside panel ── */
+.mega-col {
+  flex: 1;
+  min-width: 180px;
+}
+.mega-col-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.32);
+  padding: 0 10px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  margin-bottom: 8px;
+}
+
+/* ── Individual menu item ── */
+.mega-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+  text-decoration: none;
+}
+.mega-item:hover {
+  background: rgba(255,255,255,0.06);
+}
+.mega-item-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.mega-item-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.92);
+  line-height: 1.3;
+}
+.mega-item-desc {
+  font-size: 11.5px;
+  color: rgba(255,255,255,0.42);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+.mega-item.active .mega-item-title {
+  color: #34d399;
+}
+
+/* ── Light mode overrides ── */
+html:not(.dark) .mega-panel-inner {
+  background: #fff;
+  border-color: rgba(0,0,0,0.08);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.04);
+}
+html:not(.dark) .mega-panel::before {
+  background: #fff;
+  border-color: rgba(0,0,0,0.08);
+}
+html:not(.dark) .mega-col-label {
+  color: rgba(0,0,0,0.35);
+  border-bottom-color: rgba(0,0,0,0.06);
+}
+html:not(.dark) .mega-item:hover {
+  background: rgba(0,0,0,0.04);
+}
+html:not(.dark) .mega-item-title {
+  color: #111;
+}
+html:not(.dark) .mega-item-desc {
+  color: rgba(0,0,0,0.5);
+}
+html:not(.dark) .mega-trigger {
+  color: var(--rh-text-2, #555);
+}
+html:not(.dark) .mega-trigger:hover {
+  color: var(--rh-text-1, #111);
+  background: rgba(0,0,0,0.05);
+}
+html:not(.dark) .mega-trigger.active {
+  color: var(--rh-ink, #111) !important;
+  background: var(--rh-ink, #111) !important;
+  color: var(--rh-bg, #fff) !important;
+}
+
+/* ── RH theme overrides ── */
+.mega-trigger {
+  font-family: var(--rh-sans, 'Inter', system-ui, sans-serif) !important;
+  font-size: 12.5px !important;
+}
+
+/* ── Mobile: hide mega panels, show hamburger menu ── */
+@media (max-width: 768px) {
+  .mega-nav { display: none !important; }
+}
+
+/* ── Overlay behind mega panel ── */
+.mega-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 198;
+  display: none;
+}
+.mega-overlay.visible {
+  display: block;
+}

@@ -414,14 +414,17 @@ function updateDateRangeLabel() {
 function nav(page, sub) {
   S.page = page;
   S.sub  = sub ?? null;
-  // Update all nav-link elements (desktop + mobile menus)
+  // Update mobile nav-link active states
   document.querySelectorAll('.nav-link[data-page]').forEach(b =>
     b.classList.toggle('active', b.dataset.page === page)
   );
+  // Update mega menu active states
+  updateMegaActive(page);
+  // Close any open mega panels
+  closeMegaPanels();
   setBreadcrumb(page, sub);
   closeCmdPalette();
   closeNotifPanel();
-  // Close mobile nav if open
   const mobileMenu = document.getElementById('nav-mobile-menu');
   if (mobileMenu && mobileMenu.classList.contains('open')) {
     mobileMenu.classList.remove('open');
@@ -5560,9 +5563,76 @@ async function init() {
   initCursorGlow();
   initNavbarScroll();
   initChatbot();
+  initMegaMenu();
   // Remove loading splash
   const _loader = document.getElementById('page-loader');
   if (_loader) { _loader.classList.add('fade'); setTimeout(() => _loader.remove(), 380); }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MEGA MENU
+══════════════════════════════════════════════════════════════════════════ */
+function initMegaMenu() {
+  document.querySelectorAll('.mega-group').forEach(group => {
+    const trigger = group.querySelector('.mega-trigger');
+    let closeTimer = null;
+
+    function openGroup() {
+      clearTimeout(closeTimer);
+      closeMegaPanels();
+      group.classList.add('open');
+    }
+    function scheduleClose() {
+      closeTimer = setTimeout(() => group.classList.remove('open'), 200);
+    }
+    function cancelClose() {
+      clearTimeout(closeTimer);
+    }
+
+    trigger.addEventListener('mouseenter', openGroup);
+    trigger.addEventListener('mouseleave', scheduleClose);
+    const panel = group.querySelector('.mega-panel');
+    if (panel) {
+      panel.addEventListener('mouseenter', cancelClose);
+      panel.addEventListener('mouseleave', scheduleClose);
+    }
+    trigger.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (group.classList.contains('open')) {
+        group.classList.remove('open');
+      } else {
+        openGroup();
+      }
+    });
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.mega-group')) closeMegaPanels();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMegaPanels();
+  });
+
+  updateMegaActive(S.page || 'home');
+}
+
+function closeMegaPanels() {
+  document.querySelectorAll('.mega-group.open').forEach(g => g.classList.remove('open'));
+}
+
+function updateMegaActive(page) {
+  document.querySelectorAll('.mega-trigger').forEach(t => {
+    const pages = t.dataset.pages ? t.dataset.pages.split(',') : [];
+    const directPage = t.dataset.page;
+    if (directPage) {
+      t.classList.toggle('active', directPage === page);
+    } else {
+      t.classList.toggle('active', pages.includes(page));
+    }
+  });
+  document.querySelectorAll('.mega-item').forEach(item => {
+    item.classList.toggle('active', item.dataset.page === page);
+  });
 }
 
 document.addEventListener('DOMContentLoaded', init);
