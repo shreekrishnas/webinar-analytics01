@@ -6088,41 +6088,47 @@ function _commCard(m, results) {
 
 function _commRenderResult(moduleId, r) {
   let html = '';
-  // Email result
   if (r.subject) {
-    html += `<div style="margin-bottom:8px;">
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">Subject Line</div>
-      <div style="font-size:13px;font-weight:600;">${esc(r.subject)}</div>
+    html += `<div style="margin-bottom:10px;padding:10px;background:linear-gradient(135deg,#eef2ff,#faf5ff);border-radius:8px;">
+      <div style="font-size:10px;font-weight:600;color:#6366f1;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Subject Line</div>
+      <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(r.subject)}</div>
+      ${r.subject_variant ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">A/B Variant: <em>${esc(r.subject_variant)}</em></div>` : ''}
     </div>`;
   }
   if (r.preview_text) {
     html += `<div style="margin-bottom:8px;">
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">Preview Text</div>
-      <div style="font-size:12px;color:var(--text-muted);font-style:italic;">${esc(r.preview_text)}</div>
+      <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">Preview Text</div>
+      <div style="font-size:12px;color:var(--text-muted);font-style:italic;background:var(--bg);padding:6px 8px;border-radius:4px;">${esc(r.preview_text)}</div>
     </div>`;
   }
   if (r.body) {
-    html += `<div style="margin-bottom:8px;">
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Email Body</div>
-      <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:12px;line-height:1.6;white-space:pre-wrap;max-height:200px;overflow-y:auto;">${esc(r.body)}</div>
+    html += `<div style="margin-bottom:10px;">
+      <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Email Body</div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:13px;line-height:1.7;white-space:pre-wrap;max-height:280px;overflow-y:auto;">${esc(r.body)}</div>
     </div>`;
   }
   if (r.cta_text) {
-    html += `<div style="margin-bottom:8px;">
-      <span style="font-size:11px;color:var(--text-muted);">CTA Button: </span>
-      <strong style="font-size:12px;">[ ${esc(r.cta_text)} ]</strong>
+    html += `<div style="margin-bottom:8px;text-align:center;">
+      <span style="display:inline-block;padding:8px 20px;background:#6366f1;color:white;border-radius:6px;font-size:13px;font-weight:600;">${esc(r.cta_text)}</span>
     </div>`;
   }
   if (r.ps_line) {
-    html += `<div style="margin-bottom:8px;font-size:12px;color:var(--text-muted);font-style:italic;">P.S. ${esc(r.ps_line)}</div>`;
+    html += `<div style="margin-bottom:8px;font-size:12px;color:var(--text-muted);font-style:italic;border-left:2px solid var(--border);padding-left:8px;">P.S. ${esc(r.ps_line)}</div>`;
   }
-  // WhatsApp result
   if (r.message) {
-    html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:13px;line-height:1.6;white-space:pre-wrap;margin-bottom:8px;">${esc(r.message)}</div>`;
-    if (r.char_count) html += `<div style="font-size:11px;color:var(--text-muted);">${r.char_count} chars</div>`;
+    html += `<div style="background:#dcf8c6;border-radius:12px 12px 12px 0;padding:12px 14px;font-size:13px;line-height:1.7;white-space:pre-wrap;margin-bottom:8px;max-width:90%;box-shadow:0 1px 2px rgba(0,0,0,0.08);">${esc(r.message)}</div>`;
+    const chars = r.char_count || (r.message||'').length;
+    const charColor = chars <= 500 ? '#10b981' : chars <= 1000 ? '#f59e0b' : '#ef4444';
+    html += `<div style="font-size:11px;color:var(--text-muted);">
+      <span style="color:${charColor};font-weight:600;">${chars}</span> characters
+      ${chars <= 500 ? '· ✅ Optimal length' : chars <= 1000 ? '· ⚠️ Consider shortening' : '· 🔴 Too long for WhatsApp'}
+    </div>`;
   }
   if (!html) html = `<pre style="font-size:11px;white-space:pre-wrap;color:var(--text-muted);max-height:200px;overflow:auto;">${esc(JSON.stringify(r,null,2).slice(0,600))}</pre>`;
-  html += `<button onclick="_commRunModule('${moduleId}')" class="btn-secondary" style="font-size:11px;margin-top:8px;">Regenerate</button>`;
+  html += `<div style="display:flex;gap:6px;margin-top:10px;">
+    <button onclick="_commRunModule('${moduleId}')" class="btn-secondary" style="font-size:11px;">↻ Regenerate</button>
+    <button onclick="_copyComm('${moduleId}')" class="btn-secondary" style="font-size:11px;">📋 Copy</button>
+  </div>`;
   return html;
 }
 
@@ -6154,6 +6160,18 @@ async function _mlRunModule(moduleId) {
     _mlResults[moduleId] = await res.json();
   } catch(e) { _mlResults[moduleId] = { error: e.message }; }
   _refreshCard(moduleId);
+}
+
+function _copyComm(moduleId) {
+  const r = _commResults[moduleId];
+  if (!r) return;
+  const text = r.body || r.message || JSON.stringify(r, null, 2);
+  const full = r.subject ? `Subject: ${r.subject}\n\n${text}${r.cta_text ? '\n\n[' + r.cta_text + ']' : ''}${r.ps_line ? '\n\nP.S. ' + r.ps_line : ''}` : text;
+  navigator.clipboard.writeText(full).then(() => {
+    const btn = event.target;
+    btn.textContent = '✅ Copied!';
+    setTimeout(() => btn.textContent = '📋 Copy', 1500);
+  });
 }
 
 async function _commRunModule(moduleId) {
