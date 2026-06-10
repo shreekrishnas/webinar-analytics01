@@ -37,13 +37,14 @@ def _score_label(score: int) -> str:
     return "Low Performing"
 
 
-# Static files with long-lived cache headers so browsers cache CSS/JS for 1 year.
-# The ?v=XX query string in index.html handles cache-busting on deploy.
-class CachedStaticFiles(StaticFiles):
+# Static files — no aggressive caching so updates are picked up immediately.
+class NoCacheStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope) -> StarletteResponse:
         response = await super().get_response(path, scope)
         if response.status_code == 200:
-            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
         return response
 
 
@@ -83,7 +84,7 @@ def get_db():
 
 # ── Static files & root ───────────────────────────────────────────────────────
 
-app.mount("/static", CachedStaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+app.mount("/static", NoCacheStaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 
 
 @app.get("/", include_in_schema=False)

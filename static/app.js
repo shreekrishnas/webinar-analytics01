@@ -5247,21 +5247,8 @@ function runCountUps() {
   });
 }
 
-/** Fade-in + translateY entrance for a list of cards with stagger */
+/** Card entrance — disabled to prevent opacity flicker */
 function animateCards(selector = '.wb-card, .spk-card') {
-  const cards = document.querySelectorAll(selector);
-  cards.forEach((card, i) => {
-    card.style.opacity    = '0';
-    card.style.transform  = 'translateY(20px)';
-    card.style.transition = 'none';
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        card.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
-        card.style.opacity    = '';
-        card.style.transform  = '';
-      }, i * 45);
-    });
-  });
 }
 
 /** Add rank-N class to lb-table rows so CSS can style top-3 rows */
@@ -5275,15 +5262,8 @@ function decorateLeaderboardRows() {
   });
 }
 
-/** Animate progress bars from 0 to their target width */
+/** Progress bars — disabled to prevent flicker */
 function animateBars() {
-  document.querySelectorAll('.dur-fill, .an-bar-fill, .src-fill, .att-wb-dur-fill').forEach(bar => {
-    const target = bar.style.width;
-    bar.style.width = '0%';
-    requestAnimationFrame(() => {
-      setTimeout(() => { bar.style.width = target; }, 80);
-    });
-  });
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
