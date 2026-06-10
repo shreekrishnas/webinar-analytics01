@@ -2862,7 +2862,7 @@ ML_MODULE_PROMPTS = {
 
 @app.post("/api/ml-analysis")
 async def ml_analysis(payload: dict):
-    import aiohttp, json as _json
+    import httpx, json as _json
     module = payload.get("module", "")
     topic = payload.get("topic", "General HNI Wealth Advisory")
     if module not in ML_MODULE_PROMPTS:
@@ -2872,18 +2872,18 @@ async def ml_analysis(payload: dict):
         raise HTTPException(status_code=503, detail="OPENROUTER_API_KEY not configured")
     system_prompt = f"You are an expert AI analyst for Right Horizons Financial Services, specialising in Indian HNI wealth advisory webinars. The user topic is: {topic}. Respond ONLY with valid JSON, no markdown."
     user_prompt = ML_MODULE_PROMPTS[module]
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             json={"model": "anthropic/claude-sonnet-4-5", "max_tokens": 2000, "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ]},
-        ) as resp:
-            if resp.status != 200:
-                raise HTTPException(status_code=502, detail=f"OpenRouter returned {resp.status}")
-            data = await resp.json()
+        )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"OpenRouter returned {resp.status_code}")
+        data = resp.json()
     text = data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
     text = text.strip()
     if text.startswith("```"):
