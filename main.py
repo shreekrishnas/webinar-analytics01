@@ -500,8 +500,9 @@ def get_webinar_funnel(webinar_id: int, db: Session = Depends(get_db)):
 
     followed_up = 0
     if att_email_list:
-        placeholders = ','.join([f"'{e}'" for e in att_email_list[:100]])
-        followed_up = db.execute(_t(f"SELECT COUNT(*) FROM pipeline_contacts WHERE email IN ({placeholders}) AND status NOT IN ('new')")).fetchone()[0] or 0
+        params = {f"e{i}": e for i, e in enumerate(att_email_list[:100])}
+        ph = ",".join(f":e{i}" for i in range(len(params)))
+        followed_up = db.execute(_t(f"SELECT COUNT(*) FROM pipeline_contacts WHERE email IN ({ph}) AND status NOT IN ('new')"), params).fetchone()[0] or 0
 
     stages = []
     if impressions > 0:
@@ -693,8 +694,9 @@ def get_lead_quality(db: Session = Depends(get_db)):
     emails = [r.email for r in rows]
     pipeline_map = {}
     if emails:
-        placeholders = ','.join([f"'{e}'" for e in emails[:100]])
-        pl_rows = db.execute(_t(f"SELECT email, status FROM pipeline_contacts WHERE email IN ({placeholders})")).fetchall()
+        params = {f"e{i}": e for i, e in enumerate(emails[:100])}
+        ph = ",".join(f":e{i}" for i in range(len(params)))
+        pl_rows = db.execute(_t(f"SELECT email, status FROM pipeline_contacts WHERE email IN ({ph})"), params).fetchall()
         pipeline_map = {r.email: r.status for r in pl_rows}
 
     premium_icps = {'Family Office', 'AIF', 'PMS', 'NRI', 'ESOPs'}
@@ -1200,7 +1202,7 @@ async def get_intelligence_insights(db: Session = Depends(get_db)):
     ads_summary = ""
     if has_ads:
         ads_rows = db.execute(_t("""
-            SELECT platform, SUM(spend::numeric) as spend, SUM(impressions) as impr,
+            SELECT platform, SUM(CAST(spend AS FLOAT)) as spend, SUM(impressions) as impr,
                    SUM(clicks) as clicks, SUM(conversions) as conv
             FROM webinar_ads WHERE spend IS NOT NULL AND spend != ''
             GROUP BY platform ORDER BY spend DESC
@@ -1297,7 +1299,7 @@ def get_hot_leads(db: Session = Depends(get_db)):
             r.email,
             COUNT(DISTINCT a.webinar_id) AS webinar_count,
             MAX(a.duration_minutes) AS max_duration,
-            (SELECT GROUP_CONCAT(DISTINCT COALESCE(w2.icp,'Others')) FROM attendances a2 JOIN registrations r2 ON r2.id=a2.registration_id JOIN webinars w2 ON w2.id=a2.webinar_id WHERE a2.attended=TRUE AND r2.email=r.email) AS icps,
+            (SELECT STRING_AGG(DISTINCT COALESCE(w2.icp,'Others'), ',') FROM attendances a2 JOIN registrations r2 ON r2.id=a2.registration_id JOIN webinars w2 ON w2.id=a2.webinar_id WHERE a2.attended=TRUE AND r2.email=r.email) AS icps,
             COALESCE(p.status, 'not_added') AS pipeline_status
         FROM attendances a
         JOIN registrations r ON r.id = a.registration_id
@@ -1337,9 +1339,10 @@ def delete_competitor_activity(activity_id: int, db: Session = Depends(get_db)):
 
 def _is_pg(db: Session) -> bool:
     try:
-        return 'postgres' in str(db.bind.url).lower()
+        bind = db.get_bind()
+        return 'postgres' in str(bind.url).lower()
     except Exception:
-        return False
+        return bool(os.environ.get("DATABASE_URL"))
 
 
 @app.get("/api/competitor-gap-analysis")
@@ -2849,10 +2852,14 @@ def get_new_registrants_per_webinar(db: Session = Depends(get_db)):
 
 def _ml_fetch_webinar_stats(db):
     """Return list of dicts with title, icp, regs, att_rate for completed webinars."""
+    from sqlalchemy import text as _t
     rows = db.execute(_t("""
-        SELECT w.title, w.icp, w.total_registrations, w.total_attendees
+        SELECT w.title, w.icp,
+               (SELECT COUNT(*) FROM registrations r WHERE r.webinar_id = w.id) AS total_registrations,
+               (SELECT COUNT(*) FROM attendances a WHERE a.webinar_id = w.id AND a.attended = TRUE) AS total_attendees
         FROM webinars w
-        WHERE w.status = 'completed' AND w.total_registrations > 0
+        WHERE w.status = 'completed'
+          AND (SELECT COUNT(*) FROM registrations r WHERE r.webinar_id = w.id) > 0
     """)).fetchall()
     results = []
     for r in rows:
@@ -3327,6 +3334,7 @@ async def ai_intelligence_dashboard(db: Session = Depends(get_db)):
 
 async def _ai_intelligence_impl(db):
     import numpy as np
+    from sqlalchemy import text as _t
     from sklearn.linear_model import LinearRegression
     from sklearn.ensemble import IsolationForest
     from sklearn.feature_extraction.text import TfidfVectorizer
@@ -3334,8 +3342,12 @@ async def _ai_intelligence_impl(db):
     from datetime import datetime
 
     rows = db.execute(_t("""
-        SELECT w.id, w.title, w.date, w.icp, w.total_registrations, w.total_attendees
-        FROM webinars w WHERE w.status='completed' AND w.total_registrations>0 ORDER BY w.date ASC
+        SELECT w.id, w.title, w.date, w.icp,
+               (SELECT COUNT(*) FROM registrations r WHERE r.webinar_id = w.id) AS total_registrations,
+               (SELECT COUNT(*) FROM attendances a WHERE a.webinar_id = w.id AND a.attended = TRUE) AS total_attendees
+        FROM webinars w WHERE w.status='completed'
+          AND (SELECT COUNT(*) FROM registrations r WHERE r.webinar_id = w.id) > 0
+        ORDER BY w.date ASC
     """)).fetchall()
 
     if not rows:
