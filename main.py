@@ -3092,34 +3092,103 @@ async def _ml_ai_module(topic: str, system_msg: str, user_msg: str) -> dict:
 @app.post("/api/ml-analysis")
 async def ml_analysis(payload: dict, db: Session = Depends(get_db)):
     module = payload.get("module", "")
-    topic = payload.get("topic", "General HNI Wealth Advisory")
-    ai_system = (
-        "You are a specialist in Indian HNI wealth advisory marketing. "
-        f"The webinar topic is: \"{topic}\". "
-        "Reply ONLY with valid JSON (no markdown). Keys: score (0-100), confidence (0.0-1.0), summary (string), insights or recommendations (array of strings)."
+    topic = payload.get("topic", "General Webinar")
+    org   = payload.get("org", "our organisation")
+    date  = payload.get("date", "")
+    speaker = payload.get("speaker", "")
+
+    ai_sys = (
+        f"You are a webinar marketing specialist. Webinar topic: \"{topic}\"."
+        + (f" Organisation: {org}." if org else "")
+        + (f" Date: {date}." if date else "")
+        + (f" Speaker: {speaker}." if speaker else "")
+        + " Reply ONLY with valid JSON (no markdown)."
     )
+
     # ── Data-driven ML modules ──
-    if module == "topic_prediction":
-        return _ml_topic_advisor(db, topic)
-    if module == "topic_quality":
-        return _ml_topic_critique(db, topic)
-    if module == "pattern_detection":
-        return _ml_engagement_patterns(db, topic)
-    if module == "forecasting":
-        return _ml_registration_forecast(db, topic)
-    if module == "similarity_engine":
-        return _ml_icp_targeting(db, topic)
-    # ── AI modules (need external world knowledge) ──
-    ai_prompts = {
-        "market_intelligence": "Summarise the current Indian HNI wealth advisory market landscape relevant to this topic. Cover PMS, AIF, Family Office, NRI trends. JSON keys: score, confidence, summary, insights.",
-        "algorithm_impact": "Advise on the best channels (LinkedIn, email, WhatsApp) and timing to promote this webinar to HNI audiences. Include what works and what to avoid. JSON keys: score, confidence, summary, recommendations.",
-        "audience_psychology": "Explain the psychological triggers that make Indian HNI investors attend and convert at wealth advisory webinars on this topic. JSON keys: score, confidence, summary, insights.",
-        "content_intelligence": "Build a content playbook for this webinar: title variations, agenda structure, speaker positioning, CTA. JSON keys: score, confidence, summary, recommendations.",
-        "opportunity_risk": "Identify strategic opportunities and risks for running this webinar in the current Indian HNI market. JSON keys: score, confidence, summary, predictions, recommendations.",
+    if module == "topic_prediction":   return _ml_topic_advisor(db, topic)
+    if module == "topic_quality":      return _ml_topic_critique(db, topic)
+    if module == "pattern_detection":  return _ml_engagement_patterns(db, topic)
+    if module == "forecasting":        return _ml_registration_forecast(db, topic)
+    if module == "similarity_engine":  return _ml_icp_targeting(db, topic)
+
+    # ── AI analysis modules ──
+    ai_analysis = {
+        "market_intelligence": "Summarise the current market landscape relevant to this webinar topic. Cover demand trends, audience pain points, and what angles drive registrations. JSON keys: score, confidence, summary, insights (array).",
+        "algorithm_impact":    "Advise on the best channels (LinkedIn, email, WhatsApp) and posting times to promote this webinar. What works, what to avoid. JSON keys: score, confidence, summary, recommendations (array).",
+        "audience_psychology": "Explain the psychological triggers that make people register and attend webinars on this topic. Cover FOMO, credibility, framing. JSON keys: score, confidence, summary, insights (array).",
+        "content_intelligence":"Build a content playbook: 3 title variants, agenda outline (5 points), speaker intro angle, strong CTA. JSON keys: score, confidence, summary, recommendations (array).",
+        "opportunity_risk":    "Identify strategic opportunities and risks for running this webinar now. Cover timing, competition, audience fatigue. JSON keys: score, confidence, summary, predictions (array), recommendations (array).",
     }
-    if module not in ai_prompts:
-        raise HTTPException(status_code=400, detail=f"Unknown module: {module}")
-    return await _ml_ai_module(topic, ai_system, ai_prompts[module])
+
+    # ── Communications modules ──
+    comm_prompts = {
+        # Zoho email drafts
+        "email_invite": (
+            "Write a professional webinar invite email for Zoho Campaigns. "
+            "Include: compelling subject line, preview text, short hook (2 sentences), what attendees will learn (3 bullet points), speaker bio snippet, registration CTA button text, and a P.S. line. "
+            "JSON keys: subject, preview_text, body (full HTML-ready plain text), cta_text, ps_line."
+        ),
+        "email_reminder_1week": (
+            "Write a '1 week to go' reminder email for registered attendees. "
+            "Keep it short, build excitement, include a calendar-add CTA. "
+            "JSON keys: subject, preview_text, body, cta_text."
+        ),
+        "email_reminder_1day": (
+            "Write a '1 day to go' reminder email. Urgent tone, include the join link placeholder [JOIN_LINK], time and date. "
+            "JSON keys: subject, preview_text, body, cta_text."
+        ),
+        "email_reminder_1hr": (
+            "Write a '1 hour to go' final reminder email. Very short, punchy, just the essentials — topic, time, join link [JOIN_LINK]. "
+            "JSON keys: subject, preview_text, body, cta_text."
+        ),
+        "email_followup_attended": (
+            "Write a post-webinar follow-up email for people who attended. "
+            "Thank them, include 3 key takeaways, offer a next step (e.g. book a call, download resource), add a soft CTA. "
+            "JSON keys: subject, preview_text, body, cta_text."
+        ),
+        "email_followup_noshow": (
+            "Write a post-webinar follow-up for people who registered but did NOT attend. "
+            "Empathetic tone, offer the recording [RECORDING_LINK], 2 key highlights they missed, soft re-engagement CTA. "
+            "JSON keys: subject, preview_text, body, cta_text."
+        ),
+        # WhatsApp community messages
+        "wa_announcement": (
+            "Write a WhatsApp community announcement message for this webinar. "
+            "Conversational, emoji-friendly, max 5 lines. Include topic, date placeholder [DATE], time placeholder [TIME], and registration link [REG_LINK]. "
+            "JSON keys: message (plain text with emojis), char_count (int)."
+        ),
+        "wa_reminder_1day": (
+            "Write a WhatsApp reminder message for 1 day before the webinar. "
+            "Short, punchy, create urgency. Include [DATE], [TIME], [REG_LINK]. Max 4 lines. "
+            "JSON keys: message, char_count."
+        ),
+        "wa_reminder_morning": (
+            "Write a WhatsApp 'happening today' morning reminder. Max 3 lines. Include [TIME] and [JOIN_LINK]. "
+            "JSON keys: message, char_count."
+        ),
+        "wa_reminder_1hr": (
+            "Write a WhatsApp '1 hour to go!' message. Max 2 lines, very punchy. Include [JOIN_LINK]. "
+            "JSON keys: message, char_count."
+        ),
+        "wa_postwebinar": (
+            "Write a WhatsApp post-webinar thank-you message for attendees. "
+            "Include gratitude, 2 key takeaways, next step CTA, recording link placeholder [RECORDING_LINK]. Max 6 lines. "
+            "JSON keys: message, char_count."
+        ),
+        "wa_noshow_followup": (
+            "Write a WhatsApp follow-up for people who missed the webinar. "
+            "Friendly tone, share recording [RECORDING_LINK], 1 key highlight. Max 4 lines. "
+            "JSON keys: message, char_count."
+        ),
+    }
+
+    if module in ai_analysis:
+        return await _ml_ai_module(topic, ai_sys, ai_analysis[module])
+    if module in comm_prompts:
+        return await _ml_ai_module(topic, ai_sys, comm_prompts[module])
+
+    raise HTTPException(status_code=400, detail=f"Unknown module: {module}")
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
