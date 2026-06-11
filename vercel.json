@@ -10,7 +10,14 @@
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "api/index.py"
+      "dest": "api/index.py",
+      "headers": {
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "Surrogate-Control": "no-store",
+        "CDN-Cache-Control": "no-store",
+        "Pragma": "no-cache",
+        "Expires": "0"
+      }
     }
   ],
   "crons": [
