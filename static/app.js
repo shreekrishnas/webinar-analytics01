@@ -498,59 +498,59 @@ function renderKpiBanner() {
 
   const kpis = [
     {
-      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>', cls: 'kc-indigo',
+      icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>',
       label: 'Total Webinars',
       value: total.toString(),
       trendUp: true, trend: `${upcoming.length} upcoming`, arrow: trendArrowUp,
     },
     {
-      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>', cls: 'kc-sky',
+      icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
       label: 'Avg. Attendance',
       value: avgRate > 0 ? fmtPct(avgRate) : 'N/A',
-      trendUp: avgRate >= 50, trend: avgRate >= 50 ? '+5% vs last period' : avgRate > 0 ? '-3% vs last period' : 'No data yet',
+      trendUp: avgRate >= 50, trend: avgRate >= 50 ? 'Above benchmark' : avgRate > 0 ? 'Below benchmark' : 'No data yet',
       arrow: avgRate >= 50 ? trendArrowUp : trendArrowDown,
     },
     {
-      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>', cls: 'kc-emerald',
+      icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
       label: 'Completion Rate',
       value: total > 0 ? fmtPct(completionRate) : 'N/A',
       trendUp: completionRate >= 50, trend: completed.length + ' completed',
       arrow: completionRate >= 50 ? trendArrowUp : trendArrowDown,
     },
     {
-      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>', cls: 'kc-gold',
+      icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>',
       label: 'Top Speaker',
       value: topSpeakerDisplay,
       trendUp: null, trend: topSpeakerFull ? 'By total attendance' : 'No data yet',
       arrow: null,
     },
     {
-      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 2h4"/><path d="m9 9 3 3 3-3"/></svg>', cls: 'kc-gold',
+      icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 9 3 3 3-3"/><line x1="12" y1="12" x2="12" y2="17"/></svg>',
       label: 'Best Webinar',
       value: bestW ? (bestW.title.length > 16 ? bestW.title.slice(0,16)+'…' : bestW.title) : 'N/A',
       trendUp: null, trend: bestW ? `${bestW.attendance_rate.toFixed(1)}% attendance` : 'No completed webinars',
       arrow: null,
     },
     {
-      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>', cls: 'kc-emerald',
+      icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
       label: 'Best ICP',
       value: bestICP ? bestICP[0] : 'N/A',
       trendUp: null, trend: bestICP ? `${(bestICP[1].total/bestICP[1].count).toFixed(1)}% avg att rate` : 'No data',
       arrow: null,
     },
     {
-      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.99 12 19.79 19.79 0 0 1 1.93 3.36 2 2 0 0 1 3.9 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.98-1.98a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>',
-      cls: 'kc-red',
+      icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.99 12 19.79 19.79 0 0 1 1.93 3.36 2 2 0 0 1 3.9 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.98-1.98a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>',
       label: 'Follow-up Pending',
       value: (S.stats?.followup_pending || 0).toString(),
       trendUp: false,
       trend: 'Attendees needing follow-up',
       arrow: null,
+      alert: (S.stats?.followup_pending || 0) > 0,
     },
   ];
 
   return kpis.map(k => `
-    <div class="kpi-card ${k.cls}" ${k.label==='Follow-up Pending'?'onclick="showFollowupPendingModal()" style="cursor:pointer" title="Click to see pending follow-ups"':''}>
+    <div class="kpi-card${k.alert ? ' alert' : ''}" ${k.label==='Follow-up Pending'?'onclick="showFollowupPendingModal()" style="cursor:pointer" title="Click to see pending follow-ups"':''}>
       <div class="kpi-card-head">
         <span class="kpi-card-label">${k.label}</span>
         <span class="kpi-card-icon">${k.icon}</span>
@@ -837,10 +837,35 @@ function renderHome() {
 
   if (S.webinars.length === 0) {
     // Truly empty - first-time user
-    mainContent = `<div class="empty-state">
-      <div class="empty-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
-      <div class="empty-title">No webinars yet</div>
-      <div class="empty-sub">Get started by creating your first webinar session. It only takes a few seconds.</div>
+    mainContent = `<div class="empty-state-v2">
+      <div class="es-icon">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12h8M12 8v8"/></svg>
+      </div>
+      <div class="es-title">Set up your first webinar</div>
+      <div class="es-sub">Track registrations, attendance, and follow-ups — all in one place. Here's how to get started:</div>
+      <div class="es-steps">
+        <div class="es-step">
+          <div class="es-step-num">1</div>
+          <div class="es-step-text">
+            <strong>Create a webinar</strong>
+            <span>Add title, date, speaker, and ICP segment</span>
+          </div>
+        </div>
+        <div class="es-step">
+          <div class="es-step-num">2</div>
+          <div class="es-step-text">
+            <strong>Upload your CSVs</strong>
+            <span>Import registration and attendance exports from Zoom / Teams</span>
+          </div>
+        </div>
+        <div class="es-step">
+          <div class="es-step-num">3</div>
+          <div class="es-step-text">
+            <strong>Get instant analytics</strong>
+            <span>Attendance rate, top performers, AI insights — generated automatically</span>
+          </div>
+        </div>
+      </div>
       <button class="btn btn-primary" onclick="openWebinarModal()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Create Your First Webinar
@@ -5769,11 +5794,51 @@ function _aiTabContent() {
   return '';
 }
 
+function _iqSkeleton() {
+  const bar = (h) => `<div class="skel skel-iq-bar" style="height:${h}%"></div>`;
+  return `<div class="skel-iq-wrap">
+    <div class="skel-iq-header">
+      <div class="skel" style="width:40px;height:40px;border-radius:12px;flex-shrink:0"></div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+        <div class="skel" style="height:14px;width:55%"></div>
+        <div class="skel" style="height:11px;width:38%"></div>
+      </div>
+    </div>
+    <div class="skel-iq-kpis">
+      ${[1,2,3,4].map(() => `<div class="skel-iq-kpi">
+        <div class="skel" style="height:11px;width:60%"></div>
+        <div class="skel" style="height:28px;width:50%"></div>
+        <div class="skel" style="height:10px;width:80%"></div>
+      </div>`).join('')}
+    </div>
+    <div class="skel-iq-chart">
+      <div class="skel" style="height:12px;width:30%"></div>
+      <div class="skel-iq-bars">
+        ${[55,72,45,88,63,91,50,78,42,67].map(h => bar(h)).join('')}
+      </div>
+      <div class="skel" style="height:10px;width:100%"></div>
+    </div>
+    <div class="skel-iq-chart">
+      <div class="skel" style="height:12px;width:40%"></div>
+      <div class="skel" style="height:60px;width:100%;margin-top:8px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+        <div class="skel" style="height:10px"></div>
+        <div class="skel" style="height:10px"></div>
+        <div class="skel" style="height:10px;width:70%"></div>
+        <div class="skel" style="height:10px;width:80%"></div>
+      </div>
+    </div>
+    <div style="text-align:center;padding:8px 0;font-size:12px;color:var(--text-muted)">
+      Running ML analysis — regression, clustering, anomaly detection…
+    </div>
+  </div>`;
+}
+
 async function _loadIQDashboard() {
   _iqLoading = true; _iqData = null;
-  // Show loading in the tab content area
+  // Show skeleton while loading
   const container = document.getElementById('ai-tab-content');
-  if (container) container.innerHTML = _aiTabContent();
+  if (container) container.innerHTML = _iqSkeleton();
   try {
     const res = await fetch('/api/ai-intelligence');
     if (!res.ok) { const t = await res.text(); throw new Error(`HTTP ${res.status}: ${t.slice(0,200)}`); }
