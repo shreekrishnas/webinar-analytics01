@@ -5689,16 +5689,14 @@ let _mlTopic     = '';
 let _mlOrg       = 'Right Horizons Financial Services';
 let _mlDate      = '';
 let _mlSpeaker   = '';
-let _mlRegLink   = '';   // Registration link
-let _mlJoinLink  = '';   // Zoom join link
-let _mlRecLink   = '';   // Recording link (post-event)
-let _mlDesc      = '';   // Webinar description / extra context for AI
+let _mlWebinarLink = '';  // Single webinar link (registration, join, or recording)
+let _mlDesc        = '';  // Webinar description / extra context for AI
 let _aiTab       = 'analysis'; // 'analysis' | 'emails' | 'whatsapp'
 let _iqData      = null;
 let _iqLoading   = false;
 
 function _mlInput(id, label, placeholder, stateKey, type='text') {
-  const val = ({_mlTopic,_mlDate,_mlSpeaker,_mlRegLink,_mlJoinLink,_mlRecLink,_mlDesc})[stateKey] || '';
+  const val = ({_mlTopic,_mlDate,_mlSpeaker,_mlWebinarLink,_mlDesc})[stateKey] || '';
   return `<div>
     <label style="font-size:11px;font-weight:600;color:var(--rh-text-3,#888);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">${label}</label>
     <input id="${id}" type="${type}" placeholder="${placeholder}"
@@ -5724,10 +5722,8 @@ function renderMLAnalysis() {
         ${_mlInput('ml-date-input',   'Date and Time',   'e.g. 28 June 2025, 4:00 PM IST',            '_mlDate')}
         ${_mlInput('ml-speaker-input','Speaker',         'e.g. Rachna Rego, CFA, Head of Advisory',   '_mlSpeaker')}
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
-        ${_mlInput('ml-reglink-input', 'Registration Link',  'https://zoom.us/webinar/register/…',  '_mlRegLink',  'url')}
-        ${_mlInput('ml-joinlink-input','Zoom Join Link',     'https://zoom.us/j/…',                  '_mlJoinLink', 'url')}
-        ${_mlInput('ml-reclink-input', 'Recording Link',     'https://zoom.us/rec/… (after event)',   '_mlRecLink',  'url')}
+      <div style="margin-bottom:12px;">
+        ${_mlInput('ml-webinarlink-input', 'Webinar Link', 'https://zoom.us/j/… or registration / recording link', '_mlWebinarLink', 'url')}
       </div>
       <div style="margin-bottom:4px;">
         <label style="font-size:11px;font-weight:600;color:var(--rh-text-3);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">Description / Extra Context</label>
@@ -5754,13 +5750,11 @@ function renderMLAnalysis() {
 }
 
 function _aiSetTab(t) {
-  _mlTopic    = document.getElementById('ml-topic-input')?.value   || _mlTopic;
-  _mlDate     = document.getElementById('ml-date-input')?.value    || _mlDate;
-  _mlSpeaker  = document.getElementById('ml-speaker-input')?.value || _mlSpeaker;
-  _mlRegLink  = document.getElementById('ml-reglink-input')?.value  || _mlRegLink;
-  _mlJoinLink = document.getElementById('ml-joinlink-input')?.value || _mlJoinLink;
-  _mlRecLink  = document.getElementById('ml-reclink-input')?.value  || _mlRecLink;
-  _mlDesc     = document.getElementById('ml-desc-input')?.value     || _mlDesc;
+  _mlTopic       = document.getElementById('ml-topic-input')?.value        || _mlTopic;
+  _mlDate        = document.getElementById('ml-date-input')?.value         || _mlDate;
+  _mlSpeaker     = document.getElementById('ml-speaker-input')?.value      || _mlSpeaker;
+  _mlWebinarLink = document.getElementById('ml-webinarlink-input')?.value  || _mlWebinarLink;
+  _mlDesc        = document.getElementById('ml-desc-input')?.value         || _mlDesc;
   _aiTab = t;
   document.querySelectorAll('.aitab-btn').forEach(b => {
     const active = b.dataset.tab === t;
@@ -5794,10 +5788,9 @@ function _aiTabContent() {
     return `<div id="iq-dashboard" style="text-align:center;padding:48px 20px;">
       <div style="width:56px;height:56px;border-radius:16px;background:rgba(196,30,58,0.08);border:1.5px solid rgba(196,30,58,0.2);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:26px;">📊</div>
       <div style="font-size:19px;font-weight:700;color:var(--rh-text-1);margin-bottom:8px;font-family:var(--rh-serif);">Programme Intelligence</div>
-      <div style="font-size:13.5px;color:var(--rh-text-2);margin-bottom:8px;max-width:460px;margin-left:auto;margin-right:auto;line-height:1.7;">
-        Runs real ML across all <strong>${S.webinars.filter(w=>w.status==='completed').length} completed webinars</strong> — Linear Regression forecasts, K-Means topic clusters, Isolation Forest anomaly detection, and an AI executive summary.
+      <div style="font-size:13.5px;color:var(--rh-text-2);margin-bottom:28px;max-width:400px;margin-left:auto;margin-right:auto;line-height:1.7;">
+        ML analysis across your <strong>${S.webinars.filter(w=>w.status==='completed').length} completed webinars</strong> with AI-generated insights and forecasts.
       </div>
-      <div style="font-size:12px;color:var(--rh-text-3);margin-bottom:28px;">Results are consistent because they reflect your full historical data — refresh to re-run after adding new webinars.</div>
       <button onclick="_loadIQDashboard()" class="btn btn-primary" style="font-size:14px;padding:12px 32px;">Run Intelligence Analysis</button>
     </div>`;
   }
@@ -6232,9 +6225,7 @@ function _aiPayload(moduleId) {
     org:      _mlOrg,
     date:     _mlDate,
     speaker:  _mlSpeaker,
-    reg_link:    _mlRegLink,
-    join_link:   _mlJoinLink,
-    rec_link:    _mlRecLink,
+    webinar_link: _mlWebinarLink,
     description: _mlDesc,
   };
 }
@@ -6243,11 +6234,9 @@ function _aiPayload(moduleId) {
 function _fillPlaceholders(text) {
   if (!text) return text;
   let t = text;
-  if (_mlDate)    { t = t.replace(/\[DATE\]/gi, _mlDate).replace(/\[TIME\]/gi, _mlDate); }
-  if (_mlRegLink) { t = t.replace(/\[REG_LINK\]/gi, _mlRegLink).replace(/\[REGISTRATION_LINK\]/gi, _mlRegLink); }
-  if (_mlJoinLink){ t = t.replace(/\[JOIN_LINK\]/gi, _mlJoinLink).replace(/\[WEBINAR_LINK\]/gi, _mlJoinLink); }
-  if (_mlRecLink) { t = t.replace(/\[RECORDING_LINK\]/gi, _mlRecLink).replace(/\[RECORDING\]/gi, _mlRecLink); }
-  if (_mlSpeaker) { t = t.replace(/\[SPEAKER_NAME\]/gi, _mlSpeaker).replace(/\[SPEAKER\]/gi, _mlSpeaker); }
+  if (_mlDate)        { t = t.replace(/\[DATE\]/gi, _mlDate).replace(/\[TIME\]/gi, _mlDate); }
+  if (_mlWebinarLink) { t = t.replace(/\[REG_LINK\]/gi, _mlWebinarLink).replace(/\[REGISTRATION_LINK\]/gi, _mlWebinarLink).replace(/\[JOIN_LINK\]/gi, _mlWebinarLink).replace(/\[WEBINAR_LINK\]/gi, _mlWebinarLink).replace(/\[RECORDING_LINK\]/gi, _mlWebinarLink).replace(/\[RECORDING\]/gi, _mlWebinarLink); }
+  if (_mlSpeaker)     { t = t.replace(/\[SPEAKER_NAME\]/gi, _mlSpeaker).replace(/\[SPEAKER\]/gi, _mlSpeaker); }
   return t;
 }
 
