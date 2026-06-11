@@ -3139,9 +3139,10 @@ async def ml_analysis(payload: dict, db: Session = Depends(get_db)):
     org       = payload.get("org", "our organisation")
     date      = payload.get("date", "")
     speaker   = payload.get("speaker", "")
-    reg_link  = payload.get("reg_link", "")
-    join_link = payload.get("join_link", "")
-    rec_link  = payload.get("rec_link", "")
+    reg_link    = payload.get("reg_link", "")
+    join_link   = payload.get("join_link", "")
+    rec_link    = payload.get("rec_link", "")
+    description = payload.get("description", "")
 
     # Build context string — use actual values where provided, fallback to tokens
     date_str     = date      or "[DATE & TIME]"
@@ -3152,19 +3153,22 @@ async def ml_analysis(payload: dict, db: Session = Depends(get_db)):
 
     ctx_parts = [f'Webinar topic: "{topic}"', f"Organisation: {org}",
                  f"Date & Time: {date_str}", f"Speaker: {speaker_str}",
-                 f"Registration link: {reg_str}", f"Join link: {join_str}",
+                 f"Registration link: {reg_str}", f"Zoom join link: {join_str}",
                  f"Recording link: {rec_str}"]
+    if description:
+        ctx_parts.append(f"Additional context: {description}")
     ctx = " | ".join(ctx_parts)
 
     ai_sys = (
         f"You are a senior marketing director at {org}, a premium Indian financial advisory firm "
         "specialising in HNI and NRI wealth management (PMS, AIF, Family Office, NRI planning, ESOPs). "
         "Your audience is sophisticated, high-net-worth — they respond to authority, specificity, and "
-        "understated confidence, NOT generic motivational language or pushy sales tactics.\n\n"
+        "understated confidence, not generic motivational language or pushy sales tactics.\n\n"
         f"Current webinar context: {ctx}\n\n"
         "Writing standards:\n"
         "- Use the ACTUAL date, speaker name, and links provided above — never write placeholder tokens "
         "if the real value has been given\n"
+        "- Use any additional context provided to make the copy specific to this webinar's audience and angle\n"
         "- Every sentence must earn its place — no filler, no clichés, no 'exciting opportunity' language\n"
         "- Financial services tone: precise, credible, insider-access, not hype\n"
         "- Subject lines: specific and intriguing, not clickbait\n"

@@ -1819,8 +1819,11 @@ html.dark .skel {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   line-height: 1.4;
-  word-break: break-word;
-  overflow-wrap: break-word;
+  word-break: normal;
+  overflow-wrap: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .kpi-card-icon {
   width: 34px; height: 34px;
@@ -2566,6 +2569,24 @@ body::before, body::after { display: none !important; }
 /* Push main content below fixed navbar */
 .site-container, .page-wrap, main {
   padding-top: 78px;
+}
+.site-main {
+  display: block;
+  width: 100%;
+  overflow-x: hidden;
+}
+.site-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 78px 32px 60px;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
 }
 .navbar.scrolled { box-shadow: 0 1px 0 var(--rh-border-2, #ebe8e0); }
 
