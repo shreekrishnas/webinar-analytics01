@@ -147,6 +147,14 @@ def _to_summary(db: Session, w: models.Webinar) -> schemas.WebinarSummary:
         icp=getattr(w, 'icp', None) or 'Others',
         has_registration_data=_has_data(db, w.id, "registrations"),
         has_attendee_data=_has_data(db, w.id, "attendees"),
+        co_speaker_name=w.co_speaker.name if getattr(w, 'co_speaker', None) else "",
+        platform=getattr(w, 'platform', None),
+        category=getattr(w, 'category', None),
+        language=getattr(w, 'language', None),
+        recording_url=getattr(w, 'recording_url', None),
+        tags=getattr(w, 'tags', None),
+        expected_registrations=getattr(w, 'expected_registrations', None),
+        notes=getattr(w, 'notes', None),
     )
 
 
@@ -198,6 +206,13 @@ def create_webinar(db: Session, webinar_in: schemas.WebinarCreate) -> models.Web
         speaker_id=speaker.id,
         status=webinar_in.status,
         icp=getattr(webinar_in, 'icp', None) or 'Others',
+        platform=webinar_in.platform,
+        category=webinar_in.category,
+        language=webinar_in.language,
+        recording_url=webinar_in.recording_url,
+        tags=webinar_in.tags,
+        expected_registrations=webinar_in.expected_registrations,
+        notes=webinar_in.notes,
     )
     db.add(webinar)
     db.commit()

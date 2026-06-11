@@ -96,10 +96,17 @@ class WebinarCreate(BaseModel):
     date: date
     time: Optional[str] = None
     description: Optional[str] = None
-    speaker_name: str   # will find existing or create new speaker
+    speaker_name: str
     speaker_email: Optional[str] = None
     status: str = "upcoming"
     icp: Optional[str] = "Others"
+    platform: Optional[str] = None
+    category: Optional[str] = None
+    language: Optional[str] = None
+    recording_url: Optional[str] = None
+    tags: Optional[str] = None
+    expected_registrations: Optional[int] = None
+    notes: Optional[str] = None
 
 
 class WebinarSummary(BaseModel):
@@ -119,6 +126,13 @@ class WebinarSummary(BaseModel):
     icp: Optional[str] = "Others"
     has_registration_data: bool
     has_attendee_data: bool
+    platform: Optional[str] = None
+    category: Optional[str] = None
+    language: Optional[str] = None
+    recording_url: Optional[str] = None
+    tags: Optional[str] = None
+    expected_registrations: Optional[int] = None
+    notes: Optional[str] = None
 
 
 class WebinarDetail(BaseModel):

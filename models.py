@@ -27,6 +27,14 @@ class Webinar(Base):
     status        = Column(String, default="completed")
     icp           = Column(String, default="Others")
     co_speaker_id = Column(Integer, ForeignKey("speakers.id"), nullable=True)
+    # New fields (audit additions)
+    platform          = Column(String, nullable=True)   # Zoom, Google Meet, etc.
+    category          = Column(String, nullable=True)   # Educational, Product Demo, etc.
+    language          = Column(String, nullable=True)   # English, Hindi, etc.
+    recording_url     = Column(String, nullable=True)
+    tags              = Column(String, nullable=True)   # comma-separated
+    expected_registrations = Column(Integer, nullable=True)
+    notes             = Column(Text, nullable=True)     # internal team notes
 
     speaker    = relationship("Speaker", foreign_keys="[Webinar.speaker_id]", back_populates="webinars")
     co_speaker = relationship("Speaker", foreign_keys="[Webinar.co_speaker_id]")

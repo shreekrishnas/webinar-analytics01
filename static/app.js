@@ -896,6 +896,7 @@ function renderHome() {
         </td>
         <td style="font-size:12px;color:var(--text-2);white-space:nowrap">${fmtDate(w.date)}</td>
         <td><span class="icp-badge icp-${(w.icp||'others').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}">${esc(w.icp || 'Others')}</span></td>
+        <td style="font-size:12px;color:var(--rh-text-3)">${w.platform ? esc(w.platform) : '<span style="color:var(--rh-text-4,#ccc)">—</span>'}</td>
         <td><span class="wb-badge ${badgeCls}" style="font-size:10px;padding:3px 8px">${w.status}</span></td>
         <td style="font-size:12px;text-align:right;color:var(--c-reg);font-weight:600">${fmt(w.total_registrations)}</td>
         <td style="min-width:100px">
@@ -938,6 +939,7 @@ function renderHome() {
                 <th>Speaker</th>
                 <th>Date</th>
                 <th>ICP</th>
+                <th>Platform</th>
                 <th>Status</th>
                 <th style="text-align:right">Reg.</th>
                 <th>Attendance</th>
@@ -1217,8 +1219,15 @@ function _drawWebinarDetail(w) {
           <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
             <div>
               <div class="wd-hero-title">${esc(w.title)}</div>
-              <div class="wd-hero-meta">${fmtDate(w.date)}${w.time?' · '+esc(w.time):''}</div>
+              <div class="wd-hero-meta">${fmtDate(w.date)}${w.time?' · '+esc(w.time):''}${w.platform?' · '+esc(w.platform):''}</div>
               ${w.description ? `<div class="wd-hero-desc">${esc(w.description)}</div>` : ''}
+              <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
+                ${w.category?`<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--rh-surface);border:1px solid var(--rh-border);color:var(--rh-text-2)">${esc(w.category)}</span>`:''}
+                ${w.language?`<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--rh-surface);border:1px solid var(--rh-border);color:var(--rh-text-2)">${esc(w.language)}</span>`:''}
+                ${w.tags?(w.tags.split(',').map(t=>t.trim()).filter(Boolean).map(t=>`<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:rgba(196,30,58,0.07);color:var(--rh-red);border:1px solid rgba(196,30,58,0.15)">#${esc(t)}</span>`).join('')):''}
+                ${w.recording_url?`<a href="${esc(w.recording_url)}" target="_blank" style="font-size:11px;padding:2px 10px;border-radius:20px;background:rgba(16,185,129,0.08);color:#10b981;border:1px solid rgba(16,185,129,0.2);text-decoration:none">▶ Recording</a>`:''}
+              </div>
+              ${w.notes?`<div style="margin-top:8px;padding:8px 12px;background:rgba(245,158,11,0.07);border-left:3px solid #f59e0b;border-radius:0 6px 6px 0;font-size:12px;color:var(--rh-text-2)"><strong style="color:#f59e0b">Notes:</strong> ${esc(w.notes)}</div>`:''}
             </div>
             <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
               <span class="wb-badge ${badgeCls}" style="font-size:12px;padding:5px 14px">${w.status}</span>
@@ -1236,6 +1245,14 @@ function _drawWebinarDetail(w) {
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Export Report
               </button>` : ''}
+              <button class="btn btn-ghost btn-sm" onclick="copyWebinarTitle('${esc(w.title).replace(/'/g,"\\'")}');event.stopPropagation()" title="Copy title" style="font-size:12px;display:flex;align-items:center;gap:5px;border-radius:8px;height:32px;padding:0 12px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                Copy
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick="duplicateWebinar(${w.id});event.stopPropagation()" title="Duplicate webinar" style="font-size:12px;display:flex;align-items:center;gap:5px;border-radius:8px;height:32px;padding:0 12px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M4 16H3a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v1"/></svg>
+                Duplicate
+              </button>
               <button class="btn btn-ghost btn-sm" onclick="editWebinar(${w.id})" style="font-size:12px;display:flex;align-items:center;gap:5px;border-radius:8px;height:32px;padding:0 12px">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                 Edit
@@ -2220,14 +2237,21 @@ function openWebinarModal(webinar) {
     : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Create Webinar';
 
   if (webinar) {
-    // Pre-fill fields
     const f = id => document.getElementById(id);
-    if (f('nw-title'))   f('nw-title').value   = webinar.title || '';
-    if (f('nw-date'))    f('nw-date').value     = webinar.date || '';
-    if (f('nw-time'))    f('nw-time').value     = webinar.time || '';
-    if (f('nw-speaker')) f('nw-speaker').value  = webinar.speaker_name || '';
-    if (f('nw-desc'))    f('nw-desc').value     = webinar.description || '';
-    if (f('nw-icp'))     f('nw-icp').value      = webinar.icp || 'Others';
+    if (f('nw-title'))     f('nw-title').value     = webinar.title || '';
+    if (f('nw-date'))      f('nw-date').value       = webinar.date || '';
+    if (f('nw-time'))      f('nw-time').value       = webinar.time || '';
+    if (f('nw-speaker'))   f('nw-speaker').value    = webinar.speaker_name || '';
+    if (f('nw-cospeaker')) f('nw-cospeaker').value  = webinar.co_speaker_name || '';
+    if (f('nw-desc'))      f('nw-desc').value       = webinar.description || '';
+    if (f('nw-notes'))     f('nw-notes').value      = webinar.notes || '';
+    if (f('nw-icp'))       f('nw-icp').value        = webinar.icp || 'Others';
+    if (f('nw-platform'))  f('nw-platform').value   = webinar.platform || '';
+    if (f('nw-category'))  f('nw-category').value   = webinar.category || '';
+    if (f('nw-language'))  f('nw-language').value   = webinar.language || '';
+    if (f('nw-recording')) f('nw-recording').value  = webinar.recording_url || '';
+    if (f('nw-tags'))      f('nw-tags').value       = webinar.tags || '';
+    if (f('nw-expected'))  f('nw-expected').value   = webinar.expected_registrations || '';
     const radio = document.querySelector(`input[name="nw-status-radio"][value="${webinar.status || 'upcoming'}"]`);
     if (radio) radio.checked = true;
   } else {
@@ -2248,16 +2272,16 @@ function openWebinarModal(webinar) {
 function closeWebinarModal() {
   document.getElementById('modal-overlay').classList.remove('open');
   _editWebinarId = null;
-  ['nw-title','nw-time','nw-speaker','nw-desc'].forEach(id => {
+  ['nw-title','nw-time','nw-speaker','nw-cospeaker','nw-desc','nw-notes',
+   'nw-recording','nw-tags','nw-expected'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
-  const dateInput = document.getElementById('nw-date');
-  if (dateInput) dateInput.value = '';
-  // Reset ICP to "Others"
-  const icpSel = document.getElementById('nw-icp');
-  if (icpSel) icpSel.value = 'Others';
-  // Reset status pills to "upcoming"
+  document.getElementById('nw-date').value = '';
+  ['nw-icp','nw-platform','nw-category','nw-language'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.selectedIndex = 0;
+  });
   const upcomingRadio = document.querySelector('input[name="nw-status-radio"][value="upcoming"]');
   if (upcomingRadio) upcomingRadio.checked = true;
 }
@@ -2288,14 +2312,22 @@ async function submitWebinarModal() {
   const btn = document.querySelector('#modal-overlay .btn-primary');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
 
+  const gv = id => { const el = document.getElementById(id); return el ? el.value.trim() || null : null; };
   const payload = {
     title,
     date: dateVal,
-    time: document.getElementById('nw-time').value.trim() || null,
-    speaker_name: speaker,
-    description: document.getElementById('nw-desc').value.trim() || null,
-    status: (document.querySelector('input[name="nw-status-radio"]:checked') || {value:'upcoming'}).value,
-    icp: (document.getElementById('nw-icp') || {value:'Others'}).value,
+    time:                  gv('nw-time'),
+    speaker_name:          speaker,
+    description:           gv('nw-desc'),
+    notes:                 gv('nw-notes'),
+    status:                (document.querySelector('input[name="nw-status-radio"]:checked') || {value:'upcoming'}).value,
+    icp:                   (document.getElementById('nw-icp') || {value:'Others'}).value || 'Others',
+    platform:              gv('nw-platform'),
+    category:              gv('nw-category'),
+    language:              gv('nw-language'),
+    recording_url:         gv('nw-recording'),
+    tags:                  gv('nw-tags'),
+    expected_registrations: (() => { const v = document.getElementById('nw-expected')?.value; return v ? parseInt(v) : null; })(),
   };
 
   const isEdit = !!_editWebinarId;
@@ -4770,8 +4802,27 @@ async function editWebinar(id) {
   openWebinarModal(w);
 }
 
-async function confirmDeleteWebinar(id, title) {
-  if (!confirm(`Delete "${title}"?\n\nThis will permanently remove all registration and attendance data. This cannot be undone.`)) return;
+function confirmDeleteWebinar(id, title) {
+  // Custom confirmation modal instead of browser confirm()
+  const overlay = document.createElement('div');
+  overlay.id = 'confirm-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9000;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--rh-surface);border:1px solid var(--rh-border);border-radius:14px;padding:28px 28px 22px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+      <div style="font-size:22px;margin-bottom:10px;">🗑️</div>
+      <div style="font-size:16px;font-weight:700;color:var(--rh-text-1);margin-bottom:8px;font-family:var(--rh-serif);">Delete "${esc(title)}"?</div>
+      <div style="font-size:13px;color:var(--rh-text-2);margin-bottom:22px;line-height:1.6;">This will permanently remove all registration and attendance data for this webinar. This action cannot be undone.</div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button onclick="document.getElementById('confirm-overlay').remove()" class="btn btn-ghost">Cancel</button>
+        <button id="confirm-delete-btn" class="btn" style="background:#ef4444;color:#fff;border:none;" onclick="executeDeleteWebinar(${id},'${esc(title).replace(/'/g,"\\'")}')">Delete Webinar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+async function executeDeleteWebinar(id, title) {
+  document.getElementById('confirm-overlay')?.remove();
   try {
     await api(`/api/webinars/${id}`, 'DELETE');
     S.webinars = S.webinars.filter(w => w.id !== id);
@@ -4780,6 +4831,38 @@ async function confirmDeleteWebinar(id, title) {
   } catch(e) {
     showToast('Failed to delete webinar', 'error');
   }
+}
+
+async function duplicateWebinar(id) {
+  const w = S.webinars.find(x => x.id === id);
+  if (!w) return;
+  const payload = {
+    title: `${w.title} (Copy)`,
+    date: w.date,
+    time: w.time || null,
+    speaker_name: w.speaker_name,
+    description: w.description || null,
+    notes: w.notes || null,
+    status: 'upcoming',
+    icp: w.icp || 'Others',
+    platform: w.platform || null,
+    category: w.category || null,
+    language: w.language || null,
+    tags: w.tags || null,
+    expected_registrations: w.expected_registrations || null,
+  };
+  try {
+    const result = await api('/api/webinars', 'POST', payload);
+    S.webinars = await api('/api/webinars');
+    showToast(`Duplicated as "${payload.title}"`);
+    nav('webinar', result.id);
+  } catch(e) {
+    showToast('Failed to duplicate webinar', 'error');
+  }
+}
+
+function copyWebinarTitle(title) {
+  navigator.clipboard.writeText(title).then(() => showToast('Copied to clipboard'));
 }
 
 /* ── Search ─────────────────────────────────────────────────────────────── */

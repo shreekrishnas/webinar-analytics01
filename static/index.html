@@ -264,10 +264,10 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
-    <div class="modal-body">
+    <div class="modal-body" style="max-height:72vh;overflow-y:auto;">
       <div class="form-field">
         <label class="form-label">Webinar Name <span class="req">*</span></label>
-        <input class="form-input" id="nw-title" type="text" placeholder="e.g. Personal Finance Masterclass" />
+        <input class="form-input" id="nw-title" type="text" placeholder="e.g. NRI Taxation Masterclass 2025" />
       </div>
       <div class="form-row">
         <div class="form-field">
@@ -275,26 +275,89 @@
           <input class="form-input" id="nw-date" type="date" />
         </div>
         <div class="form-field">
-          <label class="form-label">Time <span class="opt">(optional)</span></label>
-          <input class="form-input" id="nw-time" type="text" placeholder="e.g. 10:00 AM" />
+          <label class="form-label">Time <span class="req">*</span></label>
+          <input class="form-input" id="nw-time" type="text" placeholder="e.g. 10:00 AM IST" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label class="form-label">Speaker <span class="req">*</span></label>
+          <input class="form-input" id="nw-speaker" type="text" placeholder="e.g. Anil Rego, CFA" list="speaker-list" />
+          <datalist id="speaker-list"></datalist>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Co-host / Panellist</label>
+          <input class="form-input" id="nw-cospeaker" type="text" placeholder="e.g. Rachna Rego" list="speaker-list" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label class="form-label">Platform</label>
+          <select class="form-input" id="nw-platform">
+            <option value="">Select platform</option>
+            <option value="Zoom">Zoom</option>
+            <option value="Google Meet">Google Meet</option>
+            <option value="MS Teams">MS Teams</option>
+            <option value="YouTube Live">YouTube Live</option>
+            <option value="LinkedIn Live">LinkedIn Live</option>
+            <option value="Webex">Webex</option>
+            <option value="Custom">Custom Platform</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Category</label>
+          <select class="form-input" id="nw-category">
+            <option value="">Select category</option>
+            <option value="Educational">Educational</option>
+            <option value="Product Demo">Product Demo</option>
+            <option value="Market Update">Market Update</option>
+            <option value="Q&A Session">Q&amp;A Session</option>
+            <option value="Investor Webinar">Investor Webinar</option>
+            <option value="Regulatory Update">Regulatory Update</option>
+            <option value="Onboarding">Onboarding</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label class="form-label">ICP Segment</label>
+          <select class="form-input" id="nw-icp">
+            <option value="Others">Others</option>
+            <option value="PMS">PMS</option>
+            <option value="Retirement Planning">Retirement Planning</option>
+            <option value="NRI">NRI</option>
+            <option value="ESOPs">ESOPs</option>
+            <option value="Family Office">Family Office</option>
+            <option value="AIF">AIF</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Language</label>
+          <select class="form-input" id="nw-language">
+            <option value="">Select language</option>
+            <option value="English">English</option>
+            <option value="Hindi">Hindi</option>
+            <option value="Kannada">Kannada</option>
+            <option value="Tamil">Tamil</option>
+            <option value="Telugu">Telugu</option>
+            <option value="Marathi">Marathi</option>
+            <option value="Gujarati">Gujarati</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label class="form-label">Expected Registrations</label>
+          <input class="form-input" id="nw-expected" type="number" min="0" placeholder="e.g. 500" />
+        </div>
+        <div class="form-field">
+          <label class="form-label">Tags <span style="font-size:10px;color:var(--rh-text-3)">(comma separated)</span></label>
+          <input class="form-input" id="nw-tags" type="text" placeholder="e.g. nri, taxation, 2025" />
         </div>
       </div>
       <div class="form-field">
-        <label class="form-label">Speaker Name <span class="req">*</span></label>
-        <input class="form-input" id="nw-speaker" type="text" placeholder="e.g. Anil Rego" list="speaker-list" />
-        <datalist id="speaker-list"></datalist>
-      </div>
-      <div class="form-field">
-        <label class="form-label">ICP (Ideal Customer Profile)</label>
-        <select class="form-input" id="nw-icp">
-          <option value="Others">Others</option>
-          <option value="PMS">PMS</option>
-          <option value="Retirement Planning">Retirement Planning</option>
-          <option value="NRI">NRI</option>
-          <option value="ESOPs">ESOPs</option>
-          <option value="Family Office">Family Office</option>
-          <option value="AIF">AIF</option>
-        </select>
+        <label class="form-label">Recording URL <span class="opt">(after event)</span></label>
+        <input class="form-input" id="nw-recording" type="url" placeholder="https://zoom.us/rec/…" />
       </div>
       <div class="form-field">
         <label class="form-label">Status</label>
@@ -323,8 +386,12 @@
         </div>
       </div>
       <div class="form-field">
-        <label class="form-label">Description <span class="opt">(optional)</span></label>
-        <textarea class="form-textarea" id="nw-desc" placeholder="Brief description of this webinar…" rows="2"></textarea>
+        <label class="form-label">Description</label>
+        <textarea class="form-textarea" id="nw-desc" placeholder="Brief description of the webinar, audience, and key outcomes…" rows="2"></textarea>
+      </div>
+      <div class="form-field">
+        <label class="form-label">Internal Notes <span class="opt">(team only)</span></label>
+        <textarea class="form-textarea" id="nw-notes" placeholder="e.g. Confirm speaker availability by 15th, landing page needs update…" rows="2"></textarea>
       </div>
     </div>
     <div class="modal-foot">

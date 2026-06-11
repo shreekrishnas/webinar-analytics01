@@ -224,6 +224,12 @@ def update_webinar(webinar_id: int, payload: dict, db: Session = Depends(get_db)
         w.date = _date.fromisoformat(d) if isinstance(d, str) else d
     if "icp" in payload:
         w.icp = payload["icp"] or "Others"
+    for field in ("platform", "category", "language", "recording_url", "tags", "notes"):
+        if field in payload:
+            setattr(w, field, payload[field])
+    if "expected_registrations" in payload:
+        v = payload["expected_registrations"]
+        w.expected_registrations = int(v) if v else None
     if "speaker_name" in payload:
         sp_name = payload["speaker_name"].strip()
         speaker = db.query(models.Speaker).filter(
