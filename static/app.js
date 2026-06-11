@@ -5683,51 +5683,63 @@ const COMM_WA = [
   { id:'wa_noshow_followup', label:'Missed It? Catch Up', icon:'🎬', desc:'Send recording to those who missed it' },
 ];
 
-let _mlResults  = {};
+let _mlResults   = {};
 let _commResults = {};
-let _mlTopic    = '';
-let _mlOrg      = 'Right Horizons Financial Services';
-let _mlDate     = '';
-let _mlSpeaker  = '';
-let _aiTab      = 'analysis'; // 'analysis' | 'emails' | 'whatsapp'
-let _iqData     = null;
-let _iqLoading  = false;
+let _mlTopic     = '';
+let _mlOrg       = 'Right Horizons Financial Services';
+let _mlDate      = '';
+let _mlSpeaker   = '';
+let _mlRegLink   = '';   // Registration link
+let _mlJoinLink  = '';   // Join / webinar room link
+let _mlRecLink   = '';   // Recording link (post-event)
+let _aiTab       = 'analysis'; // 'analysis' | 'emails' | 'whatsapp'
+let _iqData      = null;
+let _iqLoading   = false;
+
+function _mlInput(id, label, placeholder, stateKey, type='text') {
+  const val = ({_mlTopic,_mlDate,_mlSpeaker,_mlRegLink,_mlJoinLink,_mlRecLink})[stateKey] || '';
+  return `<div>
+    <label style="font-size:11px;font-weight:600;color:var(--rh-text-3,#888);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">${label}</label>
+    <input id="${id}" type="${type}" placeholder="${placeholder}"
+      style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--rh-border);background:var(--rh-surface);color:var(--rh-text-1);font-size:13px;box-sizing:border-box;outline:none;transition:border-color .15s;"
+      value="${esc(val)}" oninput="${stateKey}=this.value"
+      onfocus="this.style.borderColor='var(--rh-ink)'" onblur="this.style.borderColor='var(--rh-border)'" />
+  </div>`;
+}
 
 function renderMLAnalysis() {
   setContent(`
-    <div class="page-header" style="margin-bottom:8px;">
-      <h1 class="page-title">✨ AI Intelligence</h1>
-      <p class="page-subtitle">Analysis, email drafts &amp; WhatsApp messages — all from your webinar topic</p>
-    </div>
-
-    <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px;">
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
-        <div>
-          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Webinar Topic *</label>
-          <input id="ml-topic-input" type="text" placeholder="e.g. How to Build a Passive Income Portfolio"
-            style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;box-sizing:border-box;"
-            value="${esc(_mlTopic)}" oninput="_mlTopic=this.value" />
-        </div>
-        <div>
-          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Date &amp; Time</label>
-          <input id="ml-date-input" type="text" placeholder="e.g. 20 June 2025, 4:00 PM IST"
-            style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;box-sizing:border-box;"
-            value="${esc(_mlDate)}" oninput="_mlDate=this.value" />
-        </div>
-        <div>
-          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Speaker Name &amp; Title</label>
-          <input id="ml-speaker-input" type="text" placeholder="e.g. Raj Mehta, CFA — Portfolio Manager"
-            style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;box-sizing:border-box;"
-            value="${esc(_mlSpeaker)}" oninput="_mlSpeaker=this.value" />
-        </div>
+    <div class="page-hd" style="margin-bottom:20px;">
+      <div>
+        <h1 class="page-title">AI Intelligence</h1>
+        <p class="page-sub">ML analysis of your programme · AI-drafted emails &amp; WhatsApp messages</p>
       </div>
     </div>
 
-    <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;">
+    <div style="background:var(--rh-surface);border:1px solid var(--rh-border);border-radius:14px;padding:20px 20px 16px;margin-bottom:4px;">
+      <div style="font-size:11px;font-weight:700;color:var(--rh-red);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;">Webinar Details</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
+        ${_mlInput('ml-topic-input',  'Topic *',            'e.g. Navigating Market Volatility in 2025',    '_mlTopic')}
+        ${_mlInput('ml-date-input',   'Date &amp; Time',    'e.g. 28 June 2025, 4:00 PM IST',              '_mlDate')}
+        ${_mlInput('ml-speaker-input','Speaker',            'e.g. Rachna Rego, CFA — Head of Advisory',   '_mlSpeaker')}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+        ${_mlInput('ml-reglink-input',  'Registration Link',  'https://zoom.us/webinar/register/…',   '_mlRegLink',  'url')}
+        ${_mlInput('ml-joinlink-input', 'Join / Room Link',   'https://zoom.us/j/…',                  '_mlJoinLink', 'url')}
+        ${_mlInput('ml-reclink-input',  'Recording Link',     'https://drive.google.com/… (post-event)',  '_mlRecLink',  'url')}
+      </div>
+      <div style="margin-top:12px;font-size:11px;color:var(--rh-text-3);">
+        Links are automatically inserted into emails and WhatsApp messages — no manual placeholders.
+      </div>
+    </div>
+
+    <div style="display:flex;gap:0;border-bottom:2px solid var(--rh-border);margin-bottom:20px;margin-top:20px;">
       ${['analysis','emails','whatsapp'].map(t => `
         <button onclick="_aiSetTab('${t}')" class="aitab-btn" data-tab="${t}"
-          style="padding:10px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid ${_aiTab===t?'var(--accent)':'transparent'};color:${_aiTab===t?'var(--accent)':'var(--text-muted)'};margin-bottom:-2px;">
-          ${{analysis:'🧠 Intelligence',emails:'📧 Zoho Emails',whatsapp:'💬 WhatsApp'}[t]}
+          style="padding:10px 22px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;font-family:var(--rh-sans);
+            border-bottom:2px solid ${_aiTab===t?'var(--rh-red)':'transparent'};
+            color:${_aiTab===t?'var(--rh-red)':'var(--rh-text-3)'};margin-bottom:-2px;transition:color .15s;">
+          ${{analysis:'Intelligence',emails:'Zoho Mail',whatsapp:'WhatsApp'}[t]}
         </button>`).join('')}
     </div>
 
@@ -5735,14 +5747,17 @@ function renderMLAnalysis() {
 }
 
 function _aiSetTab(t) {
-  _mlTopic   = document.getElementById('ml-topic-input')?.value  || _mlTopic;
-  _mlDate    = document.getElementById('ml-date-input')?.value   || _mlDate;
-  _mlSpeaker = document.getElementById('ml-speaker-input')?.value|| _mlSpeaker;
+  _mlTopic    = document.getElementById('ml-topic-input')?.value   || _mlTopic;
+  _mlDate     = document.getElementById('ml-date-input')?.value    || _mlDate;
+  _mlSpeaker  = document.getElementById('ml-speaker-input')?.value || _mlSpeaker;
+  _mlRegLink  = document.getElementById('ml-reglink-input')?.value || _mlRegLink;
+  _mlJoinLink = document.getElementById('ml-joinlink-input')?.value|| _mlJoinLink;
+  _mlRecLink  = document.getElementById('ml-reclink-input')?.value || _mlRecLink;
   _aiTab = t;
   document.querySelectorAll('.aitab-btn').forEach(b => {
     const active = b.dataset.tab === t;
-    b.style.borderBottomColor = active ? 'var(--accent)' : 'transparent';
-    b.style.color = active ? 'var(--accent)' : 'var(--text-muted)';
+    b.style.borderBottomColor = active ? 'var(--rh-red)' : 'transparent';
+    b.style.color = active ? 'var(--rh-red)' : 'var(--rh-text-3)';
   });
   const container = document.getElementById('ai-tab-content');
   if (container) container.innerHTML = _aiTabContent();
@@ -5769,26 +5784,37 @@ function _aiTabContent() {
       </div>`;
     }
     return `<div id="iq-dashboard" style="text-align:center;padding:48px 20px;">
-      <div style="font-size:48px;margin-bottom:12px;">🧠</div>
-      <div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:6px;">AI Intelligence Dashboard</div>
-      <div style="font-size:13px;color:var(--text-muted);margin-bottom:24px;max-width:420px;margin-left:auto;margin-right:auto;">Analyze all your completed webinars with real ML — regression forecasts, anomaly detection, pattern recognition, and AI-generated executive insights.</div>
-      <button onclick="_loadIQDashboard()" class="btn-primary" style="font-size:14px;padding:12px 28px;">&#9654; Run Intelligence Analysis</button>
+      <div style="width:56px;height:56px;border-radius:16px;background:rgba(196,30,58,0.08);border:1.5px solid rgba(196,30,58,0.2);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:26px;">📊</div>
+      <div style="font-size:19px;font-weight:700;color:var(--rh-text-1);margin-bottom:8px;font-family:var(--rh-serif);">Programme Intelligence</div>
+      <div style="font-size:13.5px;color:var(--rh-text-2);margin-bottom:8px;max-width:460px;margin-left:auto;margin-right:auto;line-height:1.7;">
+        Runs real ML across all <strong>${S.webinars.filter(w=>w.status==='completed').length} completed webinars</strong> — Linear Regression forecasts, K-Means topic clusters, Isolation Forest anomaly detection, and an AI executive summary.
+      </div>
+      <div style="font-size:12px;color:var(--rh-text-3);margin-bottom:28px;">Results are consistent because they reflect your full historical data — refresh to re-run after adding new webinars.</div>
+      <button onclick="_loadIQDashboard()" class="btn btn-primary" style="font-size:14px;padding:12px 32px;">Run Intelligence Analysis</button>
     </div>`;
   }
   if (_aiTab === 'emails') {
-    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;">
-      ${COMM_EMAILS.map(m => _commCard(m, _commResults)).join('')}
+    if (!_mlTopic.trim()) return `<div style="text-align:center;padding:40px 20px;color:var(--rh-text-2);font-size:14px;">
+      Enter a <strong>Webinar Topic</strong> above to generate emails.
+    </div>`;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div style="font-size:13px;color:var(--rh-text-2);">Generating for: <strong style="color:var(--rh-text-1);">${esc(_mlTopic)}</strong>${_mlDate?` · ${esc(_mlDate)}`:''}</div>
+      <button onclick="_commRunAll('email')" class="btn btn-primary" style="font-size:12px;padding:7px 16px;">Generate All</button>
     </div>
-    <div style="margin-top:16px;text-align:right;">
-      <button onclick="_commRunAll('email')" class="btn-primary">&#9654; Generate All Emails</button>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;">
+      ${COMM_EMAILS.map(m => _commCard(m, _commResults)).join('')}
     </div>`;
   }
   if (_aiTab === 'whatsapp') {
-    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;">
-      ${COMM_WA.map(m => _commCard(m, _commResults)).join('')}
+    if (!_mlTopic.trim()) return `<div style="text-align:center;padding:40px 20px;color:var(--rh-text-2);font-size:14px;">
+      Enter a <strong>Webinar Topic</strong> above to generate WhatsApp messages.
+    </div>`;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div style="font-size:13px;color:var(--rh-text-2);">Generating for: <strong style="color:var(--rh-text-1);">${esc(_mlTopic)}</strong>${_mlDate?` · ${esc(_mlDate)}`:''}</div>
+      <button onclick="_commRunAll('wa')" class="btn btn-primary" style="font-size:12px;padding:7px 16px;">Generate All</button>
     </div>
-    <div style="margin-top:16px;text-align:right;">
-      <button onclick="_commRunAll('wa')" class="btn-primary">&#9654; Generate All Messages</button>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;">
+      ${COMM_WA.map(m => _commCard(m, _commResults)).join('')}
     </div>`;
   }
   return '';
@@ -6108,48 +6134,70 @@ function _commCard(m, results) {
     </div>${body}</div>`;
 }
 
+function _highlightPlaceholders(text) {
+  // Highlight any remaining unfilled [PLACEHOLDER] tokens in red
+  return esc(text).replace(/\[([A-Z_]+)\]/g,
+    '<mark style="background:rgba(196,30,58,0.12);color:var(--rh-red);border-radius:3px;padding:0 3px;font-size:0.9em;">[$1]</mark>');
+}
+
 function _commRenderResult(moduleId, r) {
+  // Apply placeholder substitution to all text fields
+  const filled = {};
+  for (const k of ['subject','subject_variant','preview_text','body','cta_text','ps_line','message']) {
+    filled[k] = _fillPlaceholders(r[k] || '');
+  }
+
   let html = '';
-  if (r.subject) {
-    html += `<div style="margin-bottom:10px;padding:10px;background:linear-gradient(135deg,#eef2ff,#faf5ff);border-radius:8px;">
-      <div style="font-size:10px;font-weight:600;color:#6366f1;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Subject Line</div>
-      <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(r.subject)}</div>
-      ${r.subject_variant ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">A/B Variant: <em>${esc(r.subject_variant)}</em></div>` : ''}
+  if (filled.subject) {
+    html += `<div style="margin-bottom:12px;padding:12px;background:var(--rh-surface-2);border:1px solid var(--rh-border);border-left:3px solid var(--rh-red);border-radius:8px;">
+      <div style="font-size:10px;font-weight:700;color:var(--rh-red);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;">Subject Line</div>
+      <div style="font-size:14px;font-weight:700;color:var(--rh-text-1);">${_highlightPlaceholders(filled.subject)}</div>
+      ${filled.subject_variant ? `<div style="font-size:12px;color:var(--rh-text-3);margin-top:5px;padding-top:5px;border-top:1px solid var(--rh-border);">A/B: <em>${_highlightPlaceholders(filled.subject_variant)}</em></div>` : ''}
     </div>`;
   }
-  if (r.preview_text) {
-    html += `<div style="margin-bottom:8px;">
-      <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">Preview Text</div>
-      <div style="font-size:12px;color:var(--text-muted);font-style:italic;background:var(--bg);padding:6px 8px;border-radius:4px;">${esc(r.preview_text)}</div>
-    </div>`;
-  }
-  if (r.body) {
+  if (filled.preview_text) {
     html += `<div style="margin-bottom:10px;">
-      <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Email Body</div>
-      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:13px;line-height:1.7;white-space:pre-wrap;max-height:280px;overflow-y:auto;">${esc(r.body)}</div>
+      <div style="font-size:10px;font-weight:700;color:var(--rh-text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">Preview Text</div>
+      <div style="font-size:12px;color:var(--rh-text-2);font-style:italic;background:var(--rh-surface-2);padding:6px 10px;border-radius:6px;border:1px solid var(--rh-border);">${_highlightPlaceholders(filled.preview_text)}</div>
     </div>`;
   }
-  if (r.cta_text) {
-    html += `<div style="margin-bottom:8px;text-align:center;">
-      <span style="display:inline-block;padding:8px 20px;background:#6366f1;color:white;border-radius:6px;font-size:13px;font-weight:600;">${esc(r.cta_text)}</span>
+  if (filled.body) {
+    html += `<div style="margin-bottom:12px;">
+      <div style="font-size:10px;font-weight:700;color:var(--rh-text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">Email Body</div>
+      <div style="background:var(--rh-surface-2);border:1px solid var(--rh-border);border-radius:8px;padding:14px;font-size:13px;line-height:1.8;white-space:pre-wrap;max-height:300px;overflow-y:auto;color:var(--rh-text-1);">${_highlightPlaceholders(filled.body)}</div>
     </div>`;
   }
-  if (r.ps_line) {
-    html += `<div style="margin-bottom:8px;font-size:12px;color:var(--text-muted);font-style:italic;border-left:2px solid var(--border);padding-left:8px;">P.S. ${esc(r.ps_line)}</div>`;
+  if (filled.cta_text) {
+    html += `<div style="margin-bottom:10px;text-align:center;">
+      <span style="display:inline-block;padding:9px 22px;background:var(--rh-ink);color:var(--rh-bg);border-radius:7px;font-size:13px;font-weight:600;letter-spacing:.01em;">${_highlightPlaceholders(filled.cta_text)}</span>
+    </div>`;
   }
-  if (r.message) {
-    html += `<div style="background:#dcf8c6;border-radius:12px 12px 12px 0;padding:12px 14px;font-size:13px;line-height:1.7;white-space:pre-wrap;margin-bottom:8px;max-width:90%;box-shadow:0 1px 2px rgba(0,0,0,0.08);">${esc(r.message)}</div>`;
-    const chars = r.char_count || (r.message||'').length;
+  if (filled.ps_line) {
+    html += `<div style="margin-bottom:10px;font-size:12px;color:var(--rh-text-2);font-style:italic;border-left:2px solid var(--rh-red);padding-left:10px;">P.S. ${_highlightPlaceholders(filled.ps_line)}</div>`;
+  }
+  if (filled.message) {
+    html += `<div style="background:var(--rh-surface-2);border:1px solid var(--rh-border);border-radius:12px 12px 12px 0;padding:14px 16px;font-size:13px;line-height:1.8;white-space:pre-wrap;margin-bottom:8px;max-width:95%;color:var(--rh-text-1);">${_highlightPlaceholders(filled.message)}</div>`;
+    const chars = (filled.message||'').length;
     const charColor = chars <= 500 ? '#10b981' : chars <= 1000 ? '#f59e0b' : '#ef4444';
-    html += `<div style="font-size:11px;color:var(--text-muted);">
+    html += `<div style="font-size:11px;color:var(--rh-text-3);margin-bottom:8px;">
       <span style="color:${charColor};font-weight:600;">${chars}</span> characters
-      ${chars <= 500 ? '· ✅ Optimal length' : chars <= 1000 ? '· ⚠️ Consider shortening' : '· 🔴 Too long for WhatsApp'}
+      ${chars <= 500 ? '· Optimal length' : chars <= 1000 ? '· Consider shortening' : '· Too long for WhatsApp'}
     </div>`;
   }
-  if (!html) html = `<pre style="font-size:11px;white-space:pre-wrap;color:var(--text-muted);max-height:200px;overflow:auto;">${esc(JSON.stringify(r,null,2).slice(0,600))}</pre>`;
+  if (!html) html = `<pre style="font-size:11px;white-space:pre-wrap;color:var(--rh-text-3);max-height:200px;overflow:auto;">${esc(JSON.stringify(r,null,2).slice(0,600))}</pre>`;
+
+  // Warn if any placeholders still unfilled
+  const allText = Object.values(filled).join(' ');
+  const remaining = [...new Set((allText.match(/\[[A-Z_]+\]/g)||[]))];
+  if (remaining.length) {
+    html += `<div style="margin-bottom:8px;padding:7px 10px;background:rgba(196,30,58,0.06);border:1px solid rgba(196,30,58,0.2);border-radius:6px;font-size:11px;color:var(--rh-red);">
+      Fill in the fields above to auto-replace: ${remaining.map(p=>`<code>${p}</code>`).join(', ')}
+    </div>`;
+  }
+
   html += `<div style="display:flex;gap:6px;margin-top:10px;">
-    <button onclick="_commRunModule('${moduleId}')" class="btn-secondary" style="font-size:11px;">↻ Regenerate</button>
-    <button onclick="_copyComm('${moduleId}')" class="btn-secondary" style="font-size:11px;">📋 Copy</button>
+    <button onclick="_commRunModule('${moduleId}')" class="btn btn-ghost btn-sm" style="font-size:11px;">↻ Regenerate</button>
+    <button onclick="_copyComm('${moduleId}')" class="btn btn-ghost btn-sm" style="font-size:11px;">Copy</button>
   </div>`;
   return html;
 }
@@ -6170,7 +6218,28 @@ function _mlRenderResult(moduleId, r) {
 }
 
 function _aiPayload(moduleId) {
-  return { module: moduleId, topic: _mlTopic || 'General Webinar', org: _mlOrg, date: _mlDate, speaker: _mlSpeaker };
+  return {
+    module:   moduleId,
+    topic:    _mlTopic   || 'General Webinar',
+    org:      _mlOrg,
+    date:     _mlDate,
+    speaker:  _mlSpeaker,
+    reg_link: _mlRegLink,
+    join_link:_mlJoinLink,
+    rec_link: _mlRecLink,
+  };
+}
+
+// Replace placeholder tokens in generated text with actual values
+function _fillPlaceholders(text) {
+  if (!text) return text;
+  let t = text;
+  if (_mlDate)    { t = t.replace(/\[DATE\]/gi, _mlDate).replace(/\[TIME\]/gi, _mlDate); }
+  if (_mlRegLink) { t = t.replace(/\[REG_LINK\]/gi, _mlRegLink).replace(/\[REGISTRATION_LINK\]/gi, _mlRegLink); }
+  if (_mlJoinLink){ t = t.replace(/\[JOIN_LINK\]/gi, _mlJoinLink).replace(/\[WEBINAR_LINK\]/gi, _mlJoinLink); }
+  if (_mlRecLink) { t = t.replace(/\[RECORDING_LINK\]/gi, _mlRecLink).replace(/\[RECORDING\]/gi, _mlRecLink); }
+  if (_mlSpeaker) { t = t.replace(/\[SPEAKER_NAME\]/gi, _mlSpeaker).replace(/\[SPEAKER\]/gi, _mlSpeaker); }
+  return t;
 }
 
 async function _mlRunModule(moduleId) {
