@@ -3139,22 +3139,17 @@ async def ml_analysis(payload: dict, db: Session = Depends(get_db)):
     org       = payload.get("org", "our organisation")
     date      = payload.get("date", "")
     speaker   = payload.get("speaker", "")
-    reg_link    = payload.get("reg_link", "")
-    join_link   = payload.get("join_link", "")
-    rec_link    = payload.get("rec_link", "")
-    description = payload.get("description", "")
+    webinar_link = payload.get("webinar_link", "")
+    description  = payload.get("description", "")
 
-    # Build context string — use actual values where provided, fallback to tokens
-    date_str     = date      or "[DATE & TIME]"
-    speaker_str  = speaker   or "[SPEAKER NAME & TITLE]"
-    reg_str      = reg_link  or "[REGISTRATION LINK]"
-    join_str     = join_link or "[JOIN LINK]"
-    rec_str      = rec_link  or "[RECORDING LINK]"
+    # Build context string - use actual values where provided, fallback to tokens
+    date_str        = date         or "[DATE & TIME]"
+    speaker_str     = speaker      or "[SPEAKER NAME & TITLE]"
+    webinar_link_str = webinar_link or "[WEBINAR LINK]"
 
     ctx_parts = [f'Webinar topic: "{topic}"', f"Organisation: {org}",
                  f"Date & Time: {date_str}", f"Speaker: {speaker_str}",
-                 f"Registration link: {reg_str}", f"Zoom join link: {join_str}",
-                 f"Recording link: {rec_str}"]
+                 f"Webinar link: {webinar_link_str}"]
     if description:
         ctx_parts.append(f"Additional context: {description}")
     ctx = " | ".join(ctx_parts)
@@ -3195,7 +3190,7 @@ async def ml_analysis(payload: dict, db: Session = Depends(get_db)):
     comm_prompts = {
         "email_invite": (
             f"Write a premium webinar invitation email for deployment via Zoho Campaigns.\n\n"
-            f"Webinar: \"{topic}\" | Date: {date_str} | Speaker: {speaker_str} | Register: {reg_str}\n\n"
+            f"Webinar: \"{topic}\" | Date: {date_str} | Speaker: {speaker_str} | Register: {webinar_link_str}\n\n"
             "Standards:\n"
             "- Subject line: specific and intriguing, under 52 chars, zero spam words. "
             "Write 1 primary + 1 A/B variant (different angle, same length constraint).\n"
@@ -3209,7 +3204,7 @@ async def ml_analysis(payload: dict, db: Session = Depends(get_db)):
             f"  • Speaker credibility: '{speaker_str}' — write 1 sentence establishing authority\n"
             f"  • Session details: {date_str} — include this exactly\n"
             "  • Scarcity element: seats limited, exclusive access, or timely market context\n"
-            f"  • CTA button text that leads to: {reg_str}\n"
+            f"  • CTA button text that leads to: {webinar_link_str}\n"
             "  • Closing: sign off from Right Horizons team\n"
             "- P.S. line: one sentence — a compelling secondary reason to attend or a social proof element.\n"
             "- Tone: senior private wealth advisor writing to a peer — authoritative, precise, never pushy.\n\n"
@@ -3233,14 +3228,14 @@ async def ml_analysis(payload: dict, db: Session = Depends(get_db)):
         ),
         "email_reminder_1day": (
             f"Write a 'tomorrow' reminder email for '{topic}' attendees.\n"
-            f"Date/Time: {date_str} | Join link: {join_str}\n\n"
+            f"Date/Time: {date_str} | Join link: {webinar_link_str}\n\n"
             "Brief, high-impact, under 110 words in the body.\n\n"
             "- Subject: tomorrow-specific, creates light urgency\n"
             "- Preview text: something that builds the anticipation\n"
             "- Body:\n"
             f"  • 'This time tomorrow...' opening tied to the specific outcome of '{topic}'\n"
             f"  • Date & time: {date_str} — bold and prominent\n"
-            f"  • Join link: {join_str} — on its own line, labelled 'Your join link'\n"
+            f"  • Join link: {webinar_link_str} — on its own line, labelled 'Your join link'\n"
             "  • 'Block your calendar now' — one clean line\n"
             "  • One-sentence teaser of the most surprising thing the speaker will reveal\n"
             "- No padding. Every word must justify its presence.\n\n"
@@ -3248,17 +3243,17 @@ async def ml_analysis(payload: dict, db: Session = Depends(get_db)):
         ),
         "email_reminder_1hr": (
             f"Write a 60-minute final reminder for '{topic}'.\n"
-            f"Join link: {join_str}\n\n"
+            f"Join link: {webinar_link_str}\n\n"
             "Maximum 3 lines in the body. This is not the place for context — it is the place for action.\n\n"
             "- Subject: starts with ⏰ or 🔴, 'Starting in 60 minutes'\n"
             "- Preview text: 'Your spot is waiting'\n"
             "- Body: topic name → join now → see you inside. Nothing else.\n"
-            f"- CTA: 'Join Now' pointing to {join_str}\n\n"
+            f"- CTA: 'Join Now' pointing to {webinar_link_str}\n\n"
             "JSON keys: subject, preview_text, body, cta_text"
         ),
         "email_followup_attended": (
             f"Write a post-webinar follow-up email for attendees of '{topic}'.\n"
-            f"Speaker: {speaker_str} | Recording: {rec_str}\n\n"
+            f"Speaker: {speaker_str} | Recording: {webinar_link_str}\n\n"
             "This is the most important email in the sequence — it converts interest into consultations.\n\n"
             "- Subject: gratitude + clear value continuation (not 'Thanks for joining!')\n"
             "- Preview text: hint at what's inside (key takeaway or recording access)\n"
@@ -3267,7 +3262,7 @@ async def ml_analysis(payload: dict, db: Session = Depends(get_db)):
             f"  • '3 Key Takeaways from today's session' — write 3 specific, substantive insights "
             f"that someone attending a webinar on '{topic}' in the Indian HNI/NRI context would have received. "
             "Make them actionable and specific, not generic.\n"
-            f"  • Recording access: {rec_str} — 'Watch at your convenience'\n"
+            f"  • Recording access: {webinar_link_str} — 'Watch at your convenience'\n"
             "  • 'Your Next Step': offer a complimentary 1-on-1 advisory call — "
             "frame it as exclusive to webinar attendees, not a generic sales pitch\n"
             "  • Soft close: 'Reply to this email with any questions from today'\n"
@@ -3276,14 +3271,14 @@ async def ml_analysis(payload: dict, db: Session = Depends(get_db)):
         ),
         "email_followup_noshow": (
             f"Write a no-show recovery email for '{topic}'.\n"
-            f"Recording: {rec_str}\n\n"
+            f"Recording: {webinar_link_str}\n\n"
             "Recover without guilt-tripping. Make them feel they are getting something exclusive, not scolded.\n\n"
             "- Subject: value-forward, no passive aggression (not 'You missed...')\n"
             "- Preview text: 'The recording is yours'\n"
             "- Body:\n"
             "  • Empathetic opening — acknowledge that calendars are demanding\n"
             f"  • 'Here is what attendees took away' — 2 specific, compelling highlights from '{topic}'\n"
-            f"  • Recording: {rec_str} — '30 minutes. Worth it.'\n"
+            f"  • Recording: {webinar_link_str} — '30 minutes. Worth it.'\n"
             "  • Re-engagement: mention the next event or offer a 1-on-1 conversation\n"
             "  • One gentle CTA\n"
             "- Tone: gracious, not desperate.\n\n"
@@ -3291,7 +3286,7 @@ async def ml_analysis(payload: dict, db: Session = Depends(get_db)):
         ),
         "wa_announcement": (
             f"Write a WhatsApp announcement for the webinar '{topic}'.\n"
-            f"Date/Time: {date_str} | Speaker: {speaker_str} | Register: {reg_str}\n\n"
+            f"Date/Time: {date_str} | Speaker: {speaker_str} | Register: {webinar_link_str}\n\n"
             "Audience: HNI/NRI investors and wealth management professionals in India.\n\n"
             "- First line: a hook that creates immediate relevance — one crisp statement or question "
             "tied to a current market reality or wealth concern this audience faces. No generic opener.\n"
@@ -3300,7 +3295,7 @@ async def ml_analysis(payload: dict, db: Session = Depends(get_db)):
             "is better than 'anyone interested in finance')\n"
             f"- 📅 {date_str}\n"
             f"- 🎤 {speaker_str}\n"
-            f"- 👉 Register: {reg_str}\n"
+            f"- 👉 Register: {webinar_link_str}\n"
             "- Closing: one line — limited seats or timely market context that creates genuine urgency\n"
             "- Use line breaks between each element. Max 6 emojis total. No hashtags.\n\n"
             "JSON keys: message (complete text with line breaks), char_count"
@@ -3317,37 +3312,37 @@ async def ml_analysis(payload: dict, db: Session = Depends(get_db)):
         ),
         "wa_reminder_morning": (
             f"Write a 'today is the day' WhatsApp morning message for '{topic}'.\n"
-            f"Time: {date_str} | Join: {join_str}\n\n"
+            f"Time: {date_str} | Join: {webinar_link_str}\n\n"
             "- ☀️ morning energy, specific to the topic\n"
             f"- Time reminder: {date_str}\n"
-            f"- 👉 Join: {join_str}\n"
+            f"- 👉 Join: {webinar_link_str}\n"
             "- Max 4 lines. Warm and sharp.\n\n"
             "JSON keys: message, char_count"
         ),
         "wa_reminder_1hr": (
             f"Write a 60-minute WhatsApp alert for '{topic}'.\n"
-            f"Join: {join_str}\n\n"
+            f"Join: {webinar_link_str}\n\n"
             "- 🔴 Live in 1 hour — topic name\n"
-            f"- 👉 {join_str}\n"
+            f"- 👉 {webinar_link_str}\n"
             "- 2 lines maximum. Pure urgency, no softening.\n\n"
             "JSON keys: message, char_count"
         ),
         "wa_postwebinar": (
             f"Write a WhatsApp post-webinar message for attendees of '{topic}'.\n"
-            f"Speaker: {speaker_str} | Recording: {rec_str}\n\n"
+            f"Speaker: {speaker_str} | Recording: {webinar_link_str}\n\n"
             "- Genuine, specific gratitude — reference the topic and speaker by name\n"
             f"- 2 key takeaways that someone attending '{topic}' would have genuinely learned — specific, not generic\n"
-            f"- 🎬 Recording: {rec_str}\n"
+            f"- 🎬 Recording: {webinar_link_str}\n"
             "- One next-step CTA: book a call, ask a question, or follow on LinkedIn\n"
             "- Max 7 lines. Warm but professional.\n\n"
             "JSON keys: message, char_count"
         ),
         "wa_noshow_followup": (
             f"Write a WhatsApp recovery message for people who missed '{topic}'.\n"
-            f"Recording: {rec_str}\n\n"
+            f"Recording: {webinar_link_str}\n\n"
             "- No guilt. Lead with value: 'We saved the best bits for you'\n"
             f"- 1 specific insight from '{topic}' that makes them wish they had attended\n"
-            f"- 🎬 Watch: {rec_str}\n"
+            f"- 🎬 Watch: {webinar_link_str}\n"
             "- Max 4 lines.\n\n"
             "JSON keys: message, char_count"
         ),

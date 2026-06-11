@@ -2578,7 +2578,7 @@ body::before, body::after { display: none !important; }
 .site-container {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 78px 32px 60px;
+  padding: 78px 20px 60px;
   box-sizing: border-box;
   overflow-x: hidden;
   word-break: normal;
@@ -3189,7 +3189,7 @@ html.dark .aip-verdict-card { background: rgba(250,204,21,0.04) !important; }
 .chat-fab {
   position: fixed;
   bottom: 24px;
-  left: 24px;
+  right: 24px;
   z-index: 1000;
   display: flex;
   align-items: center;
@@ -3209,7 +3209,7 @@ html.dark .aip-verdict-card { background: rgba(250,204,21,0.04) !important; }
 .chatbot-wrap {
   position: fixed;
   bottom: 80px;
-  left: 24px;
+  right: 24px;
   width: 360px;
   height: 520px;
   z-index: 999;
