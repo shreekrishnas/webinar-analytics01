@@ -414,14 +414,10 @@ function updateDateRangeLabel() {
 function nav(page, sub) {
   S.page = page;
   S.sub  = sub ?? null;
-  // Update mobile nav-link active states
-  document.querySelectorAll('.nav-link[data-page]').forEach(b =>
+  // Update sidebar + mobile nav active states
+  document.querySelectorAll('.sb-item[data-page], .nav-link[data-page]').forEach(b =>
     b.classList.toggle('active', b.dataset.page === page)
   );
-  // Update mega menu active states
-  updateMegaActive(page);
-  // Close any open mega panels
-  closeMegaPanels();
   setBreadcrumb(page, sub);
   closeCmdPalette();
   closeNotifPanel();

@@ -2434,14 +2434,13 @@ html.dark .ad-platform-badge.twitterx { background: #ffffff15; color: #e7e9ea; }
    ════════════════════ */
 @media (max-width: 1024px) {
   .site-container { padding: 28px 20px 60px; }
-  .nav-container  { padding: 0 20px; }
   .dash-hero { padding: 44px 36px 40px !important; }
   .dash-hero-title { font-size: 28px !important; }
 }
 @media (max-width: 768px) {
-  .nav-links, .mega-nav { display: none !important; }
-  .nav-chips      { display: none !important; }
+  .sidebar        { display: none; }
   .nav-hamburger  { display: flex !important; }
+  .site-main      { margin-left: 0; }
   .site-container { padding: 20px 16px 48px; }
   .dash-hero      { padding: 36px 24px 32px !important; }
   .dash-hero-title { font-size: 22px !important; }
@@ -2525,22 +2524,21 @@ html, body {
 .blob-bg, .blob, #cursor-glow { display: none !important; }
 body::before, body::after { display: none !important; }
 
-/* ════ NAVBAR — base layout ════ */
+/* ════ TOP BAR ════ */
 .navbar {
   position: fixed;
   top: 0; left: 0; right: 0;
-  height: 62px;
-  z-index: 200;
+  height: 56px;
+  z-index: 300;
   background: var(--rh-bg, #f5f4ef);
   border-bottom: 1px solid var(--rh-border, #e2e0d8);
-  box-shadow: none;
 }
 .nav-container {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 62px;
-  padding: 0 24px;
+  height: 56px;
+  padding: 0 20px;
   max-width: 100%;
 }
 .nav-brand {
@@ -2549,11 +2547,10 @@ body::before, body::after { display: none !important; }
   gap: 10px;
   cursor: pointer;
   flex-shrink: 0;
-  margin-right: 8px;
   text-decoration: none;
 }
 .nav-logo-mark {
-  width: 30px; height: 30px;
+  width: 28px; height: 28px;
   background: #111;
   border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
@@ -2563,31 +2560,89 @@ body::before, body::after { display: none !important; }
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
   flex-shrink: 0;
 }
-/* Push main content below fixed navbar */
-.site-container, .page-wrap, main {
-  padding-top: 78px;
+
+/* ════ LEFT SIDEBAR ════ */
+.sidebar {
+  position: fixed;
+  top: 56px;
+  left: 0;
+  bottom: 0;
+  width: 220px;
+  background: var(--rh-bg, #f5f4ef);
+  border-right: 1px solid var(--rh-border, #e2e0d8);
+  z-index: 200;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
-.site-main {
-  display: block;
+.sidebar-scroll {
+  padding: 16px 12px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sb-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--rh-text-3, #999);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  padding: 10px 10px 4px;
+}
+.sb-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
+  padding: 9px 12px;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: var(--rh-sans, 'Inter', sans-serif);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--rh-text-2, #555);
+  text-align: left;
+  transition: background .12s, color .12s;
+}
+.sb-item:hover {
+  background: var(--rh-surface, #efeee9);
+  color: var(--rh-text-1, #111);
+}
+.sb-item.active {
+  background: rgba(196,30,58,0.08);
+  color: var(--rh-red, #c41e3a);
+  font-weight: 600;
+}
+.sb-item.active svg { opacity: 1; }
+.sb-item svg { opacity: .55; flex-shrink: 0; }
+.sb-item:hover svg, .sb-item.active svg { opacity: 1; }
+.sb-divider {
+  height: 1px;
+  background: var(--rh-border, #e2e0d8);
+  margin: 10px 10px;
+}
+
+/* ════ MAIN LAYOUT — offset for top bar + sidebar ════ */
+html, body { overflow-x: hidden; max-width: 100vw; }
+.site-main {
+  margin-left: 220px;
+  margin-top: 56px;
+  min-height: calc(100vh - 56px);
   overflow-x: hidden;
 }
 .site-container {
-  max-width: 1280px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 78px 20px 60px;
+  padding: 32px 28px 60px;
   box-sizing: border-box;
   overflow-x: hidden;
   word-break: normal;
   overflow-wrap: break-word;
 }
-html, body {
-  overflow-x: hidden;
-  max-width: 100vw;
-}
+.site-container, .page-wrap { padding-top: 32px; }
 .navbar.scrolled { box-shadow: 0 1px 0 var(--rh-border-2, #ebe8e0); }
 
 /* Brand: serif + small logo */
