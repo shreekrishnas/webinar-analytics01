@@ -309,11 +309,6 @@ async function loadAll() {
   if (webRes.status === 'fulfilled') S.webinars = webRes.value;
   if (spkRes.status === 'fulfilled') S.speakers = spkRes.value;
   if (stRes.status  === 'fulfilled') S.stats    = stRes.value;
-  // Populate speaker datalist for modal
-  const dl = document.getElementById('speaker-list');
-  if (dl) {
-    dl.innerHTML = S.speakers.map(sp => `<option value="${esc(sp.name)}">`).join('');
-  }
 }
 
 /* ── Navbar chips ───────────────────────────────────────────────────────── */
@@ -449,6 +444,37 @@ function setContent(html) {
   runCountUps();
   decorateLeaderboardRows();
   initScrollReveal();
+}
+
+function skelLine(w='100%', h=14) {
+  return `<div class="skel-line" style="width:${w};height:${h}px"></div>`;
+}
+function skelBlock(h=80, r=12) {
+  return `<div class="skel-block" style="height:${h}px;border-radius:${r}px"></div>`;
+}
+function skelKpiBanner() {
+  return `<div class="skel-kpi-row">${Array(6).fill(0).map(()=>`
+    <div class="skel-kpi-card">
+      ${skelLine('60%', 10)}
+      ${skelLine('40%', 28)}
+      ${skelLine('70%', 10)}
+    </div>`).join('')}</div>`;
+}
+function skelCardGrid(n=6) {
+  return `<div class="skel-card-grid">${Array(n).fill(0).map(()=>`
+    <div class="skel-card">
+      ${skelLine('80%', 16)}
+      ${skelLine('50%', 12)}
+      <div style="display:flex;gap:8px;margin-top:4px">${skelLine('30%',10)}${skelLine('30%',10)}</div>
+      ${skelBlock(60, 8)}
+    </div>`).join('')}</div>`;
+}
+function skelTable(rows=5, cols=5) {
+  return `<div class="skel-table">${Array(rows).fill(0).map(()=>`
+    <div class="skel-table-row">
+      <div class="skel-circle" style="width:32px;height:32px;flex-shrink:0"></div>
+      ${Array(cols-1).fill(0).map((_,i)=>`<div class="skel-line" style="width:${[120,80,70,60][i%4]}px;margin:0"></div>`).join('')}
+    </div>`).join('')}</div>`;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1091,7 +1117,7 @@ function webinarCardHTML(w) {
    WEBINAR DETAIL
 ══════════════════════════════════════════════════════════════════════════ */
 async function renderWebinarDetail(id) {
-  setContent('<div class="pg-loading"><div class="spinner"></div><p>Loading…</p></div>');
+  setContent(`<div class="page-wrap" style="padding-top:16px">${skelKpiBanner()}${skelBlock(200,16)}${skelTable(4,4)}</div>`);
   try {
     // Always re-fetch so upload results are fresh
     const w = await api(`/api/webinars/${id}`);
@@ -1540,7 +1566,7 @@ function renderEngagementFunnel(totalReg, totalAtt, noShow) {
 ══════════════════════════════════════════════════════════════════════════ */
 function renderAnalytics() {
   if (!S.stats) {
-    setContent('<div class="pg-loading"><div class="spinner"></div><p>Loading…</p></div>');
+    setContent(`<div class="page-wrap" style="padding-top:16px">${skelKpiBanner()}${skelTable(5,4)}</div>`);
     return;
   }
   const st = S.stats;
@@ -1855,7 +1881,7 @@ async function renderSpeakers() {
 
 /* ── Speaker detail ─────────────────────────────────────────────────────── */
 async function renderSpeakerDetail(id) {
-  setContent('<div class="pg-loading"><div class="spinner"></div><p>Loading…</p></div>');
+  setContent(`<div class="page-wrap" style="padding-top:16px">${skelKpiBanner()}${skelCardGrid(3)}</div>`);
   try {
     if (!detailCache['spk_'+id]) detailCache['spk_'+id] = await api(`/api/speakers/${id}`);
     const sp = detailCache['spk_'+id];
@@ -2008,7 +2034,7 @@ async function renderLeaderboard(speakerId, webinarId) {
   if (speakerId !== undefined) S._lbSpeaker = speakerId;
   if (webinarId !== undefined) S._lbWebinar = webinarId;
 
-  setContent('<div class="pg-loading"><div class="spinner"></div><p>Loading leaderboard…</p></div>');
+  setContent(`<div class="page-wrap" style="padding-top:16px">${skelKpiBanner()}${skelTable(8, 6)}</div>`);
 
   const params = new URLSearchParams();
   const selSpeaker = S._lbSpeaker || '';
@@ -2270,6 +2296,67 @@ async function renderLeaderboard(speakerId, webinarId) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
+   SPEAKER SEARCHABLE DROPDOWN
+══════════════════════════════════════════════════════════════════════════ */
+function _speakerListHtml(wrapId, inputId, query) {
+  const q = (query || '').toLowerCase().trim();
+  const speakers = S.speakers || [];
+  const matches = q
+    ? speakers.filter(sp => sp.name.toLowerCase().includes(q) || (sp.email||'').toLowerCase().includes(q))
+    : speakers;
+  const listId = wrapId === 'speaker-dd-wrap' ? 'speaker-dd-list' : 'cospeaker-dd-list';
+  const isCohost = wrapId !== 'speaker-dd-wrap';
+
+  const items = matches.slice(0, 20).map(sp => `
+    <div class="speaker-dropdown-item" onmousedown="speakerDropdownSelect('${wrapId}','${inputId}',${JSON.stringify(sp.name).replace(/"/g,'&quot;')},${sp.id})">
+      <div style="width:28px;height:28px;border-radius:8px;background:${avColor(sp.name)};color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${initials(sp.name)}</div>
+      <div>
+        <div class="speaker-dropdown-item-name">${esc(sp.name)}</div>
+        ${sp.email ? `<div class="speaker-dropdown-item-email">${esc(sp.email)}</div>` : ''}
+      </div>
+    </div>`).join('');
+
+  // Allow free-text entry if typed name doesn't exactly match any speaker
+  const freeTextRow = (q && !matches.find(sp => sp.name.toLowerCase() === q))
+    ? `<div class="speaker-dropdown-item" style="border-top:1px solid var(--rh-border,#e5e7eb);color:var(--rh-text-3,#6b7280)" onmousedown="speakerDropdownSelect('${wrapId}','${inputId}',${JSON.stringify(q).replace(/"/g,'&quot;')},null)">
+        <div style="width:28px;height:28px;border-radius:8px;background:var(--rh-border,#e5e7eb);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">+</div>
+        <div><div class="speaker-dropdown-item-name">Use "${q}" as new speaker</div></div>
+      </div>` : '';
+
+  return (items || (isCohost ? '' : '')) + freeTextRow ||
+    `<div style="padding:10px 14px;font-size:12px;color:var(--rh-text-4,#aaa)">No speakers found</div>`;
+}
+
+function speakerDropdownOpen(wrapId, inputId) {
+  const list = document.getElementById(wrapId === 'speaker-dd-wrap' ? 'speaker-dd-list' : 'cospeaker-dd-list');
+  if (!list) return;
+  const input = document.getElementById(inputId);
+  list.innerHTML = _speakerListHtml(wrapId, inputId, input?.value || '');
+  list.style.display = 'block';
+}
+
+function speakerDropdownFilter(wrapId, inputId) {
+  const list = document.getElementById(wrapId === 'speaker-dd-wrap' ? 'speaker-dd-list' : 'cospeaker-dd-list');
+  if (!list || list.style.display === 'none') return;
+  const input = document.getElementById(inputId);
+  list.innerHTML = _speakerListHtml(wrapId, inputId, input?.value || '');
+}
+
+function speakerDropdownClose(wrapId) {
+  const list = document.getElementById(wrapId === 'speaker-dd-wrap' ? 'speaker-dd-list' : 'cospeaker-dd-list');
+  if (list) list.style.display = 'none';
+}
+
+function speakerDropdownSelect(wrapId, inputId, name, speakerId) {
+  const input = document.getElementById(inputId);
+  const hiddenId = inputId === 'nw-speaker' ? 'nw-speaker-id' : 'nw-cospeaker-id';
+  const hidden = document.getElementById(hiddenId);
+  if (input) input.value = name;
+  if (hidden) hidden.value = speakerId || '';
+  speakerDropdownClose(wrapId);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    NEW WEBINAR MODAL
 ══════════════════════════════════════════════════════════════════════════ */
 let _editWebinarId = null; // null = create mode, number = edit mode
@@ -2323,7 +2410,7 @@ function openWebinarModal(webinar) {
 function closeWebinarModal() {
   document.getElementById('modal-overlay').classList.remove('open');
   _editWebinarId = null;
-  ['nw-title','nw-time','nw-speaker','nw-cospeaker','nw-desc','nw-notes',
+  ['nw-title','nw-time','nw-speaker','nw-speaker-id','nw-cospeaker','nw-cospeaker-id','nw-desc','nw-notes',
    'nw-recording','nw-tags','nw-expected'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
@@ -2401,9 +2488,7 @@ async function submitWebinarModal() {
     S.webinars = webinars;
     S.speakers = speakers;
 
-    // Update speaker datalist
-    const dl = document.getElementById('speaker-list');
-    if (dl) dl.innerHTML = S.speakers.map(sp => `<option value="${esc(sp.name)}">`).join('');
+    // Speakers list updated in S.speakers - custom dropdown reads from it on open
 
     if (isEdit) {
       // Refresh current webinar detail page if open
@@ -4223,15 +4308,25 @@ const PIPELINE_STATUS_META = {
   not_interested:  { label: 'Not Interested', color: '#94a3b8', bg: '#94a3b81a' },
 };
 
+let _pipelineView = 'table'; // 'table' | 'board'
+
 async function renderPipeline() {
   setContent(`
     <div class="pipeline-page">
       <div class="page-hd">
         <div>
           <h1 class="page-title">Follow-up Pipeline</h1>
-          <p class="page-sub">Track high-intent attendees from your webinars through to booked meetings and conversions.</p>
+          <p class="page-sub">Track high-intent attendees through to booked meetings and conversions.</p>
         </div>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div class="pipeline-view-toggle">
+            <button class="pipeline-view-btn ${_pipelineView==='table'?'active':''}" onclick="_pipelineView='table';_drawPipeline(_pipelineCache)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:4px"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>List
+            </button>
+            <button class="pipeline-view-btn ${_pipelineView==='board'?'active':''}" onclick="_pipelineView='board';_drawPipeline(_pipelineCache)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:4px"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="18" rx="1"/><rect x="17" y="3" width="4" height="18" rx="1"/></svg>Board
+            </button>
+          </div>
           <button class="btn btn-ghost btn-sm" onclick="window.open('/api/pipeline/export','_blank')">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Export CSV
@@ -4243,7 +4338,7 @@ async function renderPipeline() {
           </button>
         </div>
       </div>
-      <div id="pipeline-body"><div class="pg-loading"><div class="spinner"></div><p>Loading pipeline…</p></div></div>
+      <div id="pipeline-body">${skelKpiBanner()}${skelTable(5, 5)}</div>
     </div>`);
   try {
     if (!_pipelineCache) _pipelineCache = await api('/api/pipeline');
@@ -4285,6 +4380,42 @@ function _drawPipeline(contacts) {
     return;
   }
 
+  // Update view toggle active state
+  document.querySelectorAll('.pipeline-view-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.trim().toLowerCase().startsWith(_pipelineView));
+  });
+
+  if (_pipelineView === 'board') {
+    // Kanban board - one column per status, filter ignored for board (show all)
+    const allC = contacts;
+    const colsHtml = Object.entries(PIPELINE_STATUS_META).map(([k, m]) => {
+      const colCards = allC.filter(c => c.status === k);
+      const cardsHtml = colCards.map(c => {
+        const totalMin = c.total_duration || 0;
+        const dur = totalMin >= 60 ? (totalMin/60).toFixed(1)+'h' : totalMin+'m';
+        return `<div class="kanban-card" onclick="openEditPipelineModal(${JSON.stringify(c).replace(/"/g,'&quot;')})">
+          <div class="kanban-card-name">${esc(c.name)}</div>
+          <div class="kanban-card-email">${esc(c.email||'')}</div>
+          <div class="kanban-card-meta">
+            <span class="kanban-badge" style="background:${m.bg};color:${m.color}">${c.total_webinars||0} webinar${(c.total_webinars||0)!==1?'s':''}</span>
+            <span class="kanban-badge" style="background:var(--rh-bg,#f9fafb);color:var(--rh-text-3,#6b7280);border:1px solid var(--rh-border,#e5e7eb)">${dur}</span>
+          </div>
+          ${c.notes ? `<div style="font-size:11px;color:var(--rh-text-3,#6b7280);margin-top:6px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(c.notes)}</div>` : ''}
+        </div>`;
+      }).join('') || `<div style="font-size:12px;color:var(--rh-text-4,#aaa);padding:8px 4px;text-align:center">Empty</div>`;
+      return `<div class="kanban-col">
+        <div class="kanban-col-header">
+          <span class="kanban-col-title" style="color:${m.color}">${m.label}</span>
+          <span class="kanban-col-count" style="color:${m.color}">${colCards.length}</span>
+        </div>
+        <div class="kanban-cards">${cardsHtml}</div>
+      </div>`;
+    }).join('');
+    body.innerHTML = kpiHtml + `<div class="kanban-board">${colsHtml}</div>`;
+    return;
+  }
+
+  // Table view
   const rows = filtered.map(c => {
     const meta = PIPELINE_STATUS_META[c.status] || PIPELINE_STATUS_META.new;
     const av = avColor(c.name); const ini = initials(c.name);

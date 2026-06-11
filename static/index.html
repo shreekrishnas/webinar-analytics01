@@ -280,14 +280,23 @@
         </div>
       </div>
       <div class="form-row">
-        <div class="form-field">
+        <div class="form-field speaker-dropdown" id="speaker-dd-wrap">
           <label class="form-label">Speaker <span class="req">*</span></label>
-          <input class="form-input" id="nw-speaker" type="text" placeholder="e.g. Anil Rego, CFA" list="speaker-list" />
-          <datalist id="speaker-list"></datalist>
+          <input class="form-input" id="nw-speaker" type="text" placeholder="Search speakers…" autocomplete="off"
+            oninput="speakerDropdownFilter('speaker-dd-wrap','nw-speaker')"
+            onfocus="speakerDropdownOpen('speaker-dd-wrap','nw-speaker')"
+            onblur="setTimeout(()=>speakerDropdownClose('speaker-dd-wrap'),180)" />
+          <input type="hidden" id="nw-speaker-id" />
+          <div class="speaker-dropdown-list" id="speaker-dd-list" style="display:none"></div>
         </div>
-        <div class="form-field">
+        <div class="form-field speaker-dropdown" id="cospeaker-dd-wrap">
           <label class="form-label">Co-host / Panellist</label>
-          <input class="form-input" id="nw-cospeaker" type="text" placeholder="e.g. Rachna Rego" list="speaker-list" />
+          <input class="form-input" id="nw-cospeaker" type="text" placeholder="Search speakers or type name…" autocomplete="off"
+            oninput="speakerDropdownFilter('cospeaker-dd-wrap','nw-cospeaker')"
+            onfocus="speakerDropdownOpen('cospeaker-dd-wrap','nw-cospeaker')"
+            onblur="setTimeout(()=>speakerDropdownClose('cospeaker-dd-wrap'),180)" />
+          <input type="hidden" id="nw-cospeaker-id" />
+          <div class="speaker-dropdown-list" id="cospeaker-dd-list" style="display:none"></div>
         </div>
       </div>
       <div class="form-row">
