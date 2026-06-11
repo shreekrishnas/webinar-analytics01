@@ -309,6 +309,12 @@ async function loadAll() {
   if (webRes.status === 'fulfilled') S.webinars = webRes.value;
   if (spkRes.status === 'fulfilled') S.speakers = spkRes.value;
   if (stRes.status  === 'fulfilled') S.stats    = stRes.value;
+  // Populate series datalist
+  const sl = document.getElementById('series-list');
+  if (sl && S.webinars) {
+    const seriesNames = [...new Set(S.webinars.map(w=>w.series).filter(Boolean))].sort();
+    sl.innerHTML = seriesNames.map(s=>`<option value="${esc(s)}">`).join('');
+  }
 }
 
 /* ── Navbar chips ───────────────────────────────────────────────────────── */
@@ -444,6 +450,53 @@ function setContent(html) {
   runCountUps();
   decorateLeaderboardRows();
   initScrollReveal();
+}
+
+/* ── Chart tooltip ── */
+let _chartTip = null;
+function showChartTooltip(event, title, rate, grade) {
+  hideChartTooltip();
+  const tip = document.createElement('div');
+  tip.id = '_chart-tip';
+  tip.style.cssText = 'position:fixed;z-index:9999;background:var(--rh-ink,#111);color:#fff;padding:8px 12px;border-radius:8px;font-size:12px;pointer-events:none;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.2)';
+  tip.innerHTML = `<strong>${title}</strong><br/>${rate}% attendance &nbsp;<span style="font-weight:700;color:${grade==='A'?'#10b981':grade==='B'?'#6366f1':grade==='C'?'#f59e0b':'#f43f5e'}">${grade}</span>`;
+  document.body.appendChild(tip);
+  _chartTip = tip;
+  _moveChartTooltip(event);
+}
+function _moveChartTooltip(event) {
+  if (!_chartTip) return;
+  _chartTip.style.left = (event.clientX + 14) + 'px';
+  _chartTip.style.top  = (event.clientY - 36) + 'px';
+}
+function hideChartTooltip() {
+  if (_chartTip) { _chartTip.remove(); _chartTip = null; }
+}
+
+/* ── Favourite star ── */
+async function toggleFavourite(id, currentVal, event) {
+  event.stopPropagation();
+  const newVal = !currentVal;
+  try {
+    await api(`/api/webinars/${id}`, 'PATCH', { is_favourite: newVal });
+    const w = S.webinars.find(x => x.id === id);
+    if (w) w.is_favourite = newVal;
+    // Update star in place without full re-render
+    const btn = event.currentTarget;
+    btn.innerHTML = newVal ? starFilledSVG() : starEmptySVG();
+    btn.title = newVal ? 'Remove from favourites' : 'Add to favourites';
+    btn.dataset.fav = newVal ? '1' : '0';
+    btn.onclick = (e) => toggleFavourite(id, newVal, e);
+    showToast(newVal ? 'Added to favourites' : 'Removed from favourites', 'success');
+  } catch(e) {
+    showToast('Failed to update favourite', 'error');
+  }
+}
+function starEmptySVG() {
+  return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+}
+function starFilledSVG() {
+  return `<svg width="14" height="14" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
 }
 
 function skelLine(w='100%', h=14) {
@@ -740,6 +793,7 @@ function renderAttendanceChart() {
     'Z'
   ].join(' ');
 
+  const benchmarkY = yPos(40);
   const gridLines = [0, 25, 50, 75, 100].map(v => {
     const y = yPos(v);
     return `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}"
@@ -758,9 +812,14 @@ function renderAttendanceChart() {
   const dots = data.map((d, i) => {
     const x    = xPos(i), y = yPos(d.attendance_rate || 0);
     const info = gradeInfo(d.attendance_rate || 0);
+    const rate = (d.attendance_rate || 0).toFixed(1);
+    const safeTitle = esc(d.title).replace(/"/g,'&quot;');
     return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5"
-      fill="${info.color}" stroke="var(--card)" stroke-width="2">
-      <title>${esc(d.title)}: ${(d.attendance_rate || 0).toFixed(1)}%</title>
+      fill="${info.color}" stroke="var(--card)" stroke-width="2"
+      style="cursor:pointer" onclick="nav('webinar',${d.id})"
+      onmouseenter="showChartTooltip(event,'${safeTitle}',${rate},'${info.grade}')"
+      onmouseleave="hideChartTooltip()">
+      <title>${safeTitle}: ${rate}%</title>
     </circle>`;
   }).join('');
 
@@ -777,6 +836,10 @@ function renderAttendanceChart() {
         </linearGradient>
       </defs>
       ${gridLines}
+      <!-- Industry benchmark at 40% -->
+      <line x1="${padL}" y1="${benchmarkY.toFixed(1)}" x2="${W - padR}" y2="${benchmarkY.toFixed(1)}"
+        stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="6,4" opacity="0.7"/>
+      <text x="${(W - padR + 4).toFixed(1)}" y="${(benchmarkY + 4).toFixed(1)}" fill="#f59e0b" font-size="9" font-family="var(--font)" font-weight="600">40% benchmark</text>
       <path d="${areaPath}" fill="url(#atCh)"/>
       <polyline points="${points}" fill="none" stroke="var(--accent)" stroke-width="2"
         stroke-linecap="round" stroke-linejoin="round"/>
@@ -846,6 +909,8 @@ function renderHome() {
       if (to && d > to) return false;
       return true;
     });
+  } else if (S.filterStatus === 'favourites') {
+    list = list.filter(w => w.is_favourite);
   } else if (S.filterStatus !== 'all' && S.filterStatus !== 'range') {
     list = list.filter(w => w.status === S.filterStatus);
   }
@@ -899,6 +964,44 @@ function renderHome() {
         Create Your First Webinar
       </button>
     </div>`;
+  } else if (S.filterStatus === 'series') {
+    // Series grouped view
+    const seriesGroups = {};
+    S.webinars.forEach(w => {
+      const s = w.series || '_none';
+      if (!seriesGroups[s]) seriesGroups[s] = [];
+      seriesGroups[s].push(w);
+    });
+    const seriesHtml = Object.entries(seriesGroups)
+      .sort((a,b) => (b[0]==='_none'?-1:1) - (a[0]==='_none'?-1:1) || a[0].localeCompare(b[0]))
+      .map(([name, items]) => {
+        const label = name === '_none' ? 'No Series' : name;
+        const totalAtt = items.reduce((s,w)=>s+(w.total_attendees||0),0);
+        const avgRate = items.length ? (items.reduce((s,w)=>s+(w.attendance_rate||0),0)/items.length).toFixed(1) : 0;
+        const cards = items.sort((a,b)=>new Date(a.date)-new Date(b.date)).map(w=>`
+          <div class="wb-card" style="cursor:pointer" onclick="nav('webinar',${w.id})">
+            <div style="height:4px;background:${gradeInfo(w.attendance_rate||0).color};border-radius:4px 4px 0 0"></div>
+            <div style="padding:14px 16px">
+              <div style="font-size:13px;font-weight:600;color:var(--rh-text-1);margin-bottom:4px;line-height:1.3">${esc(w.title)}</div>
+              <div style="font-size:11px;color:var(--rh-text-3)">${fmtDate(w.date)} · ${esc(w.speaker_name)}</div>
+              <div style="display:flex;gap:10px;margin-top:8px;font-size:12px">
+                <span style="color:var(--c-reg);font-weight:600">${fmt(w.total_registrations)} reg</span>
+                <span style="color:var(--c-att);font-weight:600">${fmt(w.total_attendees)} att</span>
+                <span style="color:${gradeInfo(w.attendance_rate||0).color};font-weight:700">${(w.attendance_rate||0).toFixed(1)}%</span>
+              </div>
+            </div>
+          </div>`).join('');
+        return `<div style="margin-bottom:28px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+            <h3 style="font-size:15px;font-weight:700;color:var(--rh-text-1);margin:0">${esc(label)}</h3>
+            <span style="font-size:12px;color:var(--rh-text-3)">${items.length} webinar${items.length!==1?'s':''}</span>
+            <span style="font-size:12px;color:var(--rh-text-3)">${fmt(totalAtt)} total attendees</span>
+            <span style="font-size:12px;font-weight:600;color:${gradeInfo(+avgRate).color}">${avgRate}% avg attendance</span>
+          </div>
+          <div class="wb-grid">${cards}</div>
+        </div>`;
+      }).join('');
+    mainContent = `<div class="reveal rd3">${seriesHtml || '<div class="empty-state"><div class="empty-title">No series yet</div><div class="empty-sub">Add a Series name when creating or editing a webinar.</div></div>'}</div>`;
   } else {
     // Activity feed
     const feedHTML = buildActivityFeed().map(item => `
@@ -1053,6 +1156,10 @@ function webinarCardHTML(w) {
           <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
             ${w.icp && w.icp !== 'Others' ? `<span class="icp-badge icp-${(w.icp||'').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')}">${esc(w.icp)}</span>` : ''}
             <span class="wb-badge ${badgeCls}" style="font-size:10px;opacity:0.75">${w.status}</span>
+            <button class="wb-card-edit" title="${w.is_favourite ? 'Remove from favourites' : 'Add to favourites'}" data-fav="${w.is_favourite?'1':'0'}"
+              onclick="toggleFavourite(${w.id},${!!w.is_favourite},event)" style="color:${w.is_favourite?'#f59e0b':'var(--rh-text-3)'}">
+              ${w.is_favourite ? starFilledSVG() : starEmptySVG()}
+            </button>
             <button class="wb-card-edit" title="Edit webinar"
               onclick="event.stopPropagation();editWebinar(${w.id})">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -2388,6 +2495,7 @@ function openWebinarModal(webinar) {
     if (f('nw-category'))  f('nw-category').value   = webinar.category || '';
     if (f('nw-language'))  f('nw-language').value   = webinar.language || '';
     if (f('nw-recording')) f('nw-recording').value  = webinar.recording_url || '';
+    if (f('nw-series'))   f('nw-series').value      = webinar.series || '';
     if (f('nw-tags'))      f('nw-tags').value       = webinar.tags || '';
     if (f('nw-expected'))  f('nw-expected').value   = webinar.expected_registrations || '';
     const radio = document.querySelector(`input[name="nw-status-radio"][value="${webinar.status || 'upcoming'}"]`);
@@ -2411,7 +2519,7 @@ function closeWebinarModal() {
   document.getElementById('modal-overlay').classList.remove('open');
   _editWebinarId = null;
   ['nw-title','nw-time','nw-speaker','nw-speaker-id','nw-cospeaker','nw-cospeaker-id','nw-desc','nw-notes',
-   'nw-recording','nw-tags','nw-expected'].forEach(id => {
+   'nw-recording','nw-tags','nw-expected','nw-series'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -2466,6 +2574,7 @@ async function submitWebinarModal() {
     recording_url:         gv('nw-recording'),
     tags:                  gv('nw-tags'),
     expected_registrations: (() => { const v = document.getElementById('nw-expected')?.value; return v ? parseInt(v) : null; })(),
+    series:                gv('nw-series'),
   };
 
   const isEdit = !!_editWebinarId;
@@ -2553,6 +2662,54 @@ function closeAdModal() {
   if (overlay) overlay.classList.remove('open');
   _adWebinarId   = null;
   _adImageBase64 = null;
+  ['ad-utm-source','ad-utm-medium','ad-utm-campaign','ad-utm-content'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const p = document.getElementById('utm-preview'); if (p) p.style.display = 'none';
+  const r = document.getElementById('ad-roi-preview'); if (r) r.style.display = 'none';
+}
+
+function buildUTM() {
+  const base = document.getElementById('ad-landing-url')?.value?.trim() || '';
+  const src  = document.getElementById('ad-utm-source')?.value?.trim() || '';
+  const med  = document.getElementById('ad-utm-medium')?.value?.trim() || '';
+  const cam  = document.getElementById('ad-utm-campaign')?.value?.trim() || '';
+  const con  = document.getElementById('ad-utm-content')?.value?.trim() || '';
+  const preview = document.getElementById('utm-preview');
+  const urlText = document.getElementById('utm-url-text');
+  if (!src && !med && !cam) { if (preview) preview.style.display = 'none'; return; }
+  const params = new URLSearchParams();
+  if (src) params.set('utm_source', src);
+  if (med) params.set('utm_medium', med);
+  if (cam) params.set('utm_campaign', cam);
+  if (con) params.set('utm_content', con);
+  const full = (base || '[your-landing-url]') + '?' + params.toString();
+  if (urlText) urlText.textContent = full;
+  if (preview) preview.style.display = 'block';
+}
+
+function copyUTM() {
+  const text = document.getElementById('utm-url-text')?.textContent || '';
+  navigator.clipboard.writeText(text).then(() => showToast('UTM URL copied', 'success'));
+}
+
+function calcAdROI() {
+  const spend = parseFloat((document.getElementById('ad-spend')?.value || '').replace(/[^\d.]/g,'')) || 0;
+  const impressions = parseInt(document.getElementById('ad-impressions')?.value) || 0;
+  const clicks = parseInt(document.getElementById('ad-clicks')?.value) || 0;
+  const conv = parseInt(document.getElementById('ad-conversions')?.value) || 0;
+  const roi = document.getElementById('ad-roi-preview');
+  if (!roi) return;
+  if (!spend && !clicks && !impressions) { roi.style.display = 'none'; return; }
+  roi.style.display = 'block';
+  const ctr = impressions ? ((clicks / impressions) * 100).toFixed(2) + '%' : '-';
+  const cpc = (clicks && spend) ? '₹' + (spend / clicks).toFixed(0) : '-';
+  const cpr = (conv && spend)   ? '₹' + (spend / conv).toFixed(0) : '-';
+  const cvr = clicks ? ((conv / clicks) * 100).toFixed(1) + '%' : '-';
+  document.getElementById('roi-ctr').textContent = ctr;
+  document.getElementById('roi-cpc').textContent = cpc;
+  document.getElementById('roi-cpr').textContent = cpr;
+  document.getElementById('roi-cvr').textContent = cvr;
 }
 
 function handleAdImageSelect(event) {

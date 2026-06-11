@@ -155,6 +155,8 @@ def _to_summary(db: Session, w: models.Webinar) -> schemas.WebinarSummary:
         tags=getattr(w, 'tags', None),
         expected_registrations=getattr(w, 'expected_registrations', None),
         notes=getattr(w, 'notes', None),
+        series=getattr(w, 'series', None),
+        is_favourite=getattr(w, 'is_favourite', False) or False,
     )
 
 
@@ -213,6 +215,7 @@ def create_webinar(db: Session, webinar_in: schemas.WebinarCreate) -> models.Web
         tags=webinar_in.tags,
         expected_registrations=webinar_in.expected_registrations,
         notes=webinar_in.notes,
+        series=getattr(webinar_in, 'series', None),
     )
     db.add(webinar)
     db.commit()

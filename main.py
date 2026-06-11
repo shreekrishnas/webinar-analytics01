@@ -224,9 +224,11 @@ def update_webinar(webinar_id: int, payload: dict, db: Session = Depends(get_db)
         w.date = _date.fromisoformat(d) if isinstance(d, str) else d
     if "icp" in payload:
         w.icp = payload["icp"] or "Others"
-    for field in ("platform", "category", "language", "recording_url", "tags", "notes"):
+    for field in ("platform", "category", "language", "recording_url", "tags", "notes", "series"):
         if field in payload:
             setattr(w, field, payload[field])
+    if "is_favourite" in payload:
+        w.is_favourite = bool(payload["is_favourite"])
     if "expected_registrations" in payload:
         v = payload["expected_registrations"]
         w.expected_registrations = int(v) if v else None

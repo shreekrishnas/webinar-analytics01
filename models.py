@@ -35,6 +35,8 @@ class Webinar(Base):
     tags              = Column(String, nullable=True)   # comma-separated
     expected_registrations = Column(Integer, nullable=True)
     notes             = Column(Text, nullable=True)     # internal team notes
+    series            = Column(String, nullable=True)   # webinar series name
+    is_favourite      = Column(Boolean, default=False, nullable=True)
 
     speaker    = relationship("Speaker", foreign_keys="[Webinar.speaker_id]", back_populates="webinars")
     co_speaker = relationship("Speaker", foreign_keys="[Webinar.co_speaker_id]")

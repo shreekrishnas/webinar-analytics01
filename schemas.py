@@ -107,6 +107,8 @@ class WebinarCreate(BaseModel):
     tags: Optional[str] = None
     expected_registrations: Optional[int] = None
     notes: Optional[str] = None
+    series: Optional[str] = None
+    is_favourite: Optional[bool] = False
 
 
 class WebinarSummary(BaseModel):
@@ -133,6 +135,8 @@ class WebinarSummary(BaseModel):
     tags: Optional[str] = None
     expected_registrations: Optional[int] = None
     notes: Optional[str] = None
+    series: Optional[str] = None
+    is_favourite: Optional[bool] = False
 
 
 class WebinarDetail(BaseModel):
