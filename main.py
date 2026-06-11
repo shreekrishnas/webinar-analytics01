@@ -66,11 +66,12 @@ class NoCacheStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope) -> StarletteResponse:
         response = await super().get_response(path, scope)
         if response.status_code == 200:
-            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0"
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
             response.headers["Surrogate-Control"] = "no-store"
             response.headers["CDN-Cache-Control"] = "no-store"
+            response.headers["Vercel-CDN-Cache-Control"] = "no-store"
         return response
 
 
@@ -93,9 +94,10 @@ app = FastAPI(title="WebinarIQ Analytics", version="2.0.0", lifespan=lifespan)
 @app.middleware("http")
 async def no_cache_middleware(request, call_next):
     response = await call_next(request)
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0"
     response.headers["Surrogate-Control"] = "no-store"
     response.headers["CDN-Cache-Control"] = "no-store"
+    response.headers["Vercel-CDN-Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
     return response
@@ -117,8 +119,12 @@ app.mount("/static", NoCacheStaticFiles(directory=os.path.join(BASE_DIR, "static
 @app.get("/", include_in_schema=False)
 async def root():
     resp = FileResponse(os.path.join(BASE_DIR, "static", "index.html"))
-    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0"
+    resp.headers["Surrogate-Control"] = "no-store"
+    resp.headers["CDN-Cache-Control"] = "no-store"
+    resp.headers["Vercel-CDN-Cache-Control"] = "no-store"
     resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
     return resp
 
 
