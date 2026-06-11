@@ -2577,7 +2577,7 @@ body::before, body::after { display: none !important; }
   overflow-x: hidden;
 }
 .sidebar-scroll {
-  padding: 16px 12px 40px;
+  padding: 24px 12px 40px;
   display: flex;
   flex-direction: column;
   gap: 2px;
