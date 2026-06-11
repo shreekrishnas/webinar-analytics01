@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, DateTime, Boolean, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Date, DateTime, Boolean, ForeignKey, Text, Index
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
@@ -38,13 +38,17 @@ class Webinar(Base):
 
 class Registration(Base):
     __tablename__ = "registrations"
+    __table_args__ = (
+        Index("ix_reg_webinar_id", "webinar_id"),
+        Index("ix_reg_email_lower", "email"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     webinar_id = Column(Integer, ForeignKey("webinars.id"))
     attendee_name = Column(String, nullable=False)
     email = Column(String, index=True)
     phone = Column(String, nullable=True)
-    source = Column(String)  # email, social, direct, referral, upload
+    source = Column(String)
     registered_at = Column(DateTime, default=datetime.utcnow)
 
     webinar = relationship("Webinar", back_populates="registrations")
@@ -53,6 +57,10 @@ class Registration(Base):
 
 class Attendance(Base):
     __tablename__ = "attendances"
+    __table_args__ = (
+        Index("ix_att_webinar_attended", "webinar_id", "attended"),
+        Index("ix_att_registration_id", "registration_id"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     webinar_id = Column(Integer, ForeignKey("webinars.id"))
