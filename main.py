@@ -1,6 +1,7 @@
 import os
+import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File, Response
+from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File, Response, Header
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from starlette.responses import Response as StarletteResponse
@@ -12,6 +13,36 @@ from database import engine, SessionLocal
 import models, crud, schemas
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+logger = logging.getLogger("webinariq")
+
+# ── App config (env-driven, sensible defaults) ────────────────────────────────
+COMPANY_NAME        = os.environ.get("COMPANY_NAME",         "Right Horizons")
+COMPANY_DESC        = os.environ.get("COMPANY_DESC",         "an Indian financial advisory firm running HNI/NRI webinars")
+COMPANY_DOMAIN      = os.environ.get("COMPANY_DOMAIN",       "righthorizons.com")
+APP_URL             = os.environ.get("APP_URL",              "https://webinar-analytics-six.vercel.app")
+OPENROUTER_REFERER  = os.environ.get("OPENROUTER_REFERER",   APP_URL)
+AI_MODEL            = os.environ.get("AI_MODEL",             "anthropic/claude-sonnet-4-5")
+# Optional API key to protect endpoints. Set API_KEY env var in Vercel to enable.
+API_KEY             = os.environ.get("API_KEY", "")
+
+def _auth(x_api_key: str = Header(default="")):
+    """Enforce API key if one is configured in the environment."""
+    if API_KEY and x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+def _ai_headers(api_key: str) -> dict:
+    return {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": OPENROUTER_REFERER,
+        "X-Title": "WebinarIQ",
+    }
 
 
 def _compute_perf_score(regs: int, att_rate: float, icp: str, has_ads: bool = False) -> int:
@@ -31,7 +62,6 @@ def _score_label(score: int) -> str:
     return "Low Performing"
 
 
-# Static files — no aggressive caching so updates are picked up immediately.
 class NoCacheStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope) -> StarletteResponse:
         response = await super().get_response(path, scope)
@@ -44,14 +74,14 @@ class NoCacheStaticFiles(StaticFiles):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Only seed in local dev; production (VERCEL / DATABASE_URL) is pre-seeded
     if not os.environ.get("DATABASE_URL") and not os.environ.get("VERCEL"):
         try:
             models.Base.metadata.create_all(bind=engine)
             from seed_data import seed_database
             seed_database()
-        except Exception:
-            pass
+            logger.info("Local dev DB seeded")
+        except Exception as e:
+            logger.warning(f"DB seed skipped: {e}")
     yield
 
 
@@ -107,8 +137,14 @@ def platform_stats(response: Response, db: Session = Depends(get_db)):
         result = stats.dict() if hasattr(stats, 'dict') else dict(stats)
         result['followup_pending'] = int(fp)
         return result
-    except Exception:
+    except Exception as e:
+        logger.warning(f"followup_pending calc failed: {e}")
         return stats
+
+
+@app.get("/api/health")
+def health_check():
+    return {"status": "ok", "company": COMPANY_NAME}
 
 
 # ── Webinars ──────────────────────────────────────────────────────────────────
@@ -234,8 +270,8 @@ async def upload_attendees(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        import traceback
-        raise HTTPException(status_code=500, detail=traceback.format_exc())
+        logger.exception("Unhandled error")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ── Webinar Notes (Human Knowledge) ──────────────────────────────────────────
@@ -290,11 +326,11 @@ def delete_note(webinar_id: int, note_id: int, db: Session = Depends(get_db)):
 @app.get("/api/intelligence")
 def get_intelligence(db: Session = Depends(get_db)):
     """Combined intelligence: topic performance, speaker deep-dive, campaign, ICP refinement."""
-    import traceback
     try:
         return _get_intelligence_inner(db)
     except Exception:
-        raise HTTPException(status_code=500, detail=traceback.format_exc()[-1500:])
+        logger.exception("Unhandled error")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def _get_intelligence_inner(db: Session):
@@ -921,9 +957,9 @@ async def auto_research_competitor(payload: dict, db: Session = Depends(get_db))
         search_resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
-                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
+                     "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
             json={
-                "model": "anthropic/claude-sonnet-4-5",
+                "model": AI_MODEL,
                 "max_tokens": 1500,
                 "messages": [{"role": "user", "content":
                     f"""Today is {today}. Based on your knowledge, describe the Indian financial advisory company "{comp.name}" ({comp.website or ''}).
@@ -954,9 +990,9 @@ Be honest about what you know vs don't know. Only report what you are reasonably
         parse_resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
-                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
+                     "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
             json={
-                "model": "anthropic/claude-sonnet-4-5",
+                "model": AI_MODEL,
                 "max_tokens": 2000,
                 "messages": [{"role": "user", "content":
                     f"""Extract structured activity records from this research about "{comp.name}":
@@ -1043,9 +1079,9 @@ async def weekly_competitor_research(db: Session = Depends(get_db)):
             search_resp = httpx.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
-                         "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
+                         "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
                 json={
-                    "model": "anthropic/claude-sonnet-4-5",
+                    "model": AI_MODEL,
                     "max_tokens": 1200,
                     "messages": [{"role": "user", "content":
                         f"""Today is {today}. Based on your knowledge, describe "{comp.name}" ({comp.website or ''}).
@@ -1068,9 +1104,9 @@ Only report what you are reasonably confident about. Keep it concise."""}]
             parse_resp = httpx.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
-                         "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
+                         "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
                 json={
-                    "model": "anthropic/claude-sonnet-4-5",
+                    "model": AI_MODEL,
                     "max_tokens": 1500,
                     "messages": [{"role": "user", "content":
                         f"""Extract activity records from this research about "{comp.name}":
@@ -1208,7 +1244,7 @@ async def get_intelligence_insights(db: Session = Depends(get_db)):
                 for r in ads_rows
             )
 
-    prompt = f"""You are a senior marketing analyst for Right Horizons, an Indian financial advisory firm running HNI/NRI webinars.
+    prompt = f"""You are a senior marketing analyst for {COMPANY_NAME}, {COMPANY_DESC}.
 
 WEBINAR DATA (all completed webinars, newest first):
 {chr(10).join(webinar_lines) if webinar_lines else 'No completed webinars yet.'}
@@ -1245,8 +1281,8 @@ Return ONLY a valid JSON array of exactly 4 objects:
         resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
-                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={"model": "anthropic/claude-sonnet-4-5", "max_tokens": 1500,
+                     "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
+            json={"model": AI_MODEL, "max_tokens": 1500,
                   "messages": [{"role": "user", "content": prompt}]},
             timeout=30.0
         )
@@ -1342,8 +1378,8 @@ def _is_pg(db: Session) -> bool:
 
 @app.get("/api/competitor-gap-analysis")
 async def competitor_gap_analysis(db: Session = Depends(get_db)):
-    """AI-powered gap analysis: where Right Horizons can win vs competitor activity."""
-    import os, httpx, traceback
+    """AI-powered gap analysis: where {COMPANY_NAME} can win vs competitor activity."""
+    import os, httpx
     from sqlalchemy import text as _t
     from datetime import date as _date, timedelta as _td
 
@@ -1396,9 +1432,9 @@ async def competitor_gap_analysis(db: Session = Depends(get_db)):
         if not api_key:
             raise HTTPException(status_code=503, detail="OPENROUTER_API_KEY not configured")
 
-        prompt = f"""You are a competitive intelligence analyst for Right Horizons, an Indian wealth advisory firm.
+        prompt = f"""You are a competitive intelligence analyst for {COMPANY_NAME}, {COMPANY_DESC}.
 
-Compare what competitors did in the last 90 days versus what Right Horizons did. Identify SPECIFIC gaps and opportunities.
+Compare what competitors did in the last 90 days versus what {COMPANY_NAME} did. Identify SPECIFIC gaps and opportunities.
 
 COMPETITOR ACTIVITY (last 90 days):
 {comp_block}
@@ -1435,8 +1471,8 @@ STRICT RULES (absolute, no exceptions):
         resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
-                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={"model": "anthropic/claude-sonnet-4-5", "max_tokens": 2500,
+                     "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
+            json={"model": AI_MODEL, "max_tokens": 2500,
                   "messages": [{"role": "user", "content": prompt}]},
             timeout=60.0
         )
@@ -1461,7 +1497,8 @@ STRICT RULES (absolute, no exceptions):
     except HTTPException:
         raise
     except Exception:
-        raise HTTPException(status_code=500, detail=traceback.format_exc()[-1500:])
+        logger.exception("Unhandled error")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ── Lead Tags (manual classification overrides) ──────────────────────────────
@@ -1598,7 +1635,7 @@ def export_leaderboard(
     def readiness_for(email_l, e):
         manual = tag_map.get(email_l)
         if manual in ('customer','internal','employee','partner'): return manual
-        if email_l.endswith('@righthorizons.com'): return "internal"
+        if email_l.endswith('@' + COMPANY_DOMAIN): return "internal"
         # Get last_date for this person
         avg_dur = e["avg_min"]
         att = e["webinars_attended"]
@@ -1792,7 +1829,7 @@ async def chat(payload: dict, db: Session = Depends(get_db)):
     # Detect capitalised name candidates (2+ capitalised words, or single name if context hints)
     name_candidates = re.findall(r'\b([A-Z][a-z]{2,})(?:\s+([A-Z][a-z]{2,}))?(?:\s+([A-Z][a-z]{2,}))?', question)
     # Flatten and remove empties + common false positives
-    STOPWORDS = {'What','When','Which','Who','How','Why','Where','The','This','That','First','Last','Top','Show','Tell','Give','List','Find','Webinar','Speaker','Attendance','Registration','Right','Horizons','Right Horizons','WebinarIQ','PMS','NRI','ICP','SIP','SWP','ESOPs'}
+    STOPWORDS = {'What','When','Which','Who','How','Why','Where','The','This','That','First','Last','Top','Show','Tell','Give','List','Find','Webinar','Speaker','Attendance','Registration','Right','Horizons',COMPANY_NAME,COMPANY_NAME.split()[0] if ' ' in COMPANY_NAME else COMPANY_NAME,'WebinarIQ','PMS','NRI','ICP','SIP','SWP','ESOPs'}
     candidates = []
     for tup in name_candidates:
         parts = [p for p in tup if p and p not in STOPWORDS]
@@ -1895,7 +1932,7 @@ async def chat(payload: dict, db: Session = Depends(get_db)):
 
     context = "\n".join(ctx_parts)
 
-    system_prompt = f"""You are WebinarIQ Assistant, an AI analyst for Right Horizons Financial Services.
+    system_prompt = f"""You are WebinarIQ Assistant, an AI analyst for {COMPANY_NAME}.
 
 STRICT RULES (absolute, no exceptions):
 1. You may ONLY use the LIVE DATA below. Never invent numbers, names, emails, dates, percentages, or facts.
@@ -1925,8 +1962,8 @@ Remember: nothing outside this data exists for you. You are a closed-book analys
     try:
         resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={"model": "anthropic/claude-sonnet-4-5", "max_tokens": 900, "messages": messages},
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
+            json={"model": AI_MODEL, "max_tokens": 900, "messages": messages},
             timeout=30.0
         )
         resp.raise_for_status()
@@ -1955,7 +1992,7 @@ async def get_topic_suggestions():
     news_context = ""
     context_block = f"Today is {today}. Use your knowledge of Indian financial markets, recent regulatory changes, budget developments, RBI decisions, SEBI updates, and macroeconomic trends."
 
-    prompt = f"""You are a webinar content strategist for Right Horizons, a premium Indian financial advisory firm.
+    prompt = f"""You are a webinar content strategist for {COMPANY_NAME}, {COMPANY_DESC}.
 
 {context_block}
 
@@ -1977,7 +2014,7 @@ Return a JSON array with this exact structure:
       {{
         "title": "TIGHT webinar title - MUST be ≤80 characters",
         "hook": "ONE sentence ≤120 chars referencing the specific news event driving urgency",
-        "angle": "ONE sentence ≤100 chars. Why Right Horizons specifically, not generic content.",
+        "angle": "ONE sentence ≤100 chars. Why {COMPANY_NAME} specifically, not generic content.",
         "expected": "High|Medium|Low",
         "news_link": "which news item from above inspired this topic (1-2 words)"
       }}
@@ -1998,8 +2035,8 @@ HARD RULES:
         resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
-                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={"model": "anthropic/claude-sonnet-4-5", "max_tokens": 4000,
+                     "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
+            json={"model": AI_MODEL, "max_tokens": 4000,
                   "messages": [{"role": "user", "content": prompt}]},
             timeout=45.0
         )
@@ -2018,14 +2055,15 @@ HARD RULES:
 @app.post("/api/webinars/{webinar_id}/analyze")
 async def analyze_webinar(webinar_id: int, db: Session = Depends(get_db)):  # noqa: C901
     """Run AI-powered analysis on a webinar using Claude."""
-    import os, json, traceback
+    import os, json
     from sqlalchemy import text
     try:
         return await _do_analyze(webinar_id, db)
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=traceback.format_exc())
+        logger.exception("Unhandled error")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def _do_analyze(webinar_id: int, db):
@@ -2169,7 +2207,7 @@ async def _do_analyze(webinar_id: int, db):
     else:
         human_notes_block = "(No human notes have been logged for this webinar.)"
 
-    prompt = f"""You are a sharp webinar performance analyst for Right Horizons, an Indian financial advisory firm.
+    prompt = f"""You are a sharp webinar performance analyst for {COMPANY_NAME}, {COMPANY_DESC}.
 
 STRICT RULES:
 - Use ONLY the numbers in 'Webinar data' below. Never fabricate numbers, names, or comparisons.
@@ -2222,9 +2260,9 @@ Return ONLY the JSON object, nothing before or after, no markdown fences."""
         import httpx
         resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
             json={
-                "model": "anthropic/claude-sonnet-4-5",
+                "model": AI_MODEL,
                 "max_tokens": 2000,
                 "messages": [{"role": "user", "content": prompt}]
             },
@@ -2250,7 +2288,7 @@ Return ONLY the JSON object, nothing before or after, no markdown fences."""
 @app.post("/api/webinars/{webinar_id}/compare")
 async def compare_webinar(webinar_id: int, db: Session = Depends(get_db)):
     """Compare this webinar to the most recent previous webinar by same speaker (fallback: same ICP, then platform avg)."""
-    import os, json, traceback
+    import os, json
     from sqlalchemy import text as _text
     try:
         w = db.query(models.Webinar).filter(models.Webinar.id == webinar_id).first()
@@ -2365,8 +2403,8 @@ Return ONLY the JSON, no markdown, no preamble."""
         resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
-                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={"model": "anthropic/claude-sonnet-4-5", "max_tokens": 800,
+                     "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
+            json={"model": AI_MODEL, "max_tokens": 800,
                   "messages": [{"role": "user", "content": prompt}]},
             timeout=25.0
         )
@@ -2384,7 +2422,8 @@ Return ONLY the JSON, no markdown, no preamble."""
     except HTTPException:
         raise
     except Exception:
-        raise HTTPException(status_code=500, detail=traceback.format_exc())
+        logger.exception("Unhandled error")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ── Registrations download ───────────────────────────────────────────────────
@@ -2570,12 +2609,8 @@ def delete_webinar_ad(webinar_id: int, ad_id: int, db: Session = Depends(get_db)
 
 @app.get("/api/speakers", response_model=List[schemas.Speaker])
 def list_speakers(response: Response, db: Session = Depends(get_db)):
-    import traceback
     response.headers["Cache-Control"] = "no-store"
-    try:
-        return crud.get_all_speakers(db)
-    except Exception:
-        raise HTTPException(status_code=500, detail=traceback.format_exc())
+    return crud.get_all_speakers(db)
 
 
 @app.get("/api/speakers/{speaker_id}", response_model=schemas.SpeakerDetail)
