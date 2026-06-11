@@ -7,7 +7,6 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 
 if DATABASE_URL:
     # PostgreSQL (Supabase) via pg8000 (pure-Python, no C deps — safe on Vercel)
-    # Normalise to pg8000 dialect regardless of what prefix the env var has
     if "postgresql+pg8000://" in DATABASE_URL:
         pg_url = DATABASE_URL
     elif DATABASE_URL.startswith("postgresql://") or DATABASE_URL.startswith("postgres://"):
@@ -16,16 +15,11 @@ if DATABASE_URL:
     else:
         pg_url = DATABASE_URL
 
-    # SSL context for Supabase
+    # SSL: require encryption but allow Supabase's self-signed cert
     ssl_ctx = ssl.create_default_context()
     ssl_ctx.check_hostname = False
-    ssl_ctx.verify_mode = ssl.CERT_NONE
+    ssl_ctx.verify_mode = ssl.CERT_NONE  # Supabase pooler uses self-signed cert on port 6543
 
-    # pool_size=2 reuses connections across warm Lambda invocations.
-    # pool_recycle=240 drops connections before Supabase's 5-min idle timeout
-    # so stale connections are never handed to a request.
-    # pool_pre_ping removed — the recycle window handles staleness without
-    # an extra SELECT 1 round-trip on every warm request.
     engine = create_engine(
         pg_url,
         pool_size=2,

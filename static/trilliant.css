@@ -273,7 +273,9 @@ html.dark .nav-link.active { color: #A5B4FC !important; background: rgba(99,102,
   backdrop-filter: blur(8px) !important;
 }
 html.dark .btn.btn-ghost, html.dark .btn.btn-secondary { background: rgba(30,41,59,0.6) !important; color: var(--text-secondary) !important; }
-.btn.btn-ghost:hover, .btn.btn-secondary:hover { background: rgba(255,255,255,0.90) !important; }
+.btn.btn-ghost:hover, .btn.btn-secondary:hover { background: rgba(255,255,255,0.90) !important; color: #374151 !important; }
+html.dark .btn.btn-ghost:hover, html.dark .btn.btn-secondary:hover { background: rgba(51,65,85,0.8) !important; color: #e2e8f0 !important; }
+.btn.btn-primary:hover { color: #fff !important; }
 
 /* Danger */
 .btn.btn-danger, .wb-card-del {
@@ -286,6 +288,8 @@ html.dark .btn.btn-ghost, html.dark .btn.btn-secondary { background: rgba(30,41,
 .btn.btn-danger:hover, .wb-card-del:hover { background: var(--status-danger) !important; box-shadow: 0 6px 20px rgba(220,38,38,0.35) !important; }
 .wb-card-del { background: transparent !important; color: #9CA3AF !important; border-radius: 0.625rem !important; }
 .wb-card-del:hover { background: rgba(239,68,68,0.10) !important; color: #DC2626 !important; box-shadow: none !important; }
+.wb-card-edit { background: transparent !important; color: #9CA3AF !important; border-radius: 0.625rem !important; width:26px; height:26px; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition: background .15s, color .15s; }
+.wb-card-edit:hover { background: rgba(99,102,241,0.10) !important; color: #6366f1 !important; box-shadow: none !important; }
 
 /* ── 6. INPUTS / SEARCH ── */
 .form-input, .filter-select, input[type="text"], input[type="email"], input[type="date"],
@@ -343,7 +347,7 @@ html.dark .form-input, html.dark .filter-select, html.dark input, html.dark sele
   border: 1px solid rgba(255,255,255,0.65) !important;
   border-radius: 1.5rem !important;
   box-shadow: 0 2px 12px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04) !important;
-  transition: all 0.2s ease !important;
+  transition: background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease !important;
 }
 html.dark .card, html.dark .wb-card, html.dark .wb-list-card, html.dark .act-feed-card,
 html.dark .ad-card, html.dark .spk-card, html.dark .speaker-topics-card,
@@ -353,6 +357,9 @@ html.dark .stat-card, html.dark .modal-box, html.dark .dash-hero, html.dark .wd-
 }
 
 /* Interactive cards lift on hover */
+.wb-card, .spk-card, .speaker-topics-card, .ad-card {
+  transition: background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, transform 0.25s ease !important;
+}
 .wb-card:hover, .spk-card:hover, .speaker-topics-card:hover, .ad-card:hover {
   background: rgba(255,255,255,0.92) !important;
   transform: translateY(-2px) !important;
@@ -1304,12 +1311,9 @@ html.dark .nav-chips { background: rgba(30,41,59,0.40) !important; }
 .ad-card { border-radius: 1.25rem !important; }
 .ad-card-title { font-family: var(--font-serif) !important; font-weight: 700 !important; color: var(--text-primary) !important; }
 
-/* ── 34. PAGE ANIMATIONS ── */
-.reveal { opacity: 0; transform: translateY(8px); animation: trl-reveal 0.35s ease-out forwards; }
-.rd1 { animation-delay: 0.08s; }
-.rd2 { animation-delay: 0.16s; }
-.rd3 { animation-delay: 0.24s; }
-@keyframes trl-reveal { to { opacity: 1; transform: translateY(0); } }
+/* ── 34. PAGE ANIMATIONS ── (disabled to prevent flicker) */
+.reveal { opacity: 1 !important; transform: none !important; animation: none !important; }
+.rd1, .rd2, .rd3 { animation-delay: 0s !important; }
 
 @media (prefers-reduced-motion: reduce) {
   .reveal, .wb-card, .spk-card, .att-wb-card, .topic-card { animation: none !important; transition: none !important; }

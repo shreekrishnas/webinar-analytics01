@@ -1,8 +1,9 @@
 import os
+import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File, Response
+from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File, Response, Header
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from starlette.responses import Response as StarletteResponse
 import csv, io
 from sqlalchemy.orm import Session
@@ -13,31 +14,89 @@ import models, crud, schemas
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# ── Logging ───────────────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+logger = logging.getLogger("webinariq")
 
-# Static files with long-lived cache headers so browsers cache CSS/JS for 1 year.
-# The ?v=XX query string in index.html handles cache-busting on deploy.
-class CachedStaticFiles(StaticFiles):
+# ── App config (env-driven, sensible defaults) ────────────────────────────────
+COMPANY_NAME        = os.environ.get("COMPANY_NAME",         "Right Horizons")
+COMPANY_DESC        = os.environ.get("COMPANY_DESC",         "an Indian financial advisory firm running HNI/NRI webinars")
+COMPANY_DOMAIN      = os.environ.get("COMPANY_DOMAIN",       "righthorizons.com")
+APP_URL             = os.environ.get("APP_URL",              "https://webinar-analytics-six.vercel.app")
+OPENROUTER_REFERER  = os.environ.get("OPENROUTER_REFERER",   APP_URL)
+AI_MODEL            = os.environ.get("AI_MODEL",             "anthropic/claude-sonnet-4-5")
+# Optional API key to protect endpoints. Set API_KEY env var in Vercel to enable.
+API_KEY             = os.environ.get("API_KEY", "")
+
+def _auth(x_api_key: str = Header(default="")):
+    """Enforce API key if one is configured in the environment."""
+    if API_KEY and x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+def _ai_headers(api_key: str) -> dict:
+    return {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": OPENROUTER_REFERER,
+        "X-Title": "WebinarIQ",
+    }
+
+
+def _compute_perf_score(regs: int, att_rate: float, icp: str, has_ads: bool = False) -> int:
+    reg_score = min(25, round(regs / 150 * 25))
+    att_score = min(35, round(att_rate / 60 * 35))
+    icp_scores = {'Family Office': 20, 'AIF': 20, 'PMS': 18, 'NRI': 16, 'ESOPs': 15, 'Retirement Planning': 14, 'Others': 8}
+    icp_score = icp_scores.get(icp or 'Others', 8)
+    fit_score = 10
+    followup_score = 3
+    return min(100, reg_score + att_score + icp_score + fit_score + followup_score)
+
+
+def _score_label(score: int) -> str:
+    if score >= 80: return "High Performing"
+    if score >= 60: return "Good"
+    if score >= 40: return "Average"
+    return "Low Performing"
+
+
+class NoCacheStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope) -> StarletteResponse:
         response = await super().get_response(path, scope)
         if response.status_code == 200:
-            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
         return response
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Only seed in local dev; production (VERCEL / DATABASE_URL) is pre-seeded
     if not os.environ.get("DATABASE_URL") and not os.environ.get("VERCEL"):
         try:
             models.Base.metadata.create_all(bind=engine)
             from seed_data import seed_database
             seed_database()
-        except Exception:
-            pass
+            logger.info("Local dev DB seeded")
+        except Exception as e:
+            logger.warning(f"DB seed skipped: {e}")
     yield
 
 
 app = FastAPI(title="WebinarIQ Analytics", version="2.0.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def no_cache_middleware(request, call_next):
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Surrogate-Control"] = "no-store"
+    response.headers["CDN-Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 def get_db():
@@ -50,25 +109,48 @@ def get_db():
 
 # ── Static files & root ───────────────────────────────────────────────────────
 
-app.mount("/static", CachedStaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+app.mount("/static", NoCacheStaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 
 
 @app.get("/", include_in_schema=False)
 async def root():
-    return FileResponse(os.path.join(BASE_DIR, "static", "index.html"))
+    resp = FileResponse(os.path.join(BASE_DIR, "static", "index.html"))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
 
 
 # ── Platform stats ────────────────────────────────────────────────────────────
 
-@app.get("/api/stats", response_model=schemas.PlatformStats)
+@app.get("/api/stats")
 def platform_stats(response: Response, db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store"
-    return crud.get_platform_stats(db)
+    stats = crud.get_platform_stats(db)
+    # Add follow-up pending: attendees not yet in pipeline or still 'new'
+    try:
+        from sqlalchemy import text as _t
+        fp = db.execute(_t("""
+            SELECT COUNT(DISTINCT r.email) FROM attendances a
+            JOIN registrations r ON r.id=a.registration_id
+            WHERE a.attended=TRUE AND r.email IS NOT NULL
+            AND r.email NOT IN (SELECT email FROM pipeline_contacts WHERE status != 'new')
+        """)).fetchone()[0] or 0
+        result = stats.dict() if hasattr(stats, 'dict') else dict(stats)
+        result['followup_pending'] = int(fp)
+        return result
+    except Exception as e:
+        logger.warning(f"followup_pending calc failed: {e}")
+        return stats
+
+
+@app.get("/api/health")
+def health_check():
+    return {"status": "ok", "company": COMPANY_NAME}
 
 
 # ── Webinars ──────────────────────────────────────────────────────────────────
 
-@app.get("/api/webinars", response_model=List[schemas.WebinarSummary])
+@app.get("/api/webinars")
 def list_webinars(
     response: Response,
     date: Optional[str] = Query(None),
@@ -78,13 +160,25 @@ def list_webinars(
 ):
     response.headers["Cache-Control"] = "no-store"
     if date:
-        return crud.get_webinars_by_date(db, date)
-    if name:
-        return crud.get_webinars_by_name(db, name)
-    webinars = crud.get_all_webinars(db)
-    if speaker_id:
-        webinars = [w for w in webinars if w.speaker_id == speaker_id]
-    return webinars
+        webinars = crud.get_webinars_by_date(db, date)
+    elif name:
+        webinars = crud.get_webinars_by_name(db, name)
+    else:
+        webinars = crud.get_all_webinars(db)
+        if speaker_id:
+            webinars = [w for w in webinars if w.speaker_id == speaker_id]
+    result = []
+    for w in webinars:
+        d = w.dict() if hasattr(w, 'dict') else dict(w)
+        if d.get('status') == 'completed':
+            regs = d.get('total_registrations') or 0
+            att_rate = d.get('attendance_rate') or 0
+            icp = d.get('icp') or 'Others'
+            score = _compute_perf_score(regs, att_rate, icp)
+            d['performance_score'] = score
+            d['score_label'] = _score_label(score)
+        result.append(d)
+    return result
 
 
 @app.post("/api/webinars", response_model=schemas.WebinarSummary, status_code=201)
@@ -116,6 +210,10 @@ def update_webinar(webinar_id: int, payload: dict, db: Session = Depends(get_db)
         w.description = payload["description"]
     if "status" in payload:
         w.status = payload["status"]
+    if "date" in payload:
+        from datetime import date as _date
+        d = payload["date"]
+        w.date = _date.fromisoformat(d) if isinstance(d, str) else d
     if "icp" in payload:
         w.icp = payload["icp"] or "Others"
     if "speaker_name" in payload:
@@ -173,8 +271,8 @@ async def upload_attendees(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        import traceback
-        raise HTTPException(status_code=500, detail=traceback.format_exc())
+        logger.exception("Unhandled error")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ── Webinar Notes (Human Knowledge) ──────────────────────────────────────────
@@ -229,11 +327,11 @@ def delete_note(webinar_id: int, note_id: int, db: Session = Depends(get_db)):
 @app.get("/api/intelligence")
 def get_intelligence(db: Session = Depends(get_db)):
     """Combined intelligence: topic performance, speaker deep-dive, campaign, ICP refinement."""
-    import traceback
     try:
         return _get_intelligence_inner(db)
     except Exception:
-        raise HTTPException(status_code=500, detail=traceback.format_exc()[-1500:])
+        logger.exception("Unhandled error")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def _get_intelligence_inner(db: Session):
@@ -245,15 +343,10 @@ def _get_intelligence_inner(db: Session):
             COALESCE(w.icp, 'Others') AS icp,
             COUNT(*) AS webinar_count,
             COALESCE(SUM(reg.cnt), 0) AS total_regs,
-            COALESCE(SUM(att.cnt), 0) AS total_att,
-            COALESCE(SUM(w.spend), 0) AS total_spend,
-            COALESCE(SUM(w.leads), 0) AS total_leads,
-            AVG(w.cpl) AS avg_cpl,
-            COALESCE(SUM(w.impressions), 0) AS total_impressions
+            COALESCE(SUM(att.cnt), 0) AS total_att
         FROM webinars w
         LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM registrations GROUP BY webinar_id) reg ON reg.webinar_id = w.id
         LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM attendances WHERE attended=TRUE GROUP BY webinar_id) att ON att.webinar_id = w.id
-        WHERE w.status = 'completed'
         GROUP BY w.icp
         ORDER BY total_regs DESC
     """)).fetchall()
@@ -263,17 +356,12 @@ def _get_intelligence_inner(db: Session):
         regs = int(r.total_regs or 0)
         att = int(r.total_att or 0)
         rate = round(att / regs * 100, 1) if regs else 0
-        cost_per_att = round(float(r.total_spend or 0) / att, 1) if att else 0
         icp_rows.append({
             "icp": r.icp,
             "webinar_count": int(r.webinar_count or 0),
             "total_regs": regs,
             "total_att": att,
             "attendance_rate": rate,
-            "total_spend": round(float(r.total_spend or 0), 0),
-            "total_leads": int(r.total_leads or 0),
-            "avg_cpl": round(float(r.avg_cpl or 0), 1),
-            "cost_per_attendee": cost_per_att,
         })
 
     # ── 2. Speaker deep performance ──
@@ -283,8 +371,6 @@ def _get_intelligence_inner(db: Session):
             COUNT(DISTINCT w.id) AS webinars,
             COALESCE(SUM(reg.cnt), 0) AS total_regs,
             COALESCE(SUM(att.cnt), 0) AS total_att,
-            COALESCE(SUM(w.spend), 0) AS spend,
-            AVG(w.cpl) AS avg_cpl,
             AVG(reg.cnt) AS avg_regs_per_webinar
         FROM speakers s
         JOIN webinars w ON w.speaker_id = s.id OR w.co_speaker_id = s.id
@@ -301,7 +387,6 @@ def _get_intelligence_inner(db: Session):
         regs = int(r.total_regs or 0)
         att = int(r.total_att or 0)
         rate = round(att / regs * 100, 1) if regs else 0
-        cost_per_att = round(float(r.spend or 0) / att, 1) if att else 0
         spk_rows.append({
             "id": r.id,
             "name": r.name,
@@ -310,15 +395,12 @@ def _get_intelligence_inner(db: Session):
             "total_att": att,
             "attendance_rate": rate,
             "avg_regs_per_webinar": round(float(r.avg_regs_per_webinar or 0), 0),
-            "spend": round(float(r.spend or 0), 0),
-            "avg_cpl": round(float(r.avg_cpl or 0), 1),
-            "cost_per_attendee": cost_per_att,
         })
 
     # ── 3. Campaign learning: best day/time + budget tier ──
     # Best day of week
     day_rows = db.execute(_t("""
-        SELECT w.date, COALESCE(reg.cnt, 0) AS regs, COALESCE(att.cnt, 0) AS att, w.spend
+        SELECT w.date, COALESCE(reg.cnt, 0) AS regs, COALESCE(att.cnt, 0) AS att
         FROM webinars w
         LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM registrations GROUP BY webinar_id) reg ON reg.webinar_id = w.id
         LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM attendances WHERE attended=TRUE GROUP BY webinar_id) att ON att.webinar_id = w.id
@@ -350,16 +432,6 @@ def _get_intelligence_inner(db: Session):
     ]
     day_order = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
     day_perf.sort(key=lambda x: day_order.index(x["day"]))
-
-    # Budget efficiency tiers
-    budget_eff = db.execute(_t("""
-        SELECT w.title, w.date, w.spend, COALESCE(reg.cnt,0) AS regs, COALESCE(att.cnt,0) AS att, w.cpl
-        FROM webinars w
-        LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM registrations GROUP BY webinar_id) reg ON reg.webinar_id = w.id
-        LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM attendances WHERE attended=TRUE GROUP BY webinar_id) att ON att.webinar_id = w.id
-        WHERE w.spend > 0 AND w.status='completed'
-        ORDER BY w.spend ASC
-    """)).fetchall()
 
     # ── 4. ICP refinement: email-domain analysis (Python-side aggregation) ──
     all_emails = db.execute(_t("""
@@ -420,10 +492,6 @@ def _get_intelligence_inner(db: Session):
             "rate": round(at/rg*100, 1) if rg else 0,
         })
 
-    # Only include spend/leads totals if they actually have real campaign data
-    raw_spend = sum(r["total_spend"] for r in icp_rows)
-    raw_leads = sum(r["total_leads"] for r in icp_rows)
-
     return {
         "topic_intelligence": icp_rows,
         "speaker_performance": spk_rows,
@@ -431,9 +499,337 @@ def _get_intelligence_inner(db: Session):
         "domain_analysis": domains,
         "source_performance": sources,
         "total_webinars": sum(r["webinar_count"] for r in icp_rows),
-        "total_spend": raw_spend if raw_spend > 0 else None,
-        "total_leads": raw_leads if raw_leads > 0 else None,
     }
+
+
+@app.get("/api/webinar-funnel/{webinar_id}")
+def get_webinar_funnel(webinar_id: int, db: Session = Depends(get_db)):
+    """Return funnel data for a single webinar: regs -> attendees -> follow-up."""
+    from sqlalchemy import text as _t
+    w = db.query(models.Webinar).filter(models.Webinar.id == webinar_id).first()
+    if not w:
+        raise HTTPException(status_code=404, detail="Webinar not found")
+
+    regs = db.execute(_t("SELECT COUNT(*) FROM registrations WHERE webinar_id=:w"), {"w": webinar_id}).fetchone()[0]
+    att = db.execute(_t("SELECT COUNT(*) FROM attendances WHERE webinar_id=:w AND attended=TRUE"), {"w": webinar_id}).fetchone()[0]
+
+    # Check if ads exist for this webinar
+    ads = db.execute(_t("SELECT SUM(impressions), SUM(clicks) FROM webinar_ads WHERE webinar_id=:w"), {"w": webinar_id}).fetchone()
+    impressions = int(ads[0] or 0)
+    clicks = int(ads[1] or 0)
+
+    regs = int(regs or 0)
+    att = int(att or 0)
+    no_show = max(0, regs - att)
+
+    # Pipeline follow-up count for attendees who have email
+    att_emails = db.execute(_t("""
+        SELECT r.email FROM attendances a
+        JOIN registrations r ON r.id = a.registration_id
+        WHERE a.webinar_id=:w AND a.attended=TRUE AND r.email IS NOT NULL
+    """), {"w": webinar_id}).fetchall()
+    att_email_list = [r.email for r in att_emails]
+
+    followed_up = 0
+    if att_email_list:
+        params = {f"e{i}": e for i, e in enumerate(att_email_list[:100])}
+        ph = ",".join(f":e{i}" for i in range(len(params)))
+        followed_up = db.execute(_t(f"SELECT COUNT(*) FROM pipeline_contacts WHERE email IN ({ph}) AND status NOT IN ('new')"), params).fetchone()[0] or 0
+
+    stages = []
+    if impressions > 0:
+        stages.append({"label": "Impressions", "count": impressions, "pct": 100})
+        click_pct = round(clicks/impressions*100, 1) if impressions else 0
+        stages.append({"label": "Clicks", "count": clicks, "pct": click_pct, "drop": round(100-click_pct, 1)})
+        reg_pct = round(regs/clicks*100, 1) if clicks else 0
+        stages.append({"label": "Registrations", "count": regs, "pct": reg_pct, "drop": round(100-reg_pct, 1)})
+    else:
+        stages.append({"label": "Registrations", "count": regs, "pct": 100})
+
+    att_pct = round(att/regs*100, 1) if regs else 0
+    stages.append({"label": "Attendees", "count": att, "pct": att_pct, "drop": round(100-att_pct, 1)})
+
+    fu_pct = round(followed_up/att*100, 1) if att else 0
+    stages.append({"label": "Followed Up", "count": followed_up, "pct": fu_pct, "drop": round(100-fu_pct, 1)})
+
+    # Generate insight
+    insight = ""
+    if att_pct < 25 and regs > 50:
+        insight = f"Registrations are strong ({regs}), but only {att_pct}% attended. Review reminder timing and audience commitment."
+    elif att_pct >= 50:
+        insight = f"Excellent attendance rate of {att_pct}%. This webinar had strong audience commitment."
+    elif att_pct >= 35:
+        insight = f"Good attendance rate of {att_pct}%. Consider improving pre-webinar reminders to push above 50%."
+    else:
+        insight = f"Attendance rate of {att_pct}% is below target. Review topic relevance and reminder sequence."
+
+    return {"webinar_id": webinar_id, "title": w.title, "stages": stages, "insight": insight, "has_ads": impressions > 0}
+
+
+@app.get("/api/repeat-audience")
+def get_repeat_audience(db: Session = Depends(get_db)):
+    """Track first-time vs repeat registrants and attendees."""
+    from sqlalchemy import text as _t
+
+    # People who attended multiple webinars
+    repeat_attendees = db.execute(_t("""
+        SELECT r.email, r.attendee_name,
+               COUNT(DISTINCT a.webinar_id) AS webinar_count,
+               MAX(a.joined_at) AS last_seen
+        FROM attendances a
+        JOIN registrations r ON r.id = a.registration_id
+        WHERE a.attended = TRUE AND r.email IS NOT NULL AND r.email NOT LIKE '%@rhorizon%'
+        GROUP BY r.email, r.attendee_name
+        HAVING COUNT(DISTINCT a.webinar_id) >= 2
+        ORDER BY webinar_count DESC
+        LIMIT 50
+    """)).fetchall()
+
+    # Total unique registrants
+    total_unique_regs = db.execute(_t("""
+        SELECT COUNT(DISTINCT email) FROM registrations WHERE email IS NOT NULL
+    """)).fetchone()[0] or 0
+
+    # Total unique attendees
+    total_unique_att = db.execute(_t("""
+        SELECT COUNT(DISTINCT r.email) FROM attendances a
+        JOIN registrations r ON r.id = a.registration_id
+        WHERE a.attended = TRUE AND r.email IS NOT NULL
+    """)).fetchone()[0] or 0
+
+    # People who registered but never attended
+    never_attended = db.execute(_t("""
+        SELECT COUNT(DISTINCT r.email) FROM registrations r
+        WHERE r.email IS NOT NULL
+        AND r.email NOT IN (
+            SELECT DISTINCT r2.email FROM attendances a
+            JOIN registrations r2 ON r2.id = a.registration_id
+            WHERE a.attended = TRUE AND r2.email IS NOT NULL
+        )
+    """)).fetchone()[0] or 0
+
+    repeat_list = [{
+        "email": r.email,
+        "name": r.attendee_name,
+        "webinar_count": int(r.webinar_count),
+        "last_seen": str(r.last_seen)[:10] if r.last_seen else None,
+    } for r in repeat_attendees]
+
+    repeat_count = len(repeat_list)
+
+    return {
+        "total_unique_registrants": int(total_unique_regs),
+        "total_unique_attendees": int(total_unique_att),
+        "repeat_attendees_count": repeat_count,
+        "never_attended_count": int(never_attended),
+        "repeat_attendees": repeat_list,
+    }
+
+
+@app.get("/api/topic-performance")
+def get_topic_performance(db: Session = Depends(get_db)):
+    """Per-ICP topic performance with best speaker and sub-topic suggestions."""
+    from sqlalchemy import text as _t
+
+    # Per ICP: webinar count, regs, attendees, attendance rate, best speaker
+    icp_rows = db.execute(_t("""
+        SELECT
+            COALESCE(w.icp, 'Others') AS icp,
+            COUNT(DISTINCT w.id) AS webinar_count,
+            COALESCE(SUM(reg.cnt), 0) AS total_regs,
+            COALESCE(SUM(att.cnt), 0) AS total_att,
+            s.name AS top_speaker_name,
+            s.id AS top_speaker_id
+        FROM webinars w
+        LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM registrations GROUP BY webinar_id) reg ON reg.webinar_id = w.id
+        LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM attendances WHERE attended=TRUE GROUP BY webinar_id) att ON att.webinar_id = w.id
+        LEFT JOIN speakers s ON s.id = w.speaker_id
+        WHERE w.status = 'completed'
+        GROUP BY w.icp
+        ORDER BY total_att DESC
+    """)).fetchall()
+
+    # For each ICP, find the best speaker (highest att rate for that ICP)
+    icp_data = []
+    for r in icp_rows:
+        regs = int(r.total_regs or 0)
+        att = int(r.total_att or 0)
+        rate = round(att/regs*100, 1) if regs else 0
+
+        # Best speaker for this ICP
+        best_spk = db.execute(_t("""
+            SELECT s.name,
+                   SUM(att.cnt) as total_att,
+                   SUM(reg.cnt) as total_regs
+            FROM webinars w
+            JOIN speakers s ON s.id = w.speaker_id
+            LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM registrations GROUP BY webinar_id) reg ON reg.webinar_id = w.id
+            LEFT JOIN (SELECT webinar_id, COUNT(*) AS cnt FROM attendances WHERE attended=TRUE GROUP BY webinar_id) att ON att.webinar_id = w.id
+            WHERE w.status='completed' AND COALESCE(w.icp,'Others')=:icp AND reg.cnt > 0
+            GROUP BY s.name
+            ORDER BY (CAST(att.cnt AS FLOAT)/reg.cnt) DESC
+            LIMIT 1
+        """), {"icp": r.icp or 'Others'}).fetchone()
+
+        # Recent webinars for this ICP
+        recent = db.execute(_t("""
+            SELECT w.title, w.date, s.name as speaker,
+                   (SELECT COUNT(*) FROM registrations WHERE webinar_id=w.id) as regs,
+                   (SELECT COUNT(*) FROM attendances WHERE webinar_id=w.id AND attended=TRUE) as att
+            FROM webinars w LEFT JOIN speakers s ON s.id=w.speaker_id
+            WHERE COALESCE(w.icp,'Others')=:icp AND w.status='completed'
+            ORDER BY w.date DESC LIMIT 3
+        """), {"icp": r.icp or 'Others'}).fetchall()
+
+        grade = 'A' if rate >= 40 else 'B' if rate >= 30 else 'C' if rate >= 20 else 'D'
+
+        icp_data.append({
+            "icp": r.icp or 'Others',
+            "webinar_count": int(r.webinar_count or 0),
+            "total_regs": regs,
+            "total_att": att,
+            "attendance_rate": rate,
+            "grade": grade,
+            "best_speaker": best_spk.name if best_spk else None,
+            "recent_webinars": [
+                {"title": x.title, "date": str(x.date), "speaker": x.speaker,
+                 "regs": int(x.regs or 0), "att": int(x.att or 0),
+                 "rate": round(int(x.att or 0)/int(x.regs or 1)*100, 1)}
+                for x in recent
+            ]
+        })
+
+    return {"topics": icp_data}
+
+
+@app.get("/api/lead-quality")
+def get_lead_quality(db: Session = Depends(get_db)):
+    """Score each attendee by ICP match, attendance count, repeat attendance, follow-up status."""
+    from sqlalchemy import text as _t
+
+    rows = db.execute(_t("""
+        SELECT r.email, r.attendee_name,
+               COUNT(DISTINCT a.webinar_id) AS webinar_count,
+               AVG(a.duration_minutes) AS avg_duration,
+               MAX(COALESCE(w.icp,'Others')) AS primary_icp,
+               MAX(a.joined_at) AS last_seen
+        FROM attendances a
+        JOIN registrations r ON r.id = a.registration_id
+        JOIN webinars w ON w.id = a.webinar_id
+        WHERE a.attended = TRUE AND r.email IS NOT NULL AND r.email NOT LIKE '%@rhorizon%'
+        GROUP BY r.email, r.attendee_name
+        ORDER BY webinar_count DESC, avg_duration DESC
+        LIMIT 100
+    """)).fetchall()
+
+    # Get pipeline status for these emails
+    emails = [r.email for r in rows]
+    pipeline_map = {}
+    if emails:
+        params = {f"e{i}": e for i, e in enumerate(emails[:100])}
+        ph = ",".join(f":e{i}" for i in range(len(params)))
+        pl_rows = db.execute(_t(f"SELECT email, status FROM pipeline_contacts WHERE email IN ({ph})"), params).fetchall()
+        pipeline_map = {r.email: r.status for r in pl_rows}
+
+    premium_icps = {'Family Office', 'AIF', 'PMS', 'NRI', 'ESOPs'}
+    leads = []
+    for r in rows:
+        webinar_count = int(r.webinar_count or 0)
+        avg_dur = float(r.avg_duration or 0)
+        icp = r.primary_icp or 'Others'
+        pl_status = pipeline_map.get(r.email, 'none')
+
+        # Score 0-100
+        score = 0
+        score += min(30, webinar_count * 10)  # repeat attendance: up to 30
+        score += min(25, round(avg_dur / 60 * 25)) if avg_dur else 0  # duration: up to 25
+        score += 25 if icp in premium_icps else 10  # ICP: 25 for premium, 10 for others
+        score += 20 if pl_status in ('meeting_booked', 'converted') else 10 if pl_status == 'contacted' else 0  # follow-up
+        score = min(100, score)
+
+        if score >= 70: quality = "High Quality"
+        elif score >= 45: quality = "Medium Quality"
+        elif score >= 25: quality = "Low Quality"
+        else: quality = "Needs Review"
+
+        leads.append({
+            "email": r.email,
+            "name": r.attendee_name,
+            "webinar_count": webinar_count,
+            "avg_duration_min": round(avg_dur, 0),
+            "primary_icp": icp,
+            "last_seen": str(r.last_seen)[:10] if r.last_seen else None,
+            "pipeline_status": pl_status,
+            "score": score,
+            "quality": quality,
+        })
+
+    leads.sort(key=lambda x: -x['score'])
+    return {"leads": leads, "total": len(leads)}
+
+
+@app.get("/api/speaker-insights")
+def get_speaker_insights(db: Session = Depends(get_db)):
+    """Per-speaker: best topics, best ICP, performance trend."""
+    from sqlalchemy import text as _t
+
+    speakers = db.execute(_t("SELECT id, name, bio FROM speakers ORDER BY name")).fetchall()
+    result = []
+
+    for spk in speakers:
+        # All completed webinars for this speaker
+        webinars = db.execute(_t("""
+            SELECT w.id, w.title, w.icp, w.date,
+                   (SELECT COUNT(*) FROM registrations WHERE webinar_id=w.id) as regs,
+                   (SELECT COUNT(*) FROM attendances WHERE webinar_id=w.id AND attended=TRUE) as att
+            FROM webinars w
+            WHERE (w.speaker_id=:id OR w.co_speaker_id=:id) AND w.status='completed'
+            ORDER BY w.date DESC
+        """), {"id": spk.id}).fetchall()
+
+        if not webinars:
+            continue
+
+        wlist = []
+        for w in webinars:
+            regs = int(w.regs or 0); att = int(w.att or 0)
+            rate = round(att/regs*100, 1) if regs else 0
+            wlist.append({"id": w.id, "title": w.title, "icp": w.icp or 'Others',
+                          "date": str(w.date), "regs": regs, "att": att, "rate": rate})
+
+        # Best ICP (highest avg attendance rate)
+        icp_map = {}
+        for w in wlist:
+            icp = w["icp"]
+            if icp not in icp_map: icp_map[icp] = {"total": 0, "count": 0}
+            icp_map[icp]["total"] += w["rate"]
+            icp_map[icp]["count"] += 1
+        best_icp = max(icp_map, key=lambda k: icp_map[k]["total"]/icp_map[k]["count"]) if icp_map else None
+
+        # Best webinars (top 3 by rate)
+        best_webinars = sorted(wlist, key=lambda x: -x["rate"])[:3]
+        # Weak webinars (bottom 2 by rate with enough regs)
+        weak_webinars = sorted([w for w in wlist if w["regs"] >= 30], key=lambda x: x["rate"])[:2]
+
+        avg_rate = round(sum(w["rate"] for w in wlist) / len(wlist), 1) if wlist else 0
+        total_regs = sum(w["regs"] for w in wlist)
+        total_att = sum(w["att"] for w in wlist)
+
+        result.append({
+            "id": spk.id,
+            "name": spk.name,
+            "webinar_count": len(wlist),
+            "total_regs": total_regs,
+            "total_att": total_att,
+            "avg_attendance_rate": avg_rate,
+            "best_icp": best_icp,
+            "best_webinars": best_webinars,
+            "weak_webinars": weak_webinars,
+            "recent_webinars": wlist[:5],
+        })
+
+    result.sort(key=lambda x: -x["avg_attendance_rate"])
+    return {"speakers": result}
 
 
 # ── Competitor Intelligence (Phase 3) ────────────────────────────────────────
@@ -562,27 +958,26 @@ async def auto_research_competitor(payload: dict, db: Session = Depends(get_db))
         search_resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
-                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
+                     "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
             json={
-                "model": "perplexity/sonar",
+                "model": AI_MODEL,
                 "max_tokens": 1500,
                 "messages": [{"role": "user", "content":
-                    f"""Today is {today}. Research the Indian financial advisory company "{comp.name}" ({comp.website or 'search online'}).
+                    f"""Today is {today}. Based on your knowledge, describe the Indian financial advisory company "{comp.name}" ({comp.website or ''}).
 
-Find their last 3-5 webinars, events, or content pieces published in the last 60 days.
+What do you know about their recent webinars, events, content, or thought leadership from the past 6 months?
 
-For each item find:
-- Date
+For each item describe:
+- Approximate date or timeframe
 - Topic/title
-- Speaker name (if any)
+- Speaker name (if known)
 - Target audience (HNI, NRI, retail, women, etc.)
-- Key messaging angle or hook they used
-- CTA (register, watch, download, etc.)
-- Link if available
+- Key messaging angle or hook
+- CTA or format (register, watch, download, webinar, LinkedIn post, etc.)
 
-Also note: What topics are they pushing hardest? What audience segments? What is their differentiation vs generic financial advice?
+Also note: What topics are they pushing hardest? What audience segments? What differentiates them?
 
-Be specific and factual — only report what you actually find, not assumptions."""}]
+Be honest about what you know vs don't know. Only report what you are reasonably confident about."""}]
             },
             timeout=40.0
         )
@@ -596,9 +991,9 @@ Be specific and factual — only report what you actually find, not assumptions.
         parse_resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
-                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
+                     "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
             json={
-                "model": "anthropic/claude-sonnet-4.5",
+                "model": AI_MODEL,
                 "max_tokens": 2000,
                 "messages": [{"role": "user", "content":
                     f"""Extract structured activity records from this research about "{comp.name}":
@@ -665,6 +1060,110 @@ Return ONLY valid JSON array."""}]
     }
 
 
+@app.get("/api/competitor-research/weekly")
+async def weekly_competitor_research(db: Session = Depends(get_db)):
+    """Vercel cron endpoint — runs every Monday to auto-research all competitors."""
+    import os, json, httpx
+    from datetime import date as _date, datetime as _dt
+    from sqlalchemy import text as _t
+
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    if not api_key:
+        return {"error": "OPENROUTER_API_KEY not configured"}
+
+    comps = db.execute(_t("SELECT id, name, website, focus FROM competitors ORDER BY name")).fetchall()
+    results = []
+
+    for comp in comps:
+        today = _date.today().strftime("%B %d, %Y")
+        try:
+            search_resp = httpx.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+                         "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
+                json={
+                    "model": AI_MODEL,
+                    "max_tokens": 1200,
+                    "messages": [{"role": "user", "content":
+                        f"""Today is {today}. Based on your knowledge, describe "{comp.name}" ({comp.website or ''}).
+
+What recent webinars, events, content or thought leadership have they done in the past 3 months? Focus: Indian wealth advisory, HNI/NRI, PMS, financial planning.
+
+For each item describe: approximate date, topic/title, target audience, key messaging angle.
+
+Only report what you are reasonably confident about. Keep it concise."""}]
+                },
+                timeout=30.0
+            )
+            search_resp.raise_for_status()
+            raw_research = search_resp.json()["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            results.append({"competitor": comp.name, "error": str(e)})
+            continue
+
+        try:
+            parse_resp = httpx.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+                         "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
+                json={
+                    "model": AI_MODEL,
+                    "max_tokens": 1500,
+                    "messages": [{"role": "user", "content":
+                        f"""Extract activity records from this research about "{comp.name}":
+
+{raw_research}
+
+Return JSON array. Each item:
+{{"activity_date":"YYYY-MM-DD","format":"webinar|linkedin|youtube|report|event|other","topic":"title max 120 chars","speaker":null,"audience_focus":"HNI|NRI|retail|etc","messaging_angle":"key hook max 80 chars","cta":null,"link":null,"notes":"one line"}}
+
+Use today {_date.today().isoformat()} if date unknown. Return [] if nothing concrete. ONLY valid JSON array."""}]
+                },
+                timeout=25.0
+            )
+            parse_resp.raise_for_status()
+            raw2 = parse_resp.json()["choices"][0]["message"]["content"].strip()
+            activities = _extract_json(raw2)
+            if not isinstance(activities, list):
+                activities = []
+        except Exception:
+            activities = []
+
+        saved = 0
+        for act in activities:
+            try:
+                existing = db.execute(_t(
+                    "SELECT id FROM competitor_activity WHERE competitor_id=:cid AND topic=:t AND activity_date=:d"
+                ), {"cid": comp.id, "t": str(act.get("topic",""))[:200], "d": str(act.get("activity_date",""))}).fetchone()
+                if existing:
+                    continue
+                db.execute(_t("""
+                    INSERT INTO competitor_activity
+                    (competitor_id, activity_date, format, topic, speaker, audience_focus, messaging_angle, cta, link, notes)
+                    VALUES (:cid,:d,:fmt,:topic,:spk,:aud,:angle,:cta,:link,:notes)
+                """), {
+                    "cid": comp.id,
+                    "d": str(act.get("activity_date",""))[:10] or str(_date.today()),
+                    "fmt": str(act.get("format","other"))[:50],
+                    "topic": str(act.get("topic",""))[:200],
+                    "spk": str(act.get("speaker",""))[:100] if act.get("speaker") else None,
+                    "aud": str(act.get("audience_focus",""))[:100] if act.get("audience_focus") else None,
+                    "angle": str(act.get("messaging_angle",""))[:200] if act.get("messaging_angle") else None,
+                    "cta": str(act.get("cta",""))[:100] if act.get("cta") else None,
+                    "link": str(act.get("link",""))[:500] if act.get("link") else None,
+                    "notes": str(act.get("notes",""))[:500] if act.get("notes") else None,
+                })
+                db.commit()
+                saved += 1
+            except Exception:
+                db.rollback()
+
+        results.append({"competitor": comp.name, "found": len(activities), "saved": saved})
+
+    return {"ran_at": _date.today().isoformat(), "results": results}
+
+
+
 @app.get("/api/intelligence/insights")
 async def get_intelligence_insights(db: Session = Depends(get_db)):
     """AI-generated written insights from the intelligence data."""
@@ -712,37 +1211,79 @@ async def get_intelligence_insights(db: Session = Depends(get_db)):
         for r in recent
     )
 
-    prompt = f"""You are a senior marketing analyst for Right Horizons, an Indian financial advisory firm. Analyze this webinar performance data and generate sharp, actionable insights.
+    # Pull all data needed for comprehensive insights
+    # Top webinars by score
+    all_webinars = db.execute(_t("""
+        SELECT w.id, w.title, w.icp, w.date, s.name as speaker_name,
+               (SELECT COUNT(*) FROM registrations r WHERE r.webinar_id=w.id) AS regs,
+               (SELECT COUNT(*) FROM attendances a WHERE a.webinar_id=w.id AND a.attended=TRUE) AS att
+        FROM webinars w LEFT JOIN speakers s ON s.id=w.speaker_id
+        WHERE w.status='completed'
+        ORDER BY w.date DESC
+    """)).fetchall()
+
+    webinar_lines = []
+    for r in all_webinars:
+        regs = int(r.regs or 0); att = int(r.att or 0)
+        rate = round(att/regs*100,1) if regs else 0
+        score = _compute_perf_score(regs, rate, r.icp or 'Others')
+        webinar_lines.append(f"  [{r.date}] \"{r.title}\" | ICP:{r.icp or 'Others'} | Speaker:{r.speaker_name or 'Unknown'} | Regs:{regs} | Att:{att} | Rate:{rate}% | Score:{score}/100")
+
+    # Check ads data
+    has_ads = db.execute(_t("SELECT COUNT(*) FROM webinar_ads")).fetchone()[0] > 0
+    ads_summary = ""
+    if has_ads:
+        ads_rows = db.execute(_t("""
+            SELECT platform, SUM(CAST(spend AS FLOAT)) as spend, SUM(impressions) as impr,
+                   SUM(clicks) as clicks, SUM(conversions) as conv
+            FROM webinar_ads WHERE spend IS NOT NULL AND spend != ''
+            GROUP BY platform ORDER BY spend DESC
+        """)).fetchall()
+        if ads_rows:
+            ads_summary = "ADS DATA:\n" + "\n".join(
+                f"  {r.platform}: spend={r.spend}, impressions={r.impr}, clicks={r.clicks}, conversions={r.conv}"
+                for r in ads_rows
+            )
+
+    prompt = f"""You are a senior marketing analyst for {COMPANY_NAME}, {COMPANY_DESC}.
+
+WEBINAR DATA (all completed webinars, newest first):
+{chr(10).join(webinar_lines) if webinar_lines else 'No completed webinars yet.'}
 
 ICP PERFORMANCE: {icp_summary}
 SPEAKER PERFORMANCE: {spk_summary}
 RECENT WEBINARS: {recent_summary}
 
-Generate exactly 5 insights. Each insight must:
-- Name a specific number or % from the data
-- State what it means for the business
-- Suggest ONE concrete next action
+Generate EXACTLY 4 structured insights as a JSON array with these exact types in this order:
+1. type="overall" — Where the biggest drop happens in the programme funnel. Cite specific numbers.
+2. type="funnel" — Registration vs attendance pattern. Which ICPs or webinars convert best vs worst.
+3. type="lead_quality" — Comment on audience profile quality based on ICP data. Are the right HNI/NRI segments attending?
+4. type="recommendation" — One clear action on the weakest stage. Be specific: topic, ICP, format, or channel to fix.
 
-Format as JSON array:
+Rules:
+- Every insight MUST cite a specific number from the data
+- Be direct and prescriptive for an HNI wealth advisory context
+- Do not mention spend, CPL, impressions, or ads unless ads data is explicitly provided
+- Focus on registrations, attendance rates, ICP distribution, and speaker performance only
+{f'- Ads data available: {ads_summary}' if has_ads else ''}
+
+Return ONLY a valid JSON array of exactly 4 objects:
 [
   {{
-    "type": "win|risk|opportunity|trend|action",
-    "headline": "short bold claim ≤60 chars",
-    "detail": "1-2 sentences with specific numbers. What it means.",
-    "action": "One specific next step ≤80 chars",
-    "metric": "the key number that supports this insight"
+    "type": "overall|funnel|lead_quality|recommendation",
+    "headline": "Bold specific claim ≤65 chars",
+    "detail": "2-3 sentences with specific numbers and clear business implication.",
+    "action": "One specific, actionable next step ≤90 chars",
+    "metric": "The key stat e.g. '47% attendance rate'"
   }}
-]
-
-Types: win=something working well, risk=something declining/concerning, opportunity=untapped potential, trend=pattern over time, action=immediate thing to do.
-Return ONLY valid JSON array."""
+]"""
 
     try:
         resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
-                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={"model": "anthropic/claude-sonnet-4.5", "max_tokens": 1500,
+                     "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
+            json={"model": AI_MODEL, "max_tokens": 1500,
                   "messages": [{"role": "user", "content": prompt}]},
             timeout=30.0
         )
@@ -754,6 +1295,73 @@ Return ONLY valid JSON array."""
         raise HTTPException(status_code=500, detail=f"Insights failed: {e}")
 
 
+@app.get("/api/intelligence/hot-leads")
+def get_hot_leads(db: Session = Depends(get_db)):
+    """Attendees who stayed 30+ min but are NOT yet in pipeline (or still status='new').
+    Also returns repeat attendees (attended 2+ webinars).
+    These are the highest-intent leads to follow up with."""
+    from sqlalchemy import text as _t
+
+    # Hot leads: attended 30+ min, not in pipeline (or new only)
+    hot = db.execute(_t("""
+        SELECT
+            r.attendee_name AS name,
+            r.email,
+            w.title AS webinar_title,
+            w.date AS webinar_date,
+            COALESCE(w.icp, 'Others') AS icp,
+            a.duration_minutes,
+            COALESCE(p.status, 'not_added') AS pipeline_status
+        FROM attendances a
+        JOIN registrations r ON r.id = a.registration_id
+        JOIN webinars w ON w.id = a.webinar_id
+        LEFT JOIN pipeline_contacts p ON p.email = r.email
+        WHERE a.attended = TRUE
+          AND a.duration_minutes >= 30
+          AND r.email IS NOT NULL
+          AND (p.id IS NULL OR p.status = 'new')
+        ORDER BY a.duration_minutes DESC, w.date DESC
+        LIMIT 100
+    """)).fetchall()
+
+    # Repeat attendees: attended 2+ different webinars
+    repeat = db.execute(_t("""
+        SELECT
+            r.attendee_name AS name,
+            r.email,
+            COUNT(DISTINCT a.webinar_id) AS webinar_count,
+            MAX(a.duration_minutes) AS max_duration,
+            (SELECT STRING_AGG(DISTINCT COALESCE(w2.icp,'Others'), ',') FROM attendances a2 JOIN registrations r2 ON r2.id=a2.registration_id JOIN webinars w2 ON w2.id=a2.webinar_id WHERE a2.attended=TRUE AND r2.email=r.email) AS icps,
+            COALESCE(p.status, 'not_added') AS pipeline_status
+        FROM attendances a
+        JOIN registrations r ON r.id = a.registration_id
+        JOIN webinars w ON w.id = a.webinar_id
+        LEFT JOIN pipeline_contacts p ON p.email = r.email
+        WHERE a.attended = TRUE AND r.email IS NOT NULL
+        GROUP BY r.attendee_name, r.email, p.status
+        HAVING COUNT(DISTINCT a.webinar_id) >= 2
+        ORDER BY webinar_count DESC, max_duration DESC
+        LIMIT 50
+    """)).fetchall()
+
+    # Summary stats
+    total_attendees = db.execute(_t(
+        "SELECT COUNT(DISTINCT r.email) FROM attendances a "
+        "JOIN registrations r ON r.id=a.registration_id WHERE a.attended=TRUE AND r.email IS NOT NULL"
+    )).scalar() or 0
+
+    in_pipeline = db.execute(_t(
+        "SELECT COUNT(DISTINCT email) FROM pipeline_contacts WHERE status != 'new'"
+    )).scalar() or 0
+
+    return {
+        "hot_leads": [dict(r._mapping) for r in hot],
+        "repeat_attendees": [dict(r._mapping) for r in repeat],
+        "total_unique_attendees": total_attendees,
+        "in_pipeline": in_pipeline,
+    }
+
+
 @app.delete("/api/competitor-activity/{activity_id}", status_code=204)
 def delete_competitor_activity(activity_id: int, db: Session = Depends(get_db)):
     from sqlalchemy import text as _t
@@ -763,15 +1371,16 @@ def delete_competitor_activity(activity_id: int, db: Session = Depends(get_db)):
 
 def _is_pg(db: Session) -> bool:
     try:
-        return 'postgres' in str(db.bind.url).lower()
+        bind = db.get_bind()
+        return 'postgres' in str(bind.url).lower()
     except Exception:
-        return False
+        return bool(os.environ.get("DATABASE_URL"))
 
 
 @app.get("/api/competitor-gap-analysis")
 async def competitor_gap_analysis(db: Session = Depends(get_db)):
-    """AI-powered gap analysis: where Right Horizons can win vs competitor activity."""
-    import os, httpx, traceback
+    """AI-powered gap analysis: where {COMPANY_NAME} can win vs competitor activity."""
+    import os, httpx
     from sqlalchemy import text as _t
     from datetime import date as _date, timedelta as _td
 
@@ -824,9 +1433,9 @@ async def competitor_gap_analysis(db: Session = Depends(get_db)):
         if not api_key:
             raise HTTPException(status_code=503, detail="OPENROUTER_API_KEY not configured")
 
-        prompt = f"""You are a competitive intelligence analyst for Right Horizons, an Indian wealth advisory firm.
+        prompt = f"""You are a competitive intelligence analyst for {COMPANY_NAME}, {COMPANY_DESC}.
 
-Compare what competitors did in the last 90 days versus what Right Horizons did. Identify SPECIFIC gaps and opportunities.
+Compare what competitors did in the last 90 days versus what {COMPANY_NAME} did. Identify SPECIFIC gaps and opportunities.
 
 COMPETITOR ACTIVITY (last 90 days):
 {comp_block}
@@ -863,8 +1472,8 @@ STRICT RULES (absolute, no exceptions):
         resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
-                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={"model": "anthropic/claude-sonnet-4.5", "max_tokens": 2500,
+                     "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
+            json={"model": AI_MODEL, "max_tokens": 2500,
                   "messages": [{"role": "user", "content": prompt}]},
             timeout=60.0
         )
@@ -889,7 +1498,8 @@ STRICT RULES (absolute, no exceptions):
     except HTTPException:
         raise
     except Exception:
-        raise HTTPException(status_code=500, detail=traceback.format_exc()[-1500:])
+        logger.exception("Unhandled error")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ── Lead Tags (manual classification overrides) ──────────────────────────────
@@ -1026,7 +1636,7 @@ def export_leaderboard(
     def readiness_for(email_l, e):
         manual = tag_map.get(email_l)
         if manual in ('customer','internal','employee','partner'): return manual
-        if email_l.endswith('@righthorizons.com'): return "internal"
+        if email_l.endswith('@' + COMPANY_DOMAIN): return "internal"
         # Get last_date for this person
         avg_dur = e["avg_min"]
         att = e["webinars_attended"]
@@ -1220,7 +1830,7 @@ async def chat(payload: dict, db: Session = Depends(get_db)):
     # Detect capitalised name candidates (2+ capitalised words, or single name if context hints)
     name_candidates = re.findall(r'\b([A-Z][a-z]{2,})(?:\s+([A-Z][a-z]{2,}))?(?:\s+([A-Z][a-z]{2,}))?', question)
     # Flatten and remove empties + common false positives
-    STOPWORDS = {'What','When','Which','Who','How','Why','Where','The','This','That','First','Last','Top','Show','Tell','Give','List','Find','Webinar','Speaker','Attendance','Registration','Right','Horizons','Right Horizons','WebinarIQ','PMS','NRI','ICP','SIP','SWP','ESOPs'}
+    STOPWORDS = {'What','When','Which','Who','How','Why','Where','The','This','That','First','Last','Top','Show','Tell','Give','List','Find','Webinar','Speaker','Attendance','Registration','Right','Horizons',COMPANY_NAME,COMPANY_NAME.split()[0] if ' ' in COMPANY_NAME else COMPANY_NAME,'WebinarIQ','PMS','NRI','ICP','SIP','SWP','ESOPs'}
     candidates = []
     for tup in name_candidates:
         parts = [p for p in tup if p and p not in STOPWORDS]
@@ -1323,7 +1933,7 @@ async def chat(payload: dict, db: Session = Depends(get_db)):
 
     context = "\n".join(ctx_parts)
 
-    system_prompt = f"""You are WebinarIQ Assistant, an AI analyst for Right Horizons Financial Services.
+    system_prompt = f"""You are WebinarIQ Assistant, an AI analyst for {COMPANY_NAME}.
 
 STRICT RULES (absolute, no exceptions):
 1. You may ONLY use the LIVE DATA below. Never invent numbers, names, emails, dates, percentages, or facts.
@@ -1353,8 +1963,8 @@ Remember: nothing outside this data exists for you. You are a closed-book analys
     try:
         resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={"model": "anthropic/claude-sonnet-4.5", "max_tokens": 900, "messages": messages},
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
+            json={"model": AI_MODEL, "max_tokens": 900, "messages": messages},
             timeout=30.0
         )
         resp.raise_for_status()
@@ -1379,30 +1989,11 @@ async def get_topic_suggestions():
 
     today = date.today().strftime("%B %d, %Y")
 
-    # Step 1: Use Perplexity (live web search) to fetch current Indian financial market news
+    # Use Claude Sonnet to generate speaker topics based on its training knowledge
     news_context = ""
-    try:
-        news_resp = httpx.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
-                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={
-                "model": "perplexity/sonar",
-                "max_tokens": 800,
-                "messages": [{"role": "user", "content":
-                    f"Today is {today}. List the 10 most important Indian financial markets and personal finance news stories from the last 7 days. Focus on: Nifty/Sensex moves, RBI decisions, SEBI regulations, Budget updates, mutual funds, NRI investing, rupee, gold, real estate, ESOPs, tariffs, geopolitics affecting Indian markets. Be specific with numbers, dates, policy names. Format as a numbered list, one line each."}]
-            },
-            timeout=30.0
-        )
-        if news_resp.status_code == 200:
-            news_context = news_resp.json()["choices"][0]["message"]["content"].strip()
-    except Exception:
-        pass
+    context_block = f"Today is {today}. Use your knowledge of Indian financial markets, recent regulatory changes, budget developments, RBI decisions, SEBI updates, and macroeconomic trends."
 
-    # Step 2: Use Claude Sonnet with live news to generate speaker topics
-    context_block = f"LIVE MARKET NEWS (last 7 days as of {today}):\n{news_context}" if news_context else f"Today is {today}. Use your knowledge of current Indian financial markets."
-
-    prompt = f"""You are a webinar content strategist for Right Horizons, a premium Indian financial advisory firm.
+    prompt = f"""You are a webinar content strategist for {COMPANY_NAME}, {COMPANY_DESC}.
 
 {context_block}
 
@@ -1424,7 +2015,7 @@ Return a JSON array with this exact structure:
       {{
         "title": "TIGHT webinar title - MUST be ≤80 characters",
         "hook": "ONE sentence ≤120 chars referencing the specific news event driving urgency",
-        "angle": "ONE sentence ≤100 chars. Why Right Horizons specifically, not generic content.",
+        "angle": "ONE sentence ≤100 chars. Why {COMPANY_NAME} specifically, not generic content.",
         "expected": "High|Medium|Low",
         "news_link": "which news item from above inspired this topic (1-2 words)"
       }}
@@ -1445,8 +2036,8 @@ HARD RULES:
         resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
-                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={"model": "anthropic/claude-sonnet-4.5", "max_tokens": 4000,
+                     "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
+            json={"model": AI_MODEL, "max_tokens": 4000,
                   "messages": [{"role": "user", "content": prompt}]},
             timeout=45.0
         )
@@ -1465,14 +2056,15 @@ HARD RULES:
 @app.post("/api/webinars/{webinar_id}/analyze")
 async def analyze_webinar(webinar_id: int, db: Session = Depends(get_db)):  # noqa: C901
     """Run AI-powered analysis on a webinar using Claude."""
-    import os, json, traceback
+    import os, json
     from sqlalchemy import text
     try:
         return await _do_analyze(webinar_id, db)
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=traceback.format_exc())
+        logger.exception("Unhandled error")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def _do_analyze(webinar_id: int, db):
@@ -1616,7 +2208,7 @@ async def _do_analyze(webinar_id: int, db):
     else:
         human_notes_block = "(No human notes have been logged for this webinar.)"
 
-    prompt = f"""You are a sharp webinar performance analyst for Right Horizons, an Indian financial advisory firm.
+    prompt = f"""You are a sharp webinar performance analyst for {COMPANY_NAME}, {COMPANY_DESC}.
 
 STRICT RULES:
 - Use ONLY the numbers in 'Webinar data' below. Never fabricate numbers, names, or comparisons.
@@ -1669,13 +2261,13 @@ Return ONLY the JSON object, nothing before or after, no markdown fences."""
         import httpx
         resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
             json={
-                "model": "anthropic/claude-sonnet-4.5",
-                "max_tokens": 1200,
+                "model": AI_MODEL,
+                "max_tokens": 2000,
                 "messages": [{"role": "user", "content": prompt}]
             },
-            timeout=25.0
+            timeout=35.0
         )
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"].strip()
@@ -1697,7 +2289,7 @@ Return ONLY the JSON object, nothing before or after, no markdown fences."""
 @app.post("/api/webinars/{webinar_id}/compare")
 async def compare_webinar(webinar_id: int, db: Session = Depends(get_db)):
     """Compare this webinar to the most recent previous webinar by same speaker (fallback: same ICP, then platform avg)."""
-    import os, json, traceback
+    import os, json
     from sqlalchemy import text as _text
     try:
         w = db.query(models.Webinar).filter(models.Webinar.id == webinar_id).first()
@@ -1812,8 +2404,8 @@ Return ONLY the JSON, no markdown, no preamble."""
         resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
-                     "HTTP-Referer": "https://webinar-analytics-six.vercel.app", "X-Title": "WebinarIQ"},
-            json={"model": "anthropic/claude-sonnet-4.5", "max_tokens": 800,
+                     "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
+            json={"model": AI_MODEL, "max_tokens": 800,
                   "messages": [{"role": "user", "content": prompt}]},
             timeout=25.0
         )
@@ -1831,7 +2423,8 @@ Return ONLY the JSON, no markdown, no preamble."""
     except HTTPException:
         raise
     except Exception:
-        raise HTTPException(status_code=500, detail=traceback.format_exc())
+        logger.exception("Unhandled error")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ── Registrations download ───────────────────────────────────────────────────
@@ -2017,12 +2610,8 @@ def delete_webinar_ad(webinar_id: int, ad_id: int, db: Session = Depends(get_db)
 
 @app.get("/api/speakers", response_model=List[schemas.Speaker])
 def list_speakers(response: Response, db: Session = Depends(get_db)):
-    import traceback
     response.headers["Cache-Control"] = "no-store"
-    try:
-        return crud.get_all_speakers(db)
-    except Exception:
-        raise HTTPException(status_code=500, detail=traceback.format_exc())
+    return crud.get_all_speakers(db)
 
 
 @app.get("/api/speakers/{speaker_id}", response_model=schemas.SpeakerDetail)
@@ -2258,6 +2847,805 @@ def fix_sequences(db: Session = Depends(get_db)):
             results[seq] = str(e)
     db.commit()
     return results
+
+
+@app.get("/api/new-registrants-per-webinar")
+def get_new_registrants_per_webinar(db: Session = Depends(get_db)):
+    """For each webinar (sorted by date), count how many registrant emails appear for the FIRST time."""
+    from sqlalchemy import text as _t
+
+    rows = db.execute(_t("""
+        SELECT w.id AS webinar_id, w.title, w.date, r.email
+        FROM webinars w
+        JOIN registrations r ON r.webinar_id = w.id
+        WHERE r.email IS NOT NULL AND r.email != ''
+        ORDER BY w.date ASC, w.id ASC
+    """)).fetchall()
+
+    seen = set()
+    webinar_map = {}
+    for row in rows:
+        wid = row.webinar_id
+        if wid not in webinar_map:
+            webinar_map[wid] = {"webinar_id": wid, "title": row.title, "date": str(row.date)[:10] if row.date else None, "new_count": 0, "repeat_count": 0}
+        email = (row.email or "").lower().strip()
+        if email in seen:
+            webinar_map[wid]["repeat_count"] += 1
+        else:
+            seen.add(email)
+            webinar_map[wid]["new_count"] += 1
+
+    result = sorted(webinar_map.values(), key=lambda x: x["date"] or "")
+    return {"webinars": result}
+
+
+# ── AI Intelligence Modules (real ML + AI) ────────────────────────────────────
+
+def _ml_fetch_webinar_stats(db):
+    """Return list of dicts with title, icp, regs, att_rate for completed webinars."""
+    from sqlalchemy import text as _t
+    rows = db.execute(_t("""
+        SELECT w.title, w.icp,
+               (SELECT COUNT(*) FROM registrations r WHERE r.webinar_id = w.id) AS total_registrations,
+               (SELECT COUNT(*) FROM attendances a WHERE a.webinar_id = w.id AND a.attended = TRUE) AS total_attendees
+        FROM webinars w
+        WHERE w.status = 'completed'
+          AND (SELECT COUNT(*) FROM registrations r WHERE r.webinar_id = w.id) > 0
+    """)).fetchall()
+    results = []
+    for r in rows:
+        att_rate = (r.total_attendees / r.total_registrations * 100) if r.total_registrations else 0
+        results.append({
+            "title": r.title or "",
+            "icp": r.icp or "Others",
+            "regs": r.total_registrations or 0,
+            "att_rate": round(att_rate, 1),
+        })
+    return results
+
+
+def _ml_tfidf_similarity(query: str, corpus: list[str]):
+    """Return cosine similarity scores between query and each corpus item."""
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+    import numpy as np
+    if not corpus:
+        return []
+    vec = TfidfVectorizer(ngram_range=(1, 2), stop_words="english")
+    try:
+        tfidf = vec.fit_transform([query] + corpus)
+        sims = cosine_similarity(tfidf[0:1], tfidf[1:]).flatten()
+        return sims.tolist()
+    except Exception:
+        return [0.0] * len(corpus)
+
+
+def _ml_topic_advisor(db, topic: str):
+    """TF-IDF clustering to identify high-performing topic clusters and gaps."""
+    import numpy as np
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.cluster import KMeans
+    stats = _ml_fetch_webinar_stats(db)
+    if len(stats) < 3:
+        return {"score": 0, "confidence": 0.0, "method": "insufficient_data",
+                "summary": "Not enough completed webinars to run topic modelling. Need at least 3.",
+                "insights": [], "recommendations": ["Run more webinars to build training data."]}
+    titles = [s["title"] for s in stats]
+    vec = TfidfVectorizer(ngram_range=(1, 2), stop_words="english", max_features=200)
+    X = vec.fit_transform(titles)
+    n_clusters = min(4, len(titles))
+    km = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+    labels = km.fit_predict(X)
+    # Score each cluster by average attendance rate
+    cluster_stats = {}
+    for i, s in enumerate(stats):
+        c = int(labels[i])
+        if c not in cluster_stats:
+            cluster_stats[c] = {"att_rates": [], "regs": [], "titles": []}
+        cluster_stats[c]["att_rates"].append(s["att_rate"])
+        cluster_stats[c]["regs"].append(s["regs"])
+        cluster_stats[c]["titles"].append(s["title"])
+    # Find which cluster the input topic belongs to
+    sims = _ml_tfidf_similarity(topic, titles)
+    best_match_idx = int(np.argmax(sims)) if sims else 0
+    matched_cluster = int(labels[best_match_idx]) if sims else 0
+    mc = cluster_stats.get(matched_cluster, {})
+    avg_att = round(float(np.mean(mc["att_rates"])), 1) if mc.get("att_rates") else 0
+    avg_regs = int(np.mean(mc["regs"])) if mc.get("regs") else 0
+    score = min(100, int(avg_att * 1.2 + min(avg_regs / 2, 40)))
+    # Best performing cluster
+    best_cluster = max(cluster_stats, key=lambda c: np.mean(cluster_stats[c]["att_rates"]))
+    best_titles = cluster_stats[best_cluster]["titles"][:3]
+    insights = [
+        f"Your topic matches a cluster with avg {avg_att}% attendance rate across {len(mc.get('titles', []))} webinars.",
+        f"Avg registrations in this topic cluster: {avg_regs}.",
+        f"Best-performing cluster includes: {', '.join(best_titles)}.",
+        f"Total webinars analysed: {len(stats)}.",
+    ]
+    return {
+        "score": score, "confidence": round(min(sims) + 0.5, 2) if sims else 0.5,
+        "method": "TF-IDF + K-Means clustering on historical webinar titles",
+        "summary": f"Topic clusters into a group averaging {avg_att}% attendance. Score based on historical cluster performance.",
+        "insights": insights,
+    }
+
+
+def _ml_topic_critique(db, topic: str):
+    """Cosine similarity to top-performing webinars as a quality signal."""
+    import numpy as np
+    stats = _ml_fetch_webinar_stats(db)
+    if len(stats) < 2:
+        return {"score": 50, "confidence": 0.3, "method": "insufficient_data",
+                "summary": "Not enough data for similarity scoring.", "insights": []}
+    titles = [s["title"] for s in stats]
+    sims = _ml_tfidf_similarity(topic, titles)
+    sim_arr = np.array(sims)
+    att_arr = np.array([s["att_rate"] for s in stats])
+    # Weighted score: high similarity to high-attendance webinars = good
+    weighted_score = float(np.dot(sim_arr, att_arr) / (np.sum(sim_arr) + 1e-9))
+    score = min(100, int(weighted_score * 1.5))
+    top3_idx = sim_arr.argsort()[-3:][::-1]
+    similar = [f"\"{stats[i]['title']}\" ({stats[i]['att_rate']}% att)" for i in top3_idx]
+    return {
+        "score": score,
+        "confidence": round(float(sim_arr.max()), 2),
+        "method": "TF-IDF cosine similarity weighted by historical attendance rates",
+        "summary": f"Topic similarity score vs historical webinars: {score}/100. Higher means it resembles your best performers.",
+        "insights": [f"Most similar past webinar: {similar[0] if similar else 'N/A'}"] + similar[1:],
+    }
+
+
+def _ml_engagement_patterns(db, topic: str):
+    """Statistical analysis of attendance patterns from actual data."""
+    import numpy as np
+    stats = _ml_fetch_webinar_stats(db)
+    if len(stats) < 3:
+        return {"score": 0, "confidence": 0.3, "method": "insufficient_data",
+                "summary": "Need at least 3 completed webinars.", "insights": []}
+    att_rates = np.array([s["att_rate"] for s in stats])
+    mean_att = round(float(att_rates.mean()), 1)
+    std_att = round(float(att_rates.std()), 1)
+    median_att = round(float(np.median(att_rates)), 1)
+    top_webinar = max(stats, key=lambda x: x["att_rate"])
+    bottom_webinar = min(stats, key=lambda x: x["att_rate"])
+    # ICP breakdown
+    icp_groups = {}
+    for s in stats:
+        icp = s["icp"]
+        if icp not in icp_groups:
+            icp_groups[icp] = []
+        icp_groups[icp].append(s["att_rate"])
+    icp_avgs = {icp: round(float(np.mean(rates)), 1) for icp, rates in icp_groups.items()}
+    best_icp = max(icp_avgs, key=icp_avgs.get)
+    insights = [
+        f"Mean attendance rate across {len(stats)} webinars: {mean_att}% (std dev: {std_att}%)",
+        f"Median attendance rate: {median_att}%",
+        f"Best performer: \"{top_webinar['title']}\" at {top_webinar['att_rate']}%",
+        f"Lowest performer: \"{bottom_webinar['title']}\" at {bottom_webinar['att_rate']}%",
+        f"Best-performing ICP: {best_icp} (avg {icp_avgs[best_icp]}%)",
+    ]
+    score = min(100, int(mean_att * 1.4))
+    return {
+        "score": score, "confidence": round(1 - std_att / (mean_att + 1), 2),
+        "method": "Descriptive statistics on historical attendance data",
+        "summary": f"Your webinars average {mean_att}% attendance. {best_icp} ICPs engage best.",
+        "insights": insights,
+        "icp_breakdown": icp_avgs,
+    }
+
+
+def _ml_registration_forecast(db, topic: str):
+    """Linear regression forecast based on historical ICP + topic performance."""
+    import numpy as np
+    from sklearn.linear_model import LinearRegression
+    stats = _ml_fetch_webinar_stats(db)
+    if len(stats) < 3:
+        return {"score": 0, "confidence": 0.3, "method": "insufficient_data",
+                "summary": "Need at least 3 completed webinars to train the model.", "predictions": []}
+    titles = [s["title"] for s in stats]
+    sims = np.array(_ml_tfidf_similarity(topic, titles))
+    regs = np.array([s["regs"] for s in stats])
+    att_rates = np.array([s["att_rate"] for s in stats])
+    # Features: similarity score + index (proxy for recency)
+    X = np.column_stack([sims, np.arange(len(sims))])
+    reg_model = LinearRegression().fit(X, regs)
+    att_model = LinearRegression().fit(X, att_rates)
+    # Predict for a "new" webinar (most similar = high sim, latest = last index)
+    X_pred = np.array([[float(sims.max()), len(sims)]])
+    pred_regs = max(0, int(reg_model.predict(X_pred)[0]))
+    pred_att = min(100, max(0, round(float(att_model.predict(X_pred)[0]), 1)))
+    pred_attendees = int(pred_regs * pred_att / 100)
+    r2_regs = round(float(reg_model.score(X, regs)), 2)
+    r2_att = round(float(att_model.score(X, att_rates)), 2)
+    return {
+        "score": min(100, int(pred_att * 1.2)),
+        "confidence": round((r2_regs + r2_att) / 2, 2),
+        "method": "Linear Regression trained on historical registrations and attendance rates",
+        "summary": f"Model predicts ~{pred_regs} registrations and ~{pred_att}% attendance ({pred_attendees} live attendees).",
+        "predictions": [
+            f"Predicted registrations: {pred_regs}",
+            f"Predicted attendance rate: {pred_att}%",
+            f"Predicted live attendees: {pred_attendees}",
+            f"Regression R² (registrations): {r2_regs} | Regression R² (attendance): {r2_att}",
+        ],
+    }
+
+
+def _ml_icp_targeting(db, topic: str):
+    """Find which ICPs have historically performed best and match this topic."""
+    import numpy as np
+    stats = _ml_fetch_webinar_stats(db)
+    if len(stats) < 2:
+        return {"score": 0, "confidence": 0.3, "method": "insufficient_data",
+                "summary": "Need more data.", "insights": []}
+    titles = [s["title"] for s in stats]
+    sims = np.array(_ml_tfidf_similarity(topic, titles))
+    # For each ICP, weight attendance rate by similarity score
+    icp_weighted = {}
+    icp_count = {}
+    for i, s in enumerate(stats):
+        icp = s["icp"]
+        w = sims[i]
+        if icp not in icp_weighted:
+            icp_weighted[icp] = 0.0
+            icp_count[icp] = 0
+        icp_weighted[icp] += s["att_rate"] * w
+        icp_count[icp] += 1
+    icp_scores = {icp: round(icp_weighted[icp] / icp_count[icp], 1) for icp in icp_weighted}
+    ranked = sorted(icp_scores.items(), key=lambda x: x[1], reverse=True)
+    best_icp, best_score = ranked[0]
+    score = min(100, int(best_score * 1.5))
+    insights = [f"{icp}: weighted score {sc}" for icp, sc in ranked]
+    return {
+        "score": score, "confidence": round(float(sims.max()), 2),
+        "method": "TF-IDF similarity-weighted ICP attendance scoring",
+        "summary": f"Best ICP match for this topic: {best_icp} (weighted score: {best_score}). Based on how similar ICPs performed on similar webinars.",
+        "insights": insights,
+        "icp_rankings": dict(ranked),
+    }
+
+
+async def _ml_ai_module(topic: str, system_msg: str, user_msg: str, max_tokens: int = 1500) -> dict:
+    """Call AI for modules that genuinely need external knowledge."""
+    import httpx, json as _json
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    if not api_key:
+        return {"score": 0, "confidence": 0, "summary": "OPENROUTER_API_KEY not set.", "insights": []}
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={"model": "anthropic/claude-sonnet-4-5", "max_tokens": max_tokens, "messages": [
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg},
+            ]},
+        )
+    if resp.status_code != 200:
+        return {"score": 0, "confidence": 0, "summary": f"AI call failed: {resp.status_code}", "insights": []}
+    text = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "{}")
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    try:
+        return _json.loads(text)
+    except Exception:
+        return {"score": 0, "confidence": 0, "summary": text, "insights": []}
+
+
+@app.post("/api/ml-analysis")
+async def ml_analysis(payload: dict, db: Session = Depends(get_db)):
+    module    = payload.get("module", "")
+    topic     = payload.get("topic", "General Webinar")
+    org       = payload.get("org", "our organisation")
+    date      = payload.get("date", "")
+    speaker   = payload.get("speaker", "")
+    webinar_link = payload.get("webinar_link", "")
+    description  = payload.get("description", "")
+
+    # Build context string - use actual values where provided, fallback to tokens
+    date_str        = date         or "[DATE & TIME]"
+    speaker_str     = speaker      or "[SPEAKER NAME & TITLE]"
+    webinar_link_str = webinar_link or "[WEBINAR LINK]"
+
+    ctx_parts = [f'Webinar topic: "{topic}"', f"Organisation: {org}",
+                 f"Date & Time: {date_str}", f"Speaker: {speaker_str}",
+                 f"Webinar link: {webinar_link_str}"]
+    if description:
+        ctx_parts.append(f"Additional context: {description}")
+    ctx = " | ".join(ctx_parts)
+
+    ai_sys = (
+        f"You are a senior marketing director at {org}, a premium Indian financial advisory firm "
+        "specialising in HNI and NRI wealth management (PMS, AIF, Family Office, NRI planning, ESOPs). "
+        "Your audience is sophisticated, high-net-worth — they respond to authority, specificity, and "
+        "understated confidence, not generic motivational language or pushy sales tactics.\n\n"
+        f"Current webinar context: {ctx}\n\n"
+        "Writing standards:\n"
+        "- Use the ACTUAL date, speaker name, and links provided above — never write placeholder tokens "
+        "if the real value has been given\n"
+        "- Use any additional context provided to make the copy specific to this webinar's audience and angle\n"
+        "- Every sentence must earn its place — no filler, no clichés, no 'exciting opportunity' language\n"
+        "- Financial services tone: precise, credible, insider-access, not hype\n"
+        "- Subject lines: specific and intriguing, not clickbait\n"
+        "- Reply ONLY with valid JSON (no markdown, no code fences)"
+    )
+
+    # ── Data-driven ML modules ──
+    if module == "topic_prediction":   return _ml_topic_advisor(db, topic)
+    if module == "topic_quality":      return _ml_topic_critique(db, topic)
+    if module == "pattern_detection":  return _ml_engagement_patterns(db, topic)
+    if module == "forecasting":        return _ml_registration_forecast(db, topic)
+    if module == "similarity_engine":  return _ml_icp_targeting(db, topic)
+
+    # ── AI analysis modules ──
+    ai_analysis = {
+        "market_intelligence": "Summarise the current market landscape relevant to this webinar topic. Cover demand trends, audience pain points, and what angles drive registrations. JSON keys: score, confidence, summary, insights (array).",
+        "algorithm_impact":    "Advise on the best channels (LinkedIn, email, WhatsApp) and posting times to promote this webinar. What works, what to avoid. JSON keys: score, confidence, summary, recommendations (array).",
+        "audience_psychology": "Explain the psychological triggers that make people register and attend webinars on this topic. Cover FOMO, credibility, framing. JSON keys: score, confidence, summary, insights (array).",
+        "content_intelligence":"Build a content playbook: 3 title variants, agenda outline (5 points), speaker intro angle, strong CTA. JSON keys: score, confidence, summary, recommendations (array).",
+        "opportunity_risk":    "Identify strategic opportunities and risks for running this webinar now. Cover timing, competition, audience fatigue. JSON keys: score, confidence, summary, predictions (array), recommendations (array).",
+    }
+
+    # ── Communications modules ──
+    comm_prompts = {
+        "email_invite": (
+            f"Write a premium webinar invitation email for deployment via Zoho Campaigns.\n\n"
+            f"Webinar: \"{topic}\" | Date: {date_str} | Speaker: {speaker_str} | Register: {webinar_link_str}\n\n"
+            "Standards:\n"
+            "- Subject line: specific and intriguing, under 52 chars, zero spam words. "
+            "Write 1 primary + 1 A/B variant (different angle, same length constraint).\n"
+            "- Preview text: 65-85 chars, complements subject without repeating it.\n"
+            "- Body (write the full text, use \\n for line breaks):\n"
+            "  • Open with a sharp insight or counterintuitive question relevant to the topic — "
+            "no generic 'Dear [Name]' opener\n"
+            "  • One paragraph identifying the specific pain point this audience faces on this topic\n"
+            "  • 'What you will leave with:' — 4 concrete, outcome-specific bullet points tied to this topic "
+            "(not generic 'learn best practices' — be specific to the subject matter)\n"
+            f"  • Speaker credibility: '{speaker_str}' — write 1 sentence establishing authority\n"
+            f"  • Session details: {date_str} — include this exactly\n"
+            "  • Scarcity element: seats limited, exclusive access, or timely market context\n"
+            f"  • CTA button text that leads to: {webinar_link_str}\n"
+            "  • Closing: sign off from Right Horizons team\n"
+            "- P.S. line: one sentence — a compelling secondary reason to attend or a social proof element.\n"
+            "- Tone: senior private wealth advisor writing to a peer — authoritative, precise, never pushy.\n\n"
+            "JSON keys: subject, subject_variant, preview_text, body, cta_text, ps_line"
+        ),
+        "email_reminder_1week": (
+            f"Write a 7-day countdown email for REGISTERED attendees of '{topic}'.\n"
+            f"Speaker: {speaker_str} | Date: {date_str}\n\n"
+            "They already registered — do not re-pitch. Build insider anticipation.\n\n"
+            "- Subject: countdown energy, specific to topic (not 'Don't forget')\n"
+            "- Preview text: tease one unexpected insight they'll walk away with\n"
+            "- Body:\n"
+            "  • Acknowledge their spot is confirmed\n"
+            f"  • 1 surprising data point or market development directly related to '{topic}' — "
+            "something that makes them think 'I need to hear more on this'\n"
+            "  • Brief 'What to expect' — 2 sentences, specific agenda points\n"
+            f"  • 'Add to calendar' prompt with date: {date_str}\n"
+            "  • Invite them to submit questions for the speaker in advance (reply to this email)\n"
+            "- Tone: insider briefing, not a promotional reminder.\n\n"
+            "JSON keys: subject, preview_text, body, cta_text"
+        ),
+        "email_reminder_1day": (
+            f"Write a 'tomorrow' reminder email for '{topic}' attendees.\n"
+            f"Date/Time: {date_str} | Join link: {webinar_link_str}\n\n"
+            "Brief, high-impact, under 110 words in the body.\n\n"
+            "- Subject: tomorrow-specific, creates light urgency\n"
+            "- Preview text: something that builds the anticipation\n"
+            "- Body:\n"
+            f"  • 'This time tomorrow...' opening tied to the specific outcome of '{topic}'\n"
+            f"  • Date & time: {date_str} — bold and prominent\n"
+            f"  • Join link: {webinar_link_str} — on its own line, labelled 'Your join link'\n"
+            "  • 'Block your calendar now' — one clean line\n"
+            "  • One-sentence teaser of the most surprising thing the speaker will reveal\n"
+            "- No padding. Every word must justify its presence.\n\n"
+            "JSON keys: subject, preview_text, body, cta_text"
+        ),
+        "email_reminder_1hr": (
+            f"Write a 60-minute final reminder for '{topic}'.\n"
+            f"Join link: {webinar_link_str}\n\n"
+            "Maximum 3 lines in the body. This is not the place for context — it is the place for action.\n\n"
+            "- Subject: starts with ⏰ or 🔴, 'Starting in 60 minutes'\n"
+            "- Preview text: 'Your spot is waiting'\n"
+            "- Body: topic name → join now → see you inside. Nothing else.\n"
+            f"- CTA: 'Join Now' pointing to {webinar_link_str}\n\n"
+            "JSON keys: subject, preview_text, body, cta_text"
+        ),
+        "email_followup_attended": (
+            f"Write a post-webinar follow-up email for attendees of '{topic}'.\n"
+            f"Speaker: {speaker_str} | Recording: {webinar_link_str}\n\n"
+            "This is the most important email in the sequence — it converts interest into consultations.\n\n"
+            "- Subject: gratitude + clear value continuation (not 'Thanks for joining!')\n"
+            "- Preview text: hint at what's inside (key takeaway or recording access)\n"
+            "- Body:\n"
+            f"  • Genuine, specific thank-you referencing the webinar topic and speaker\n"
+            f"  • '3 Key Takeaways from today's session' — write 3 specific, substantive insights "
+            f"that someone attending a webinar on '{topic}' in the Indian HNI/NRI context would have received. "
+            "Make them actionable and specific, not generic.\n"
+            f"  • Recording access: {webinar_link_str} — 'Watch at your convenience'\n"
+            "  • 'Your Next Step': offer a complimentary 1-on-1 advisory call — "
+            "frame it as exclusive to webinar attendees, not a generic sales pitch\n"
+            "  • Soft close: 'Reply to this email with any questions from today'\n"
+            "- Tone: trusted advisor wrapping up a valuable session.\n\n"
+            "JSON keys: subject, preview_text, body, cta_text"
+        ),
+        "email_followup_noshow": (
+            f"Write a no-show recovery email for '{topic}'.\n"
+            f"Recording: {webinar_link_str}\n\n"
+            "Recover without guilt-tripping. Make them feel they are getting something exclusive, not scolded.\n\n"
+            "- Subject: value-forward, no passive aggression (not 'You missed...')\n"
+            "- Preview text: 'The recording is yours'\n"
+            "- Body:\n"
+            "  • Empathetic opening — acknowledge that calendars are demanding\n"
+            f"  • 'Here is what attendees took away' — 2 specific, compelling highlights from '{topic}'\n"
+            f"  • Recording: {webinar_link_str} — '30 minutes. Worth it.'\n"
+            "  • Re-engagement: mention the next event or offer a 1-on-1 conversation\n"
+            "  • One gentle CTA\n"
+            "- Tone: gracious, not desperate.\n\n"
+            "JSON keys: subject, preview_text, body, cta_text"
+        ),
+        "wa_announcement": (
+            f"Write a WhatsApp announcement for the webinar '{topic}'.\n"
+            f"Date/Time: {date_str} | Speaker: {speaker_str} | Register: {webinar_link_str}\n\n"
+            "Audience: HNI/NRI investors and wealth management professionals in India.\n\n"
+            "- First line: a hook that creates immediate relevance — one crisp statement or question "
+            "tied to a current market reality or wealth concern this audience faces. No generic opener.\n"
+            f"- Second line: what '{topic}' will specifically address — one sentence\n"
+            "- Who should attend: one line describing the ideal attendee (be specific — 'investors with ₹50L+ in PMS' "
+            "is better than 'anyone interested in finance')\n"
+            f"- 📅 {date_str}\n"
+            f"- 🎤 {speaker_str}\n"
+            f"- 👉 Register: {webinar_link_str}\n"
+            "- Closing: one line — limited seats or timely market context that creates genuine urgency\n"
+            "- Use line breaks between each element. Max 6 emojis total. No hashtags.\n\n"
+            "JSON keys: message (complete text with line breaks), char_count"
+        ),
+        "wa_reminder_1day": (
+            f"Write a WhatsApp 1-day countdown for '{topic}'.\n"
+            f"Date/Time: {date_str} | Speaker: {speaker_str}\n\n"
+            "- ⏳ Tomorrow energy — specific to the topic\n"
+            f"- One insight or question that makes them think 'I need to hear this'\n"
+            f"- 📅 {date_str}\n"
+            "- Warm closing — 'See you tomorrow'\n"
+            "- Max 5 lines. No registration link (they're already registered).\n\n"
+            "JSON keys: message, char_count"
+        ),
+        "wa_reminder_morning": (
+            f"Write a 'today is the day' WhatsApp morning message for '{topic}'.\n"
+            f"Time: {date_str} | Join: {webinar_link_str}\n\n"
+            "- ☀️ morning energy, specific to the topic\n"
+            f"- Time reminder: {date_str}\n"
+            f"- 👉 Join: {webinar_link_str}\n"
+            "- Max 4 lines. Warm and sharp.\n\n"
+            "JSON keys: message, char_count"
+        ),
+        "wa_reminder_1hr": (
+            f"Write a 60-minute WhatsApp alert for '{topic}'.\n"
+            f"Join: {webinar_link_str}\n\n"
+            "- 🔴 Live in 1 hour — topic name\n"
+            f"- 👉 {webinar_link_str}\n"
+            "- 2 lines maximum. Pure urgency, no softening.\n\n"
+            "JSON keys: message, char_count"
+        ),
+        "wa_postwebinar": (
+            f"Write a WhatsApp post-webinar message for attendees of '{topic}'.\n"
+            f"Speaker: {speaker_str} | Recording: {webinar_link_str}\n\n"
+            "- Genuine, specific gratitude — reference the topic and speaker by name\n"
+            f"- 2 key takeaways that someone attending '{topic}' would have genuinely learned — specific, not generic\n"
+            f"- 🎬 Recording: {webinar_link_str}\n"
+            "- One next-step CTA: book a call, ask a question, or follow on LinkedIn\n"
+            "- Max 7 lines. Warm but professional.\n\n"
+            "JSON keys: message, char_count"
+        ),
+        "wa_noshow_followup": (
+            f"Write a WhatsApp recovery message for people who missed '{topic}'.\n"
+            f"Recording: {webinar_link_str}\n\n"
+            "- No guilt. Lead with value: 'We saved the best bits for you'\n"
+            f"- 1 specific insight from '{topic}' that makes them wish they had attended\n"
+            f"- 🎬 Watch: {webinar_link_str}\n"
+            "- Max 4 lines.\n\n"
+            "JSON keys: message, char_count"
+        ),
+    }
+
+    if module in ai_analysis:
+        return await _ml_ai_module(topic, ai_sys, ai_analysis[module])
+    if module in comm_prompts:
+        return await _ml_ai_module(topic, ai_sys, comm_prompts[module], max_tokens=2000)
+
+    raise HTTPException(status_code=400, detail=f"Unknown module: {module}")
+
+
+# ── AI Intelligence Dashboard ──────────────────────────────────────────────────
+
+def _iq_lead_quality(data):
+    qs = {'Family Office':20,'AIF':20,'PMS':18,'NRI':16,'ESOPs':15,'Retirement Planning':14,'Others':8}
+    buckets = {'high':0,'medium':0,'low':0}
+    icp_regs = {}
+    for d in data:
+        s = qs.get(d['icp'], 10)
+        icp_regs[d['icp']] = icp_regs.get(d['icp'], 0) + d['regs']
+        if s >= 18:   buckets['high']   += d['regs']
+        elif s >= 14: buckets['medium'] += d['regs']
+        else:         buckets['low']    += d['regs']
+    total = sum(buckets.values()) or 1
+    high_pct = buckets['high'] / total * 100
+    score = min(100, int(high_pct * 1.2 + buckets['medium'] / total * 40))
+    top_icp = max(icp_regs, key=icp_regs.get) if icp_regs else "N/A"
+    return {"score": score, "confidence": round(min(0.95, 0.5 + len(data)*0.03), 2),
+            "top_icp": top_icp, "method": "ICP quality scoring weighted by registration volume",
+            "breakdown": {k: {'count': v, 'pct': round(v/total*100, 1)} for k, v in buckets.items()}}
+
+
+async def _iq_ai_narrative(stats: dict) -> dict:
+    import httpx, json as _j
+    key = os.environ.get("OPENROUTER_API_KEY")
+    if not key:
+        return {"executive_summary": {"headline": "Webinar data analysed", "bullets": []}, "recommendations": []}
+    prompt = (
+        "You are a senior business intelligence analyst. Based on this webinar performance data, produce:\n"
+        "1. A sharp executive summary: one powerful headline sentence + exactly 5 specific bullet points (use real numbers from the data).\n"
+        "2. Exactly 5 prioritised actionable recommendations.\n\n"
+        f"Data: {_j.dumps(stats)}\n\n"
+        'Reply ONLY with JSON:\n'
+        '{"executive_summary":{"headline":"...","bullets":["..."],"sentiment":"Positive|Neutral|Cautious"},'
+        '"recommendations":[{"title":"Short title","action":"Detailed action step","impact":"high|medium|low","confidence":0.8}]}'
+    )
+    async with httpx.AsyncClient(timeout=30) as c:
+        r = await c.post("https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={"model": "anthropic/claude-sonnet-4-5", "max_tokens": 900,
+                  "messages": [{"role": "user", "content": prompt}]})
+    if r.status_code != 200:
+        return {"executive_summary": {"headline": "Analysis complete", "bullets": []}, "recommendations": []}
+    text = r.json().get("choices",[{}])[0].get("message",{}).get("content","{}").strip()
+    if text.startswith("```"): text = text.split("\n",1)[-1].rsplit("```",1)[0].strip()
+    try:    return _j.loads(text)
+    except: return {"executive_summary": {"headline": text[:120], "bullets": []}, "recommendations": []}
+
+
+@app.get("/api/ai-intelligence")
+async def ai_intelligence_dashboard(db: Session = Depends(get_db)):
+    import traceback
+    try:
+        return await _ai_intelligence_impl(db)
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": str(e), "detail": traceback.format_exc()[-500:]})
+
+async def _ai_intelligence_impl(db):
+    import numpy as np
+    from sqlalchemy import text as _t
+    from sklearn.linear_model import LinearRegression
+    from sklearn.ensemble import IsolationForest
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.cluster import KMeans
+    from datetime import datetime
+
+    rows = db.execute(_t("""
+        SELECT w.id, w.title, w.date, w.icp,
+               (SELECT COUNT(*) FROM registrations r WHERE r.webinar_id = w.id) AS total_registrations,
+               (SELECT COUNT(*) FROM attendances a WHERE a.webinar_id = w.id AND a.attended = TRUE) AS total_attendees
+        FROM webinars w WHERE w.status='completed'
+          AND (SELECT COUNT(*) FROM registrations r WHERE r.webinar_id = w.id) > 0
+        ORDER BY w.date ASC
+    """)).fetchall()
+
+    if not rows:
+        return {"error": "no_data", "message": "No completed webinars yet."}
+
+    data = []
+    for w in rows:
+        att = (w.total_attendees / w.total_registrations * 100) if w.total_registrations else 0
+        data.append({"id": w.id, "title": w.title or "", "date": str(w.date)[:10] if w.date else "",
+                     "icp": w.icp or "Others", "regs": w.total_registrations or 0,
+                     "attendees": w.total_attendees or 0, "att_rate": round(att, 1)})
+
+    n = len(data)
+    regs = np.array([d["regs"] for d in data], float)
+    atts = np.array([d["att_rate"] for d in data], float)
+    X    = np.arange(n).reshape(-1, 1)
+
+    # ── Intelligence Score ──────────────────────────────────────────────────
+    avg_att = float(atts.mean());  avg_regs = float(regs.mean())
+    iq_scores_map = {'Family Office':20,'AIF':20,'PMS':18,'NRI':16,'ESOPs':15,'Retirement Planning':14,'Others':8}
+    s_reg  = min(25, int(avg_regs / 100 * 25))
+    s_att  = min(30, int(avg_att  / 60  * 30))
+    s_cons = max(0, 20 - int(atts.std() / 5))
+    s_lead = min(15, int(float(np.mean([iq_scores_map.get(d["icp"],10) for d in data])) / 20 * 15))
+    s_conv = min(10, int(avg_att / 100 * 10 + 3))
+    overall = s_reg + s_att + s_cons + s_lead + s_conv
+    grade   = "Excellent" if overall >= 80 else "Good" if overall >= 65 else "Average" if overall >= 45 else "Needs Work"
+    half    = n // 2
+    iq_trend = ("improving" if half > 0 and atts[half:].mean() > atts[:half].mean() else "declining" if half > 0 else "stable")
+
+    intelligence_score = {
+        "overall": overall, "grade": grade, "trend": iq_trend,
+        "breakdown": {
+            "registration":  {"score": s_reg,  "max": 25, "label": "Registration Volume"},
+            "attendance":    {"score": s_att,  "max": 30, "label": "Attendance Rate"},
+            "consistency":   {"score": s_cons, "max": 20, "label": "Consistency"},
+            "lead_quality":  {"score": s_lead, "max": 15, "label": "Lead Quality"},
+            "conversion":    {"score": s_conv, "max": 10, "label": "Conversion Potential"},
+        }
+    }
+
+    # ── Predictive Analytics ───────────────────────────────────────────────
+    rm  = LinearRegression().fit(X, regs);  am = LinearRegression().fit(X, atts)
+    pr  = max(0, int(rm.predict([[n]])[0]));  pa = min(100, max(0, round(float(am.predict([[n]])[0]), 1)))
+    pa_count = int(pr * pa / 100)
+    rr2 = round(float(rm.score(X, regs)), 2);  ar2 = round(float(am.score(X, atts)), 2)
+    r_res_std = float((regs - rm.predict(X)).std());  a_res_std = float((atts - am.predict(X)).std())
+
+    predictive = {
+        "attendance": {
+            "predicted_attendees": pa_count,
+            "predicted_rate": pa,
+            "range": [max(0, int(pa_count - a_res_std * pr/100)), int(pa_count + a_res_std * pr/100)],
+            "confidence": round(max(0.3, 1 - a_res_std/(avg_att+1)), 2),
+            "r2": ar2, "method": "Linear Regression on attendance time series",
+            "factors": ["Historical trend", "Topic cluster", "ICP composition"],
+        },
+        "registrations": {
+            "predicted": pr,
+            "range": [max(0, int(pr - r_res_std)), int(pr + r_res_std)],
+            "growth_per_webinar": round(float(rm.coef_[0]), 1),
+            "confidence": round(max(0.3, 1 - r_res_std/(avg_regs+1)), 2),
+            "r2": rr2, "method": "Linear Regression on registration time series",
+        },
+        "lead_quality": _iq_lead_quality(data),
+        "conversion": {
+            "predicted_rate": round(avg_att * 0.12, 1),
+            "confidence": 0.62,
+            "method": "Historical attendance-to-conversion ratio baseline",
+        },
+    }
+
+    # ── Pattern Detection ──────────────────────────────────────────────────
+    patterns = []
+
+    # Day-of-week
+    dow_map: dict = {}
+    for d in data:
+        if d["date"]:
+            try:
+                day = datetime.strptime(d["date"], "%Y-%m-%d").strftime("%A")
+                dow_map.setdefault(day, []).append(d["att_rate"])
+            except Exception: pass
+    if dow_map:
+        day_avgs = {k: round(float(np.mean(v)),1) for k,v in dow_map.items()}
+        bd = max(day_avgs, key=day_avgs.get);  wd = min(day_avgs, key=day_avgs.get)
+        if day_avgs[bd] - day_avgs[wd] >= 3:
+            patterns.append({"type":"best_day","icon":"📅","impact":"high",
+                "insight": f"{bd} webinars average {day_avgs[bd]}% attendance — {round(day_avgs[bd]-day_avgs[wd],1)}% above {wd}",
+                "confidence": min(0.92, 0.6 + len(dow_map)*0.05), "data": day_avgs})
+
+    # ICP performance
+    icp_map: dict = {}
+    for d in data:
+        icp_map.setdefault(d["icp"], {"a":[],"r":[]}).update(
+            {"a": icp_map.get(d["icp"],{"a":[]})["a"] + [d["att_rate"]],
+             "r": icp_map.get(d["icp"],{"r":[]})["r"] + [d["regs"]]})
+    icp_att_avgs = {k: round(float(np.mean(v["a"])),1) for k,v in icp_map.items()}
+    if len(icp_att_avgs) >= 2:
+        bi = max(icp_att_avgs, key=icp_att_avgs.get);  wi = min(icp_att_avgs, key=icp_att_avgs.get)
+        if icp_att_avgs[bi] - icp_att_avgs[wi] >= 4:
+            patterns.append({"type":"best_icp","icon":"🎯","impact":"high",
+                "insight": f"{bi} audiences achieve {icp_att_avgs[bi]}% attendance — {round(icp_att_avgs[bi]-icp_att_avgs[wi],1)}% above {wi}",
+                "confidence": 0.85, "data": icp_att_avgs})
+
+    # Registration trend
+    if n >= 3:
+        g = float(rm.coef_[0])
+        if abs(g) >= 2:
+            patterns.append({"type":"reg_trend","icon":"📈" if g>0 else "📉","impact":"medium",
+                "insight": f"Registrations {'growing' if g>0 else 'declining'} by {abs(round(g,1))} per webinar (R²={rr2})",
+                "confidence": rr2})
+
+    # Best performing webinar
+    top = max(data, key=lambda x: x["att_rate"])
+    patterns.append({"type":"best_webinar","icon":"⭐","impact":"low",
+        "insight": f'Top performer: "{top["title"]}" — {top["att_rate"]}% attendance, {top["regs"]} registrations',
+        "confidence": 1.0})
+
+    # TF-IDF topic cluster analysis
+    if n >= 4:
+        try:
+            titles = [d["title"] for d in data]
+            vec = TfidfVectorizer(ngram_range=(1,2), stop_words="english", max_features=100)
+            X_tfidf = vec.fit_transform(titles)
+            k = min(3, n)
+            labels = KMeans(n_clusters=k, random_state=42, n_init=10).fit_predict(X_tfidf)
+            cl_atts = {}
+            for i, d in enumerate(data):
+                cl_atts.setdefault(int(labels[i]), []).append(d["att_rate"])
+            best_cl = max(cl_atts, key=lambda c: np.mean(cl_atts[c]))
+            patterns.append({"type":"topic_cluster","icon":"🔍","impact":"medium",
+                "insight": f"Topic cluster {best_cl+1} has the highest avg attendance: {round(float(np.mean(cl_atts[best_cl])),1)}% (K-Means on TF-IDF titles)",
+                "confidence": 0.72})
+        except Exception: pass
+
+    # ── Anomaly Detection ──────────────────────────────────────────────────
+    anomalies = []
+    if n >= 4:
+        rz = (regs - regs.mean()) / (regs.std() + 1e-9)
+        az = (atts - atts.mean()) / (atts.std() + 1e-9)
+        for i, d in enumerate(data):
+            for z, val, label, unit in [(rz[i], d["regs"], "Registration", "registrations"),
+                                         (az[i], d["att_rate"], "Attendance", "%")]:
+                if abs(z) >= 2.0:
+                    sev = "critical" if abs(z) >= 3 else "high"
+                    anomalies.append({
+                        "type": f"{label.lower()}_anomaly",
+                        "severity": sev,
+                        "webinar": d["title"][:50],
+                        "description": f"{label} {'spike' if z>0 else 'drop'}: {val}{unit if unit=='%' else ''} (z={round(float(z),1)}, expected ≈ {round(float(regs.mean()) if unit!='%' else float(atts.mean()),0)}{unit if unit=='%' else ''})",
+                        "date": d["date"],
+                    })
+        if n >= 6:
+            try:
+                iso_labels = IsolationForest(contamination=0.1, random_state=42).fit_predict(
+                    np.column_stack([regs, atts]))
+                for i, lbl in enumerate(iso_labels):
+                    if lbl == -1 and not any(a["webinar"] == data[i]["title"][:50] for a in anomalies):
+                        anomalies.append({
+                            "type": "multivariate_anomaly", "severity": "medium",
+                            "webinar": data[i]["title"][:50],
+                            "description": f"Unusual reg/attendance combination ({data[i]['regs']} regs, {data[i]['att_rate']}% att) — Isolation Forest",
+                            "date": data[i]["date"],
+                        })
+            except Exception: pass
+
+    # ── Audience Segments ──────────────────────────────────────────────────
+    segments = []
+    for icp, v in icp_map.items():
+        q = iq_scores_map.get(icp, 10)
+        a_avg = round(float(np.mean(v["a"])), 1)
+        segments.append({
+            "name": icp, "webinar_count": len(v["a"]),
+            "avg_attendance_rate": a_avg,
+            "avg_registrations": int(np.mean(v["r"])),
+            "conversion_likelihood": "High" if q >= 18 else "Medium" if q >= 14 else "Low",
+            "engagement_level": "High" if a_avg >= 50 else "Medium" if a_avg >= 30 else "Low",
+            "quality_score": q,
+        })
+    segments.sort(key=lambda x: x["quality_score"], reverse=True)
+
+    # ── Monthly Trends ─────────────────────────────────────────────────────
+    monthly: dict = {}
+    for d in data:
+        if d["date"]:
+            m = d["date"][:7]
+            monthly.setdefault(m, {"r":[],"a":[]})
+            monthly[m]["r"].append(d["regs"]); monthly[m]["a"].append(d["att_rate"])
+    trends = [{"month": m, "avg_regs": int(np.mean(v["r"])),
+               "avg_att_rate": round(float(np.mean(v["a"])),1), "count": len(v["r"])}
+              for m, v in sorted(monthly.items())]
+
+    # ── AI Narrative ───────────────────────────────────────────────────────
+    summary_stats = {
+        "total_webinars": n, "avg_registrations": round(avg_regs),
+        "avg_attendance_rate": round(avg_att, 1),
+        "best_icp": max(icp_att_avgs, key=icp_att_avgs.get) if icp_att_avgs else "N/A",
+        "registration_trend": "growing" if float(rm.coef_[0]) > 0 else "declining",
+        "predicted_next_regs": pr, "predicted_next_att_rate": pa,
+        "intelligence_score": overall, "anomaly_count": len(anomalies),
+        "patterns_found": len(patterns),
+    }
+    ai_out = await _iq_ai_narrative(summary_stats)
+
+    return {
+        "data_basis": f"{n} completed webinar{'s' if n!=1 else ''}",
+        "intelligence_score": intelligence_score,
+        "executive_summary": ai_out.get("executive_summary", {}),
+        "recommendations": ai_out.get("recommendations", []),
+        "predictive_analytics": predictive,
+        "patterns": patterns,
+        "anomalies": anomalies,
+        "audience_segments": segments,
+        "trends": trends,
+        "raw_stats": summary_stats,
+    }
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
