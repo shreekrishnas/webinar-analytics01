@@ -1825,6 +1825,15 @@ html.dark .skel {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.metric-tooltip {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 10px;
+  color: var(--rh-text-4, #aaa);
+  cursor: help;
+  vertical-align: middle;
+  line-height: 1;
+}
 .kpi-card-icon {
   width: 34px; height: 34px;
   border-radius: 10px;

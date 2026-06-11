@@ -496,12 +496,14 @@ function renderKpiBanner() {
     {
       icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>',
       label: 'Total Webinars',
+      tooltip: 'All webinars created in the system, including upcoming, live, and completed.',
       value: total.toString(),
       trendUp: true, trend: `${upcoming.length} upcoming`, arrow: trendArrowUp,
     },
     {
       icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
       label: 'Avg. Attendance',
+      tooltip: 'Average attendance rate across all completed webinars. Attendance rate = actual attendees / total registrations x 100. Industry benchmark is 40-50%.',
       value: avgRate > 0 ? fmtPct(avgRate) : 'N/A',
       trendUp: avgRate >= 50, trend: avgRate >= 50 ? 'Above benchmark' : avgRate > 0 ? 'Below benchmark' : 'No data yet',
       arrow: avgRate >= 50 ? trendArrowUp : trendArrowDown,
@@ -509,6 +511,7 @@ function renderKpiBanner() {
     {
       icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
       label: 'Completion Rate',
+      tooltip: 'Percentage of scheduled webinars that have been completed (vs. upcoming or cancelled).',
       value: total > 0 ? fmtPct(completionRate) : 'N/A',
       trendUp: completionRate >= 50, trend: completed.length + ' completed',
       arrow: completionRate >= 50 ? trendArrowUp : trendArrowDown,
@@ -516,6 +519,7 @@ function renderKpiBanner() {
     {
       icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>',
       label: 'Top Speaker',
+      tooltip: 'Speaker with the highest total attendees across all their webinars.',
       value: topSpeakerDisplay,
       trendUp: null, trend: topSpeakerFull ? 'By total attendance' : 'No data yet',
       arrow: null,
@@ -523,6 +527,7 @@ function renderKpiBanner() {
     {
       icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 9 3 3 3-3"/><line x1="12" y1="12" x2="12" y2="17"/></svg>',
       label: 'Best Webinar',
+      tooltip: 'Completed webinar with the highest attendance rate.',
       value: bestW ? (bestW.title.length > 16 ? bestW.title.slice(0,16)+'…' : bestW.title) : 'N/A',
       trendUp: null, trend: bestW ? `${bestW.attendance_rate.toFixed(1)}% attendance` : 'No completed webinars',
       arrow: null,
@@ -530,6 +535,7 @@ function renderKpiBanner() {
     {
       icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
       label: 'Best ICP',
+      tooltip: 'Ideal Customer Profile segment with the highest average attendance rate (min. 3 webinars). ICP is set per webinar and reflects your target audience segment.',
       value: bestICP ? bestICP[0] : 'N/A',
       trendUp: null, trend: bestICP ? `${(bestICP[1].total/bestICP[1].count).toFixed(1)}% avg att rate` : 'No data',
       arrow: null,
@@ -548,7 +554,7 @@ function renderKpiBanner() {
   return kpis.map(k => `
     <div class="kpi-card${k.alert ? ' alert' : ''}" ${k.label==='Follow-up Pending'?'onclick="showFollowupPendingModal()" style="cursor:pointer" title="Click to see pending follow-ups"':''}>
       <div class="kpi-card-head">
-        <span class="kpi-card-label">${k.label}</span>
+        <span class="kpi-card-label">${k.label}${k.tooltip ? `<span class="metric-tooltip" title="${k.tooltip.replace(/"/g,'&quot;')}">&#x24D8;</span>` : ''}</span>
         <span class="kpi-card-icon">${k.icon}</span>
       </div>
       <div class="kpi-card-value">${k.value}</div>
@@ -1076,6 +1082,7 @@ function webinarCardHTML(w) {
               ${w.has_attendee_data ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : '○'} Attendees
             </span>`
         }
+        ${w.has_attendee_data ? `<a href="/api/webinars/${w.id}/attendees/download" onclick="event.stopPropagation()" download title="Download attendees CSV" class="upload-tag has" style="text-decoration:none;margin-left:auto;padding:3px 8px;font-size:11px;display:flex;align-items:center;gap:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> CSV</a>` : ''}
       </div>
     </div>`;
 }
@@ -1245,6 +1252,10 @@ function _drawWebinarDetail(w) {
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Export Report
               </button>` : ''}
+              ${w.has_attendee_data ? `<a href="/api/webinars/${w.id}/attendees/download" download title="Download attendees CSV" class="btn btn-ghost btn-sm" style="font-size:12px;display:flex;align-items:center;gap:5px;border-radius:8px;height:32px;padding:0 12px;text-decoration:none;color:inherit;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Attendees CSV
+              </a>` : ''}
               <button class="btn btn-ghost btn-sm" onclick="copyWebinarTitle('${esc(w.title).replace(/'/g,"\\'")}');event.stopPropagation()" title="Copy title" style="font-size:12px;display:flex;align-items:center;gap:5px;border-radius:8px;height:32px;padding:0 12px">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                 Copy
@@ -2010,10 +2021,21 @@ async function renderLeaderboard(speakerId, webinarId) {
   try {
     const lbAll = await api('/api/leaderboard?' + params.toString());
 
-    // Score range filter (client-side)
+    // Score range + readiness + ICP filter (client-side)
     const minS = S._lbScoreMin !== undefined && S._lbScoreMin !== '' ? +S._lbScoreMin : null;
     const maxS = S._lbScoreMax !== undefined && S._lbScoreMax !== '' ? +S._lbScoreMax : null;
     const readinessF = S._lbReadiness || 'all';
+    const icpF = S._lbIcp || 'all';
+    const metricF = S._lbMetric || 'score';
+    const periodF = S._lbPeriod || 'all';
+
+    // Derive cutoff date for time period filter
+    const now = new Date();
+    let cutoffDate = null;
+    if (periodF === 'week')    { cutoffDate = new Date(now - 7*86400000); }
+    else if (periodF === 'month')  { cutoffDate = new Date(now - 30*86400000); }
+    else if (periodF === 'quarter'){ cutoffDate = new Date(now - 90*86400000); }
+
     const lb = lbAll.filter(e => {
       if (minS !== null && e.score < minS) return false;
       if (maxS !== null && e.score > maxS) return false;
@@ -2025,8 +2047,21 @@ async function renderLeaderboard(speakerId, webinarId) {
           return false;
         }
       }
+      if (cutoffDate && e.last_attended_date) {
+        if (new Date(e.last_attended_date) < cutoffDate) return false;
+      }
       return true;
     });
+
+    // Sort by selected metric
+    if (metricF === 'webinars')  lb.sort((a,b) => b.webinars_attended - a.webinars_attended);
+    else if (metricF === 'duration') lb.sort((a,b) => b.total_duration_minutes - a.total_duration_minutes);
+    else if (metricF === 'avg_min')  lb.sort((a,b) => b.avg_minutes - a.avg_minutes);
+    // Re-rank after sort
+    lb.forEach((e, i) => { e.rank = i + 1; });
+
+    // Unique ICP values from webinars for filter dropdown
+    const icpValues = [...new Set((S.webinars||[]).map(w=>w.icp).filter(Boolean))].sort();
 
     const speakerOpts = S.speakers.map(sp =>
       `<option value="${sp.id}" ${selSpeaker==sp.id?'selected':''}>${esc(sp.name)}</option>`
@@ -2158,6 +2193,18 @@ async function renderLeaderboard(speakerId, webinarId) {
 
         ${(S._lbView === 'repeat' || S._lbView === 'leadquality') ? '<div id="lb-alt-content"></div>' : S._lbView !== 'attendees' ? altViewHTML : `
         <div class="lb-filters">
+          <select class="filter-select" onchange="S._lbMetric=this.value;renderLeaderboard()" title="Sort by metric">
+            <option value="score"    ${metricF==='score'?'selected':''}>Score</option>
+            <option value="webinars" ${metricF==='webinars'?'selected':''}>Webinars Attended</option>
+            <option value="duration" ${metricF==='duration'?'selected':''}>Total Duration</option>
+            <option value="avg_min"  ${metricF==='avg_min'?'selected':''}>Avg Engagement</option>
+          </select>
+          <select class="filter-select" onchange="S._lbPeriod=this.value;renderLeaderboard()" title="Time period">
+            <option value="all"     ${periodF==='all'?'selected':''}>All Time</option>
+            <option value="week"    ${periodF==='week'?'selected':''}>Last 7 Days</option>
+            <option value="month"   ${periodF==='month'?'selected':''}>Last 30 Days</option>
+            <option value="quarter" ${periodF==='quarter'?'selected':''}>Last 90 Days</option>
+          </select>
           <select class="filter-select" onchange="S._lbSpeaker=this.value;S._lbWebinar='';renderLeaderboard()">
             <option value="" ${!selSpeaker?'selected':''}>All Speakers</option>
             ${speakerOpts}
@@ -2166,6 +2213,10 @@ async function renderLeaderboard(speakerId, webinarId) {
             <option value="" ${!selWebinar?'selected':''}>All Webinars</option>
             ${webinarOpts}
           </select>
+          ${icpValues.length ? `<select class="filter-select" onchange="S._lbIcp=this.value;renderLeaderboard()">
+            <option value="all" ${icpF==='all'?'selected':''}>All ICPs</option>
+            ${icpValues.map(v=>`<option value="${esc(v)}" ${icpF===v?'selected':''}>${esc(v)}</option>`).join('')}
+          </select>` : ''}
           <div class="lb-score-range">
             <span class="lb-score-lbl">Score:</span>
             <input type="number" class="filter-select lb-score-input" placeholder="min" value="${S._lbScoreMin||''}" onchange="S._lbScoreMin=this.value;renderLeaderboard()" />
@@ -2174,7 +2225,7 @@ async function renderLeaderboard(speakerId, webinarId) {
           </div>
           <select class="filter-select" onchange="S._lbReadiness=this.value;renderLeaderboard()">
             <option value="all" ${readinessF==='all'?'selected':''}>All Leads</option>
-            <option value="meeting_ready" ${readinessF==='meeting_ready'?'selected':''}>🔥 Meeting Ready</option>
+            <option value="meeting_ready" ${readinessF==='meeting_ready'?'selected':''}>Meeting Ready</option>
             <option value="hot"  ${readinessF==='hot'?'selected':''}>Hot</option>
             <option value="warm" ${readinessF==='warm'?'selected':''}>Warm</option>
             <option value="cold" ${readinessF==='cold'?'selected':''}>Cold</option>
@@ -2184,7 +2235,7 @@ async function renderLeaderboard(speakerId, webinarId) {
             <option value="internal" ${readinessF==='internal'?'selected':''}>Internal</option>
             <option value="employee" ${readinessF==='employee'?'selected':''}>Employee</option>
           </select>
-          <button class="btn btn-ghost btn-sm" onclick="S._lbSpeaker='';S._lbWebinar='';S._lbScoreMin='';S._lbScoreMax='';S._lbLimit=50;S._lbReadiness='all';renderLeaderboard()">Clear Filters</button>
+          <button class="btn btn-ghost btn-sm" onclick="S._lbSpeaker='';S._lbWebinar='';S._lbScoreMin='';S._lbScoreMax='';S._lbLimit=50;S._lbReadiness='all';S._lbIcp='all';S._lbMetric='score';S._lbPeriod='all';renderLeaderboard()">Clear Filters</button>
         </div>
 
         ${tableHTML}
@@ -6275,9 +6326,14 @@ function _commRenderResult(moduleId, r) {
     </div>`;
   }
 
-  html += `<div style="display:flex;gap:6px;margin-top:10px;">
-    <button onclick="_commRunModule('${moduleId}')" class="btn btn-ghost btn-sm" style="font-size:11px;">↻ Regenerate</button>
-    <button onclick="_copyComm('${moduleId}')" class="btn btn-ghost btn-sm" style="font-size:11px;">Copy</button>
+  const ts = _generatedAt[moduleId];
+  const tsStr = ts ? ts.toLocaleString('en-IN', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+  html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;flex-wrap:wrap;gap:6px;">
+    <div style="display:flex;gap:6px;">
+      <button onclick="_commRunModule('${moduleId}')" class="btn btn-ghost btn-sm" style="font-size:11px;">&#8635; Regenerate</button>
+      <button onclick="_copyComm('${moduleId}')" class="btn btn-ghost btn-sm" style="font-size:11px;">Copy</button>
+    </div>
+    ${tsStr ? `<span style="font-size:10px;color:var(--rh-text-4,#aaa);">Generated ${tsStr}</span>` : ''}
   </div>`;
   return html;
 }
@@ -6293,7 +6349,12 @@ function _mlRenderResult(moduleId, r) {
   if (Array.isArray(r.insights)        && r.insights.length)        html += list(r.insights);
   if (Array.isArray(r.recommendations) && r.recommendations.length) html += list(r.recommendations);
   if (!html) html = `<pre style="font-size:11px;white-space:pre-wrap;color:var(--text-muted);">${JSON.stringify(r,null,2).slice(0,400)}</pre>`;
-  html += `<button onclick="_mlRunModule('${moduleId}')" class="btn-secondary" style="font-size:11px;margin-top:8px;">Refresh</button>`;
+  const tsML = _generatedAt[moduleId];
+  const tsMLStr = tsML ? tsML.toLocaleString('en-IN', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+  html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;flex-wrap:wrap;gap:6px;">
+    <button onclick="_mlRunModule('${moduleId}')" class="btn-secondary" style="font-size:11px;">&#8635; Regenerate</button>
+    ${tsMLStr ? `<span style="font-size:10px;color:var(--rh-text-4,#aaa);">Generated ${tsMLStr}</span>` : ''}
+  </div>`;
   return html;
 }
 
@@ -6306,8 +6367,15 @@ function _aiPayload(moduleId) {
     speaker:  _mlSpeaker,
     webinar_link: _mlWebinarLink,
     description: _mlDesc,
+    today:    new Date().toISOString().slice(0, 10),
+    webinar_context: S.webinars ? JSON.stringify(S.webinars.slice(0, 10).map(w => ({
+      title: w.title, date: w.date, speaker: w.speaker_name, registrations: w.total_registrations,
+      attendees: w.total_attendees, icp: w.icp, status: w.status
+    }))) : '',
   };
 }
+
+const _generatedAt = {};
 
 // Replace placeholder tokens in generated text with actual values
 function _fillPlaceholders(text) {
@@ -6326,6 +6394,7 @@ async function _mlRunModule(moduleId) {
     const res = await fetch('/api/ml-analysis', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(_aiPayload(moduleId)) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     _mlResults[moduleId] = await res.json();
+    _generatedAt[moduleId] = new Date();
   } catch(e) { _mlResults[moduleId] = { error: e.message }; }
   _refreshCard(moduleId);
 }
@@ -6348,6 +6417,7 @@ async function _commRunModule(moduleId) {
     const res = await fetch('/api/ml-analysis', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(_aiPayload(moduleId)) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     _commResults[moduleId] = await res.json();
+    _generatedAt[moduleId] = new Date();
   } catch(e) { _commResults[moduleId] = { error: e.message }; }
   _refreshCard(moduleId);
 }
