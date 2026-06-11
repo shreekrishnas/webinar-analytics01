@@ -5690,14 +5690,15 @@ let _mlOrg       = 'Right Horizons Financial Services';
 let _mlDate      = '';
 let _mlSpeaker   = '';
 let _mlRegLink   = '';   // Registration link
-let _mlJoinLink  = '';   // Join / webinar room link
+let _mlJoinLink  = '';   // Zoom join link
 let _mlRecLink   = '';   // Recording link (post-event)
+let _mlDesc      = '';   // Webinar description / extra context for AI
 let _aiTab       = 'analysis'; // 'analysis' | 'emails' | 'whatsapp'
 let _iqData      = null;
 let _iqLoading   = false;
 
 function _mlInput(id, label, placeholder, stateKey, type='text') {
-  const val = ({_mlTopic,_mlDate,_mlSpeaker,_mlRegLink,_mlJoinLink,_mlRecLink})[stateKey] || '';
+  const val = ({_mlTopic,_mlDate,_mlSpeaker,_mlRegLink,_mlJoinLink,_mlRecLink,_mlDesc})[stateKey] || '';
   return `<div>
     <label style="font-size:11px;font-weight:600;color:var(--rh-text-3,#888);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">${label}</label>
     <input id="${id}" type="${type}" placeholder="${placeholder}"
@@ -5719,17 +5720,23 @@ function renderMLAnalysis() {
     <div style="background:var(--rh-surface);border:1px solid var(--rh-border);border-radius:14px;padding:20px 20px 16px;margin-bottom:4px;">
       <div style="font-size:11px;font-weight:700;color:var(--rh-red);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;">Webinar Details</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
-        ${_mlInput('ml-topic-input',  'Topic *',            'e.g. Navigating Market Volatility in 2025',    '_mlTopic')}
-        ${_mlInput('ml-date-input',   'Date &amp; Time',    'e.g. 28 June 2025, 4:00 PM IST',              '_mlDate')}
-        ${_mlInput('ml-speaker-input','Speaker',            'e.g. Rachna Rego, CFA — Head of Advisory',   '_mlSpeaker')}
+        ${_mlInput('ml-topic-input',  'Topic *',         'e.g. Navigating Market Volatility in 2025',  '_mlTopic')}
+        ${_mlInput('ml-date-input',   'Date and Time',   'e.g. 28 June 2025, 4:00 PM IST',            '_mlDate')}
+        ${_mlInput('ml-speaker-input','Speaker',         'e.g. Rachna Rego, CFA, Head of Advisory',   '_mlSpeaker')}
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
-        ${_mlInput('ml-reglink-input',  'Registration Link',  'https://zoom.us/webinar/register/…',   '_mlRegLink',  'url')}
-        ${_mlInput('ml-joinlink-input', 'Join / Room Link',   'https://zoom.us/j/…',                  '_mlJoinLink', 'url')}
-        ${_mlInput('ml-reclink-input',  'Recording Link',     'https://drive.google.com/… (post-event)',  '_mlRecLink',  'url')}
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
+        ${_mlInput('ml-reglink-input', 'Registration Link',  'https://zoom.us/webinar/register/…',  '_mlRegLink',  'url')}
+        ${_mlInput('ml-joinlink-input','Zoom Join Link',     'https://zoom.us/j/…',                  '_mlJoinLink', 'url')}
+        ${_mlInput('ml-reclink-input', 'Recording Link',     'https://zoom.us/rec/… (after event)',   '_mlRecLink',  'url')}
       </div>
-      <div style="margin-top:12px;font-size:11px;color:var(--rh-text-3);">
-        Links are automatically inserted into emails and WhatsApp messages — no manual placeholders.
+      <div style="margin-bottom:4px;">
+        <label style="font-size:11px;font-weight:600;color:var(--rh-text-3);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">Description / Extra Context</label>
+        <textarea id="ml-desc-input" placeholder="e.g. This webinar targets NRI investors exploring repatriation options. The speaker will cover FEMA regulations, NRE/NRO account strategies, and tax implications. Expected audience: 200+ professionals with ₹1Cr+ investable assets."
+          style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--rh-border);background:var(--rh-surface);color:var(--rh-text-1);font-size:13px;box-sizing:border-box;resize:vertical;min-height:72px;line-height:1.6;font-family:var(--rh-sans);outline:none;transition:border-color .15s;"
+          oninput="_mlDesc=this.value"
+          onfocus="this.style.borderColor='var(--rh-ink)'" onblur="this.style.borderColor='var(--rh-border)'"
+        >${esc(_mlDesc)}</textarea>
+        <div style="margin-top:5px;font-size:11px;color:var(--rh-text-3);">Describe the audience, agenda, key outcomes, or tone. The more context, the more specific the generated content.</div>
       </div>
     </div>
 
@@ -5750,9 +5757,10 @@ function _aiSetTab(t) {
   _mlTopic    = document.getElementById('ml-topic-input')?.value   || _mlTopic;
   _mlDate     = document.getElementById('ml-date-input')?.value    || _mlDate;
   _mlSpeaker  = document.getElementById('ml-speaker-input')?.value || _mlSpeaker;
-  _mlRegLink  = document.getElementById('ml-reglink-input')?.value || _mlRegLink;
-  _mlJoinLink = document.getElementById('ml-joinlink-input')?.value|| _mlJoinLink;
-  _mlRecLink  = document.getElementById('ml-reclink-input')?.value || _mlRecLink;
+  _mlRegLink  = document.getElementById('ml-reglink-input')?.value  || _mlRegLink;
+  _mlJoinLink = document.getElementById('ml-joinlink-input')?.value || _mlJoinLink;
+  _mlRecLink  = document.getElementById('ml-reclink-input')?.value  || _mlRecLink;
+  _mlDesc     = document.getElementById('ml-desc-input')?.value     || _mlDesc;
   _aiTab = t;
   document.querySelectorAll('.aitab-btn').forEach(b => {
     const active = b.dataset.tab === t;
@@ -6224,9 +6232,10 @@ function _aiPayload(moduleId) {
     org:      _mlOrg,
     date:     _mlDate,
     speaker:  _mlSpeaker,
-    reg_link: _mlRegLink,
-    join_link:_mlJoinLink,
-    rec_link: _mlRecLink,
+    reg_link:    _mlRegLink,
+    join_link:   _mlJoinLink,
+    rec_link:    _mlRecLink,
+    description: _mlDesc,
   };
 }
 
