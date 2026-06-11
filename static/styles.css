@@ -2598,6 +2598,48 @@ html.dark .mega-trigger.active svg { color: #000 !important; }
 html.dark .nav-link.active { background: #fafafa !important; color: #000 !important; }
 html.dark .nav-link.active svg { color: #000 !important; }
 
+/* Mobile nav menu — hidden on desktop, shown when .open via JS */
+.nav-mobile-menu {
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  position: absolute;
+  top: 62px;
+  left: 0;
+  right: 0;
+  background: var(--rh-bg, #f5f4ef);
+  border-bottom: 1px solid var(--rh-border, #e2e0d8);
+  padding: 10px 16px 16px;
+  z-index: 500;
+}
+.nav-mobile-menu.open {
+  display: flex;
+}
+.nav-mobile-menu .nav-link {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--rh-text-1, #111);
+  width: 100%;
+  text-align: left;
+}
+.nav-mobile-menu .nav-link:hover {
+  background: rgba(0,0,0,0.04);
+}
+.nav-mobile-menu .nav-link.active {
+  background: var(--rh-red, #c41e3a);
+  color: #fff;
+}
+
+/* Hamburger button: hidden on desktop */
+.nav-hamburger {
+  display: none;
+}
+
 /* Nav right controls */
 .tb-notif-btn, .nav-theme-btn, .nav-hamburger {
   background: transparent !important;
