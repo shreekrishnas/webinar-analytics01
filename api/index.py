@@ -8,8 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 if os.environ.get("DATABASE_URL"):
-    # PostgreSQL (Supabase): run create_all so new tables (e.g. webinar_ads) are
-    # created automatically. create_all is idempotent — it skips existing tables.
+    # PostgreSQL: create any missing tables, then add any missing columns.
     try:
         from database import engine
         import models
@@ -17,6 +16,41 @@ if os.environ.get("DATABASE_URL"):
     except Exception as e:
         import traceback
         print("DB create_all error:", traceback.format_exc(), file=sys.stderr)
+
+    # Column migrations — ADD COLUMN IF NOT EXISTS is idempotent in PostgreSQL.
+    # Add new columns here whenever the model gains a new field.
+    _COLUMN_MIGRATIONS = [
+        # (table, column, pg_type)
+        ("webinars", "icp",                    "VARCHAR"),
+        ("webinars", "co_speaker_id",           "INTEGER"),
+        ("webinars", "platform",                "VARCHAR"),
+        ("webinars", "category",                "VARCHAR"),
+        ("webinars", "language",                "VARCHAR"),
+        ("webinars", "recording_url",           "VARCHAR"),
+        ("webinars", "tags",                    "VARCHAR"),
+        ("webinars", "expected_registrations",  "INTEGER"),
+        ("webinars", "notes",                   "TEXT"),
+        ("webinars", "series",                  "VARCHAR"),
+        ("webinars", "is_favourite",            "BOOLEAN DEFAULT FALSE"),
+        ("speakers",  "bio",                    "TEXT"),
+        ("upload_logs", "unmatched_attendees",  "INTEGER DEFAULT 0"),
+        ("upload_logs", "filename",             "VARCHAR"),
+    ]
+    try:
+        from sqlalchemy import text as _text
+        with engine.connect() as _conn:
+            for _tbl, _col, _typ in _COLUMN_MIGRATIONS:
+                try:
+                    _conn.execute(_text(
+                        f"ALTER TABLE {_tbl} ADD COLUMN IF NOT EXISTS {_col} {_typ}"
+                    ))
+                except Exception as _ce:
+                    print(f"Column migration warning {_tbl}.{_col}: {_ce}", file=sys.stderr)
+            _conn.commit()
+        print("DB column migrations done", file=sys.stderr)
+    except Exception as e:
+        import traceback
+        print("DB migration error:", traceback.format_exc(), file=sys.stderr)
 elif os.environ.get("VERCEL"):
     # Vercel without Postgres: copy bundled SQLite DB to /tmp on cold start
     try:
