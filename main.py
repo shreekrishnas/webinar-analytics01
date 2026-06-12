@@ -1,9 +1,10 @@
 import os
+import hashlib
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File, Response, Header
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse, HTMLResponse
 from starlette.responses import Response as StarletteResponse
 import csv, io
 from sqlalchemy.orm import Session
@@ -62,6 +63,18 @@ def _score_label(score: int) -> str:
     return "Low Performing"
 
 
+def _compute_static_version() -> str:
+    h = hashlib.md5()
+    for fname in ["app.js", "styles.css", "trilliant.css"]:
+        fpath = os.path.join(BASE_DIR, "static", fname)
+        if os.path.exists(fpath):
+            with open(fpath, "rb") as f:
+                h.update(f.read())
+    return h.hexdigest()[:12]
+
+STATIC_VERSION = _compute_static_version()
+
+
 class NoCacheStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope) -> StarletteResponse:
         response = await super().get_response(path, scope)
@@ -118,7 +131,14 @@ app.mount("/static", NoCacheStaticFiles(directory=os.path.join(BASE_DIR, "static
 
 @app.get("/", include_in_schema=False)
 async def root():
-    resp = FileResponse(os.path.join(BASE_DIR, "static", "index.html"))
+    html_path = os.path.join(BASE_DIR, "static", "index.html")
+    with open(html_path, "r", encoding="utf-8") as f:
+        html = f.read()
+    # Replace any hardcoded ?v=NNN with the content-hash version so browsers
+    # automatically load fresh assets after every deploy that changes files.
+    import re
+    html = re.sub(r'\?v=[^"\'&]+', f'?v={STATIC_VERSION}', html)
+    resp = HTMLResponse(content=html)
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0"
     resp.headers["Surrogate-Control"] = "no-store"
     resp.headers["CDN-Cache-Control"] = "no-store"
