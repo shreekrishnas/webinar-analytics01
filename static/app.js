@@ -3387,7 +3387,7 @@ let _intelHotLeadsCache = null;
 let _intelInsightsCache = null;
 
 async function renderIntelligence() {
-  if (!S._intelTab) S._intelTab = 'scoreboard';
+  if (!S._intelTab) S._intelTab = 'aiinsights';
   setContent(`
     <div class="intel-page">
       <div class="page-hd">
@@ -3395,9 +3395,10 @@ async function renderIntelligence() {
           <h1 class="page-title">Smart Recommendations</h1>
           <p class="page-sub">AI-powered insights from your webinar data.</p>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="_intelCache=null;_intelHotLeadsCache=null;renderIntelligence()">Refresh</button>
+        <button class="btn btn-ghost btn-sm" onclick="_intelCache=null;_intelHotLeadsCache=null;_intelInsightsCache=null;renderIntelligence()">Refresh</button>
       </div>
       <div class="intel-tabs">
+        <button class="intel-tab ${S._intelTab==='aiinsights'?'active':''}"  onclick="S._intelTab='aiinsights';renderIntelligence()">AI Insights</button>
         <button class="intel-tab ${S._intelTab==='scoreboard'?'active':''}" onclick="S._intelTab='scoreboard';renderIntelligence()">Programme Scoreboard</button>
         <button class="intel-tab ${S._intelTab==='hotleads'?'active':''}"   onclick="S._intelTab='hotleads';renderIntelligence()">Hot Leads</button>
         <button class="intel-tab ${S._intelTab==='nextplay'?'active':''}"   onclick="S._intelTab='nextplay';renderIntelligence()">Next Play</button>
@@ -3406,7 +3407,9 @@ async function renderIntelligence() {
     </div>`);
   try {
     const body = document.getElementById('intel-body');
-    if (S._intelTab === 'scoreboard') {
+    if (S._intelTab === 'aiinsights') {
+      await _renderAIInsights(body);
+    } else if (S._intelTab === 'scoreboard') {
       _renderScoreboard(body);
     } else if (S._intelTab === 'hotleads') {
       await _renderHotLeads(body);
@@ -3908,7 +3911,7 @@ async function _renderAIInsights(body) {
             <h2 style="font-size:20px;font-weight:800;margin:0;color:var(--text-primary)">Smart Recommendations</h2>
             <p style="font-size:13px;color:var(--text-muted);margin:4px 0 0">AI analysis of ${completed.length} completed webinars · ${fmt(totalReg)} registrations · ${fmt(totalAtt)} attendees</p>
           </div>
-          <button class="btn btn-ghost btn-sm" style="display:flex;align-items:center;gap:6px" onclick="_intelInsightsCache=null;_renderAIInsights(document.getElementById('intel-body'))">
+          <button class="btn btn-ghost btn-sm" style="display:flex;align-items:center;gap:6px" onclick="_intelInsightsCache=null;S._intelTab='aiinsights';renderIntelligence()">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             Refresh Analysis
           </button>

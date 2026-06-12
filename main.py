@@ -1297,39 +1297,42 @@ ICP PERFORMANCE: {icp_summary}
 SPEAKER PERFORMANCE: {spk_summary}
 RECENT WEBINARS: {recent_summary}
 
-Generate EXACTLY 4 structured insights as a JSON array with these exact types in this order:
-1. type="overall" — Where the biggest drop happens in the programme funnel. Cite specific numbers.
-2. type="funnel" — Registration vs attendance pattern. Which ICPs or webinars convert best vs worst.
-3. type="lead_quality" — Comment on audience profile quality based on ICP data. Are the right HNI/NRI segments attending?
-4. type="recommendation" — One clear action on the weakest stage. Be specific: topic, ICP, format, or channel to fix.
+Generate EXACTLY 8 structured insights as a JSON array using these types: win, risk, opportunity, action, trend, funnel, lead_quality, recommendation.
+
+Distribution: 2 wins, 2 risks, 2 opportunities, 1 action, 1 trend. Tailor every insight to the HNI/NRI wealth advisory business context of {COMPANY_NAME}.
 
 Rules:
-- Every insight MUST cite a specific number from the data
-- Be direct and prescriptive for an HNI wealth advisory context
-- Do not mention spend, CPL, impressions, or ads unless ads data is explicitly provided
-- Focus on registrations, attendance rates, ICP distribution, and speaker performance only
+- EVERY insight MUST cite a specific number, name, or date from the data
+- Be direct, prescriptive, and specific — no generic marketing advice
+- Each "action" must name which speaker, which ICP, and which format to use
+- "win" = something working well that should be doubled down on
+- "risk" = something deteriorating or underperforming that needs fixing now
+- "opportunity" = an untapped ICP, topic, or speaker combination worth trying
+- "trend" = a directional pattern visible across multiple webinars
+- Do not mention ad spend or CPL unless ads data is provided
 {f'- Ads data available: {ads_summary}' if has_ads else ''}
 
-Return ONLY a valid JSON array of exactly 4 objects:
+Return ONLY a valid JSON array of exactly 8 objects:
 [
   {{
-    "type": "overall|funnel|lead_quality|recommendation",
-    "headline": "Bold specific claim ≤65 chars",
-    "detail": "2-3 sentences with specific numbers and clear business implication.",
-    "action": "One specific, actionable next step ≤90 chars",
-    "metric": "The key stat e.g. '47% attendance rate'"
+    "type": "win|risk|opportunity|action|trend|funnel|lead_quality|recommendation",
+    "headline": "Bold specific claim ≤70 chars",
+    "detail": "2-3 sentences with specific numbers, names, and clear business implication.",
+    "action": "One specific next step naming speaker/ICP/format ≤100 chars",
+    "metric": "The key stat e.g. '47% attendance rate' or 'Anil Rego 3 webinars'"
   }}
 ]"""
 
     try:
-        resp = httpx.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
-                     "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
-            json={"model": AI_MODEL, "max_tokens": 1500,
-                  "messages": [{"role": "user", "content": prompt}]},
-            timeout=30.0
-        )
+        import httpx as _httpx
+        async with _httpx.AsyncClient(timeout=45.0) as _ac:
+            resp = await _ac.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+                         "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
+                json={"model": AI_MODEL, "max_tokens": 2000,
+                      "messages": [{"role": "user", "content": prompt}]},
+            )
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"].strip()
         insights = _extract_json(raw)
@@ -3455,24 +3458,30 @@ def _iq_lead_quality(data):
             "breakdown": {k: {'count': v, 'pct': round(v/total*100, 1)} for k, v in buckets.items()}}
 
 
-async def _iq_ai_narrative(stats: dict) -> dict:
+async def _iq_ai_narrative(stats: dict, webinar_lines: list = None) -> dict:
     import httpx, json as _j
     key = os.environ.get("OPENROUTER_API_KEY")
     if not key:
         return {"executive_summary": {"headline": "Webinar data analysed", "bullets": []}, "recommendations": []}
+    wb_block = ""
+    if webinar_lines:
+        wb_block = "\n\nWEBINAR DETAIL (newest first):\n" + "\n".join(webinar_lines[-20:])
     prompt = (
-        "You are a senior business intelligence analyst. Based on this webinar performance data, produce:\n"
-        "1. A sharp executive summary: one powerful headline sentence + exactly 5 specific bullet points (use real numbers from the data).\n"
-        "2. Exactly 5 prioritised actionable recommendations.\n\n"
-        f"Data: {_j.dumps(stats)}\n\n"
+        f"You are a senior business intelligence analyst for {COMPANY_NAME}, {COMPANY_DESC}.\n"
+        "Based on this webinar programme data, produce:\n"
+        "1. A sharp executive summary: one powerful headline sentence + exactly 5 specific bullet points (cite real numbers, speaker names, and ICP names from the data).\n"
+        "2. Exactly 5 prioritised actionable recommendations for growing the HNI/NRI webinar programme. Each must name a specific speaker, ICP, or topic.\n\n"
+        f"SUMMARY STATS: {_j.dumps(stats)}"
+        f"{wb_block}\n\n"
         'Reply ONLY with JSON:\n'
         '{"executive_summary":{"headline":"...","bullets":["..."],"sentiment":"Positive|Neutral|Cautious"},'
-        '"recommendations":[{"title":"Short title","action":"Detailed action step","impact":"high|medium|low","confidence":0.8}]}'
+        '"recommendations":[{"title":"Short title","action":"Detailed action step naming speaker/ICP/topic","impact":"high|medium|low","confidence":0.8}]}'
     )
-    async with httpx.AsyncClient(timeout=30) as c:
+    async with httpx.AsyncClient(timeout=40) as c:
         r = await c.post("https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-            json={"model": "anthropic/claude-sonnet-4-5", "max_tokens": 900,
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
+                     "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
+            json={"model": AI_MODEL, "max_tokens": 1000,
                   "messages": [{"role": "user", "content": prompt}]})
     if r.status_code != 200:
         return {"executive_summary": {"headline": "Analysis complete", "bullets": []}, "recommendations": []}
@@ -3710,7 +3719,11 @@ async def _ai_intelligence_impl(db):
         "intelligence_score": overall, "anomaly_count": len(anomalies),
         "patterns_found": len(patterns),
     }
-    ai_out = await _iq_ai_narrative(summary_stats)
+    wb_lines = [
+        f"[{d['date']}] \"{d['title'][:60]}\" | ICP:{d['icp']} | Regs:{d['regs']} | Att:{d['attendees']} | Rate:{d['att_rate']}%"
+        for d in data
+    ]
+    ai_out = await _iq_ai_narrative(summary_stats, wb_lines)
 
     return {
         "data_basis": f"{n} completed webinar{'s' if n!=1 else ''}",

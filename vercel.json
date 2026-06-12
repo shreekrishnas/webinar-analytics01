@@ -33,6 +33,11 @@
       ]
     }
   ],
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 60
+    }
+  },
   "crons": [
     {
       "path": "/api/competitor-research/weekly",
