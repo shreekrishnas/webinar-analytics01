@@ -113,6 +113,7 @@ async def no_cache_middleware(request, call_next):
     response.headers["Vercel-CDN-Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
+    response.headers["Vary"] = "*"          # prevent CDN Vary-based caching
     return response
 
 

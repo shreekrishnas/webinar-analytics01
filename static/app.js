@@ -11,6 +11,33 @@ let _adWebinarId   = null;
 let _adImageBase64 = null;
 const detailCache = {};
 
+/* ── Cache invalidation helpers ─────────────────────────────────────────── */
+function _clearAllCaches() {
+  // Wipe all in-memory caches so the next render fetches fresh data
+  Object.keys(detailCache).forEach(k => delete detailCache[k]);
+  _intelCache = null;
+  _intelHotLeadsCache = null;
+  _intelInsightsCache = null;
+  _pipelineCache = null;
+  _topicsCache = null;
+}
+
+function _clearWebinarCaches(webinarId) {
+  // Wipe caches for a specific webinar and any aggregated caches
+  delete detailCache[webinarId];
+  // Wipe speaker caches (they embed webinar data)
+  Object.keys(detailCache).filter(k => k.startsWith('spk_')).forEach(k => delete detailCache[k]);
+  // Wipe aggregated caches that may include this webinar's data
+  _intelCache = null;
+  _intelHotLeadsCache = null;
+  _intelInsightsCache = null;
+  _pipelineCache = null;
+}
+
+async function _refreshStats() {
+  try { S.stats = await api('/api/stats'); } catch(e) {}
+}
+
 /* ── Helpers ────────────────────────────────────────────────────────────── */
 function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1535,19 +1562,24 @@ async function uploadFile(webinarId, type, file) {
     }
     const result = await resp.json();
     showToast(result.message);
-    // Invalidate cache and re-render detail
-    delete detailCache[webinarId];
-    // Update the webinar in S.webinars list with fresh data
-    const fresh = await api(`/api/webinars/${webinarId}`);
+    // Clear all caches touched by this upload
+    _clearWebinarCaches(webinarId);
+    // Fetch fresh data in parallel
+    const [fresh, stats] = await Promise.all([
+      api(`/api/webinars/${webinarId}`),
+      api('/api/stats'),
+    ]);
     detailCache[webinarId] = fresh;
+    S.stats = stats;
+    // Patch the summary list entry in-place so overview stays in sync
     const idx = S.webinars.findIndex(w => w.id === webinarId);
-    if (idx >= 0) {
-      S.webinars[idx].total_registrations = fresh.total_registrations;
-      S.webinars[idx].total_attendees = fresh.total_attendees;
-      S.webinars[idx].attendance_rate = fresh.attendance_rate;
-      S.webinars[idx].has_registration_data = fresh.has_registration_data;
-      S.webinars[idx].has_attendee_data = fresh.has_attendee_data;
-    }
+    if (idx >= 0) Object.assign(S.webinars[idx], {
+      total_registrations: fresh.total_registrations,
+      total_attendees: fresh.total_attendees,
+      attendance_rate: fresh.attendance_rate,
+      has_registration_data: fresh.has_registration_data,
+      has_attendee_data: fresh.has_attendee_data,
+    });
     _drawWebinarDetail(fresh);
   } catch(e) {
     showToast(e.message || 'Upload failed', 'error');
@@ -2621,25 +2653,27 @@ async function submitWebinarModal() {
     closeWebinarModal();
     showToast(isEdit ? `"${title}" updated!` : `"${title}" saved! Upload your data below.`);
 
-    // Refresh lists so new speaker appears
-    const [webinars, speakers] = await Promise.all([
+    // Clear stale caches before refreshing
+    if (isEdit) _clearWebinarCaches(_editWebinarId);
+    else _clearAllCaches();
+
+    // Refresh lists + stats so everything is consistent
+    const [webinars, speakers, stats] = await Promise.all([
       api('/api/webinars'),
       api('/api/speakers'),
+      api('/api/stats'),
     ]);
     S.webinars = webinars;
     S.speakers = speakers;
-
-    // Speakers list updated in S.speakers - custom dropdown reads from it on open
+    S.stats    = stats;
 
     if (isEdit) {
-      // Refresh current webinar detail page if open
       if (S.page === 'webinar' && S.sub == _editWebinarId) {
         nav('webinar', _editWebinarId);
       } else {
         renderHome();
       }
     } else {
-      // Go straight to the new webinar's upload/detail page
       nav('webinar', result.id);
     }
   } catch(e) {
@@ -2826,7 +2860,7 @@ async function submitAdModal() {
     await api(`/api/webinars/${wid}/ads`, 'POST', payload);
     closeAdModal();
     showToast('Ad creative saved!');
-    // Reload detail
+    _clearWebinarCaches(wid);
     const fresh = await api(`/api/webinars/${wid}`);
     detailCache[wid] = fresh;
     _drawWebinarDetail(fresh);
@@ -5205,7 +5239,9 @@ async function executeDeleteWebinar(id, title) {
   document.getElementById('confirm-overlay')?.remove();
   try {
     await api(`/api/webinars/${id}`, 'DELETE');
+    _clearWebinarCaches(id);
     S.webinars = S.webinars.filter(w => w.id !== id);
+    _refreshStats();
     showToast(`"${title}" deleted`);
     nav('home');
   } catch(e) {
