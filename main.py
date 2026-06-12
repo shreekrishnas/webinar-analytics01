@@ -217,10 +217,16 @@ def create_webinar(webinar: schemas.WebinarCreate, db: Session = Depends(get_db)
 
 @app.get("/api/webinars/{webinar_id}", response_model=schemas.WebinarDetail)
 def get_webinar(webinar_id: int, db: Session = Depends(get_db)):
-    detail = crud.get_webinar_detail(db, webinar_id)
-    if not detail:
-        raise HTTPException(status_code=404, detail="Webinar not found")
-    return detail
+    try:
+        detail = crud.get_webinar_detail(db, webinar_id)
+        if not detail:
+            raise HTTPException(status_code=404, detail="Webinar not found")
+        return detail
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Error loading webinar %s: %s", webinar_id, exc)
+        raise HTTPException(status_code=500, detail=f"Failed to load webinar: {exc}")
 
 
 @app.patch("/api/webinars/{webinar_id}", response_model=schemas.WebinarSummary)
@@ -2681,10 +2687,16 @@ def list_speakers(response: Response, db: Session = Depends(get_db)):
 
 @app.get("/api/speakers/{speaker_id}", response_model=schemas.SpeakerDetail)
 def get_speaker(speaker_id: int, db: Session = Depends(get_db)):
-    detail = crud.get_speaker_detail(db, speaker_id)
-    if not detail:
-        raise HTTPException(status_code=404, detail="Speaker not found")
-    return detail
+    try:
+        detail = crud.get_speaker_detail(db, speaker_id)
+        if not detail:
+            raise HTTPException(status_code=404, detail="Speaker not found")
+        return detail
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Error loading speaker %s: %s", speaker_id, exc)
+        raise HTTPException(status_code=500, detail=f"Failed to load speaker: {exc}")
 
 
 # ── Attendee profile ──────────────────────────────────────────────────────────

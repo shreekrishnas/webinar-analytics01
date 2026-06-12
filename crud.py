@@ -11,41 +11,28 @@ import schemas
 # ── Shared helpers ────────────────────────────────────────────────────────────
 
 def _webinar_stats(db: Session, webinar_id: int) -> dict:
-    """Single-query stats for one webinar (used for detail pages)."""
-    sql = text("""
-        SELECT
-            COALESCE(r_stats.total_reg, 0)  AS total_registrations,
-            COALESCE(a_stats.total_att, 0)  AS total_attendees,
-            COALESCE(ul_dup.dup_removed, 0) AS duplicates_removed,
-            COALESCE(ul_unm.unmatched, 0)   AS unmatched_attendees
-        FROM (SELECT 1) base
-        LEFT JOIN (
-            SELECT COUNT(*) AS total_reg
-            FROM registrations WHERE webinar_id = :wid
-        ) r_stats ON TRUE
-        LEFT JOIN (
-            SELECT COUNT(*) AS total_att
-            FROM attendances WHERE webinar_id = :wid AND attended = TRUE
-        ) a_stats ON TRUE
-        LEFT JOIN (
-            SELECT SUM(duplicates_removed) AS dup_removed
-            FROM upload_logs WHERE webinar_id = :wid
-        ) ul_dup ON TRUE
-        LEFT JOIN (
-            SELECT SUM(unmatched_attendees) AS unmatched
-            FROM upload_logs WHERE webinar_id = :wid AND file_type = 'attendees'
-        ) ul_unm ON TRUE
-    """)
-    row = db.execute(sql, {"wid": webinar_id}).fetchone()
-    total_reg = int(row.total_registrations or 0)
-    total_att = int(row.total_attendees or 0)
+    """Compute stats for one webinar using simple separate queries (pg8000-safe)."""
+    total_reg = db.query(func.count(models.Registration.id)).filter(
+        models.Registration.webinar_id == webinar_id
+    ).scalar() or 0
+    total_att = db.query(func.count(models.Attendance.id)).filter(
+        models.Attendance.webinar_id == webinar_id,
+        models.Attendance.attended == True,
+    ).scalar() or 0
+    dup_row = db.query(func.sum(models.UploadLog.duplicates_removed)).filter(
+        models.UploadLog.webinar_id == webinar_id
+    ).scalar()
+    unm_row = db.query(func.sum(models.UploadLog.unmatched_attendees)).filter(
+        models.UploadLog.webinar_id == webinar_id,
+        models.UploadLog.file_type == 'attendees',
+    ).scalar()
     rate = round(total_att / total_reg * 100, 1) if total_reg > 0 else 0.0
     return {
-        "total_registrations": total_reg,
-        "total_attendees": total_att,
+        "total_registrations": int(total_reg),
+        "total_attendees": int(total_att),
         "attendance_rate": rate,
-        "duplicates_removed": int(row.duplicates_removed or 0),
-        "unmatched_attendees": int(row.unmatched_attendees or 0),
+        "duplicates_removed": int(dup_row or 0),
+        "unmatched_attendees": int(unm_row or 0),
     }
 
 
