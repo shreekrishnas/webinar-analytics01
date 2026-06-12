@@ -1749,12 +1749,13 @@ function renderAnalytics() {
           { label:'Completed', val:st.completed_webinars||completed.length, color:'#10b981' },
           { label:'Registrations', val:fmt(totalReg), color:'#6366f1' },
           { label:'Attendees', val:fmt(totalAtt), color:'#10b981' },
-          { label:'Avg Attendance', val:st.overall_attendance_rate+'%', color:'#f59e0b' },
-          { label:'Conversion Rate', val:convRate+'%', color: convRate>=40?'#10b981':convRate>=25?'#f59e0b':'#f43f5e' },
+          { label:'Avg Attendance', val:st.overall_attendance_rate+'%', color:'#f59e0b', benchmark:'40%', aboveBench: st.overall_attendance_rate >= 40 },
+          { label:'Conversion Rate', val:convRate+'%', color: convRate>=40?'#10b981':convRate>=25?'#f59e0b':'#f43f5e', benchmark:'40%', aboveBench: convRate >= 40 },
         ].map(k=>`
           <div class="an-kpi-card" style="border-top:3px solid ${k.color}">
             <div class="an-kpi-val" style="color:${k.color}">${k.val}</div>
             <div class="an-kpi-label">${k.label}</div>
+            ${k.benchmark ? `<div style="font-size:10px;color:${k.aboveBench?'#10b981':'#f59e0b'};margin-top:3px">${k.aboveBench?'Above':'Below'} 40% benchmark</div>` : ''}
           </div>`).join('')}
       </div>
 
@@ -1785,6 +1786,7 @@ function renderAnalytics() {
           <div style="text-align:center;padding:14px 24px;background:#6366f108;border:1px solid #6366f140;border-radius:10px">
             <div style="font-size:20px;font-weight:800;color:#6366f1">${convRate}%</div>
             <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Reg → Attendee</div>
+            <div style="font-size:10px;color:${convRate>=40?'#10b981':'#f59e0b'};margin-top:3px">${convRate>=40?'Above':'Below'} 40% benchmark</div>
           </div>
           <div style="text-align:center;padding:14px 24px;background:#10b98108;border:1px solid #10b98140;border-radius:10px">
             <div style="font-size:20px;font-weight:800;color:#10b981">${completed.length > 0 ? Math.round(totalAtt/completed.length) : 0}</div>
@@ -1813,17 +1815,26 @@ function renderAnalytics() {
         </div>` : ''}
         ${icpRows.length ? `
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px 28px">
-          <div style="font-weight:700;font-size:15px;margin-bottom:16px">Attendees by ICP</div>
-          ${icpRows.map(([icp,d]) => `
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+            <div style="font-weight:700;font-size:15px">Attendees by ICP</div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#f59e0b"><span style="display:inline-block;width:12px;height:2px;background:#f59e0b;border-top:2px dashed #f59e0b"></span>40% benchmark</div>
+          </div>
+          ${icpRows.map(([icp,d]) => {
+            const attRate = d.att>0&&d.reg>0 ? Math.round(d.att/d.reg*100) : 0;
+            const barPct = Math.round(d.att/maxIcpAtt*100);
+            const benchPct = Math.min(40/100*maxIcpAtt/maxIcpAtt*100, 100);
+            const rateColor = attRate >= 40 ? '#10b981' : attRate >= 25 ? '#f59e0b' : '#f43f5e';
+            return `
             <div style="margin-bottom:12px">
               <div style="display:flex;justify-content:space-between;margin-bottom:4px">
                 <span style="font-size:13px;font-weight:600">${esc(icp)}</span>
-                <span style="font-size:12px;color:var(--text-muted)">${fmt(d.att)} attended · ${d.att>0&&d.reg>0?Math.round(d.att/d.reg*100)+'%':'-'}</span>
+                <span style="font-size:12px;color:${rateColor};font-weight:600">${fmt(d.att)} attended · ${attRate>0?attRate+'%':'-'}</span>
               </div>
-              <div style="height:8px;background:var(--border);border-radius:4px">
-                <div style="height:100%;width:${Math.round(d.att/maxIcpAtt*100)}%;background:#6366f1;border-radius:4px"></div>
+              <div style="height:8px;background:var(--border);border-radius:4px;position:relative">
+                <div style="height:100%;width:${barPct}%;background:#6366f1;border-radius:4px"></div>
               </div>
-            </div>`).join('')}
+            </div>`;
+          }).join('')}
         </div>` : ''}
       </div>
 
@@ -1839,13 +1850,25 @@ function renderAnalytics() {
             </div>`).join('')}
         </div>
         <div class="an-card">
-          <div class="an-title">Top 8 by Attendance Rate</div>
-          ${top10att.length ? top10att.map(w => `
+          <div class="an-title" style="display:flex;align-items:center;justify-content:space-between">
+            Top 8 by Attendance Rate
+            <span style="font-size:10px;font-weight:500;color:#f59e0b;display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:14px;border-top:2px dashed #f59e0b"></span>40% target</span>
+          </div>
+          ${top10att.length ? top10att.map(w => {
+            const rate = w.attendance_rate || 0;
+            const barW = Math.min(rate/maxAtt*100, 100);
+            const benchW = Math.min(40/maxAtt*100, 100);
+            const barColor = rate >= 40 ? '#10b981' : rate >= 25 ? '#f59e0b' : '#f43f5e';
+            return `
             <div class="an-row" onclick="nav('webinar',${w.id})" style="cursor:pointer">
               <span class="an-row-lbl" title="${esc(w.title)}">${esc(w.title)}</span>
-              <div class="an-bar-wrap"><div class="an-bar-fill" style="width:${Math.min((w.attendance_rate||0)/maxAtt*100,100)}%;background:#10b981"></div></div>
-              <span class="an-row-val">${fmtPct(w.attendance_rate)}</span>
-            </div>`).join('') : '<div style="color:var(--text-3);font-size:12px;padding:8px 0">No completed webinars with attendance data yet.</div>'}
+              <div class="an-bar-wrap" style="position:relative">
+                <div class="an-bar-fill" style="width:${barW}%;background:${barColor}"></div>
+                <div style="position:absolute;top:0;bottom:0;left:${benchW}%;width:2px;background:#f59e0b;opacity:0.7;border-radius:1px"></div>
+              </div>
+              <span class="an-row-val" style="color:${barColor}">${fmtPct(rate)}</span>
+            </div>`;
+          }).join('') : '<div style="color:var(--text-3);font-size:12px;padding:8px 0">No completed webinars with attendance data yet.</div>'}
         </div>
       </div>
 
@@ -4336,7 +4359,7 @@ async function loadTopicPerformance() {
       <div style="margin-bottom:36px">
         <div class="page-hd" style="margin-bottom:16px">
           <div><h2 style="font-size:18px;font-weight:700;margin:0">ICP Performance</h2>
-          <p class="page-sub" style="margin:2px 0 0">How each topic category is performing across all webinars</p></div>
+          <p class="page-sub" style="margin:2px 0 0">How each topic category is performing across all webinars · <span style="color:#f59e0b;font-weight:600">40% attendance rate = industry benchmark</span></p></div>
         </div>
         <div class="tp-grid">${rows || '<div style="color:var(--text-muted);font-size:13px;padding:16px">No topic performance data yet.</div>'}</div>
       </div>`;

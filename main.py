@@ -2007,7 +2007,35 @@ async def get_topic_suggestions():
 
     # Use Claude Sonnet to generate speaker topics based on its training knowledge
     news_context = ""
-    context_block = f"Today is {today}. Use your knowledge of Indian financial markets, recent regulatory changes, budget developments, RBI decisions, SEBI updates, and macroeconomic trends."
+    # Try to fetch live Indian financial news via free RSS feeds (no key required)
+    NEWS_FEEDS = [
+        "https://economictimes.indiatimes.com/markets/rss.cms",
+        "https://economictimes.indiatimes.com/wealth/rss.cms",
+        "https://www.moneycontrol.com/rss/results.xml",
+    ]
+    try:
+        import re as _re
+        for feed_url in NEWS_FEEDS:
+            try:
+                r = httpx.get(feed_url, timeout=5.0, follow_redirects=True,
+                              headers={"User-Agent": "Mozilla/5.0 (WebinarIQ/1.0)"})
+                if r.status_code == 200:
+                    titles = _re.findall(r'<title><!\[CDATA\[(.*?)\]\]></title>', r.text)[:8]
+                    if not titles:
+                        titles = _re.findall(r'<title>(.*?)</title>', r.text)[1:9]
+                    headlines = [t.strip() for t in titles if len(t.strip()) > 10]
+                    if headlines:
+                        news_context += "\n".join(f"- {h}" for h in headlines[:6]) + "\n"
+                        break
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    if news_context:
+        context_block = f"Today is {today}. Here are LIVE headlines from Indian financial news (use these to make topics timely and specific):\n{news_context}\nAlso use your knowledge of recent RBI decisions, SEBI updates, budget developments, and macroeconomic trends."
+    else:
+        context_block = f"Today is {today}. Use your knowledge of Indian financial markets, recent regulatory changes, budget developments, RBI decisions, SEBI updates, and macroeconomic trends."
 
     prompt = f"""You are a webinar content strategist for {COMPANY_NAME}, {COMPANY_DESC}.
 
