@@ -15,6 +15,10 @@ const detailCache = {};
 function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+function stripEmDash(s) {
+  return String(s ?? '').replace(/—/g, ', ').replace(/–/g, ', ').replace(/ - /g, ', ');
+}
+function escAI(s) { return esc(stripEmDash(s)); }
 function fmt(n)    { return Number(n).toLocaleString('en-IN'); }
 function fmtINR(n) { return '₹' + Number(n).toLocaleString('en-IN'); }
 function fmtPct(n) { return Number(n).toFixed(1) + '%'; }
@@ -1230,10 +1234,11 @@ async function renderWebinarDetail(id) {
     const w = await api(`/api/webinars/${id}`);
     detailCache[id] = w;
     _drawWebinarDetail(w);
-    loadNotes(id);
-    loadWebinarFunnel(id, w);
+    // Run secondary loads independently so a failure doesn't wipe the page
+    loadNotes(id).catch(()=>{});
+    loadWebinarFunnel(id, w).catch(()=>{});
   } catch(e) {
-    setContent('<div class="empty-state"><div class="empty-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><div class="empty-title">Failed to load</div></div>');
+    setContent(`<div class="empty-state"><div class="empty-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><div class="empty-title">Failed to load webinar</div><div class="empty-sub">${esc(e.message||'')}</div></div>`);
   }
 }
 
@@ -1896,22 +1901,26 @@ async function _loadNewLeadsChart() {
     const maxTotal = Math.max(...webinars.map(w => w.new_count + w.repeat_count), 1);
 
     body.innerHTML = `
-      <div style="display:flex;align-items:flex-end;gap:10px;height:140px;margin-bottom:8px">
+      <div style="display:flex;gap:10px;align-items:flex-end;height:120px;margin-bottom:6px">
         ${webinars.map(w => {
-          const total = w.new_count + w.repeat_count;
-          const newH  = Math.max(Math.round((w.new_count/maxTotal)*120), 4);
-          const repH  = Math.max(Math.round((w.repeat_count/maxTotal)*120), w.repeat_count>0?4:0);
+          const newH  = Math.max(Math.round((w.new_count/maxTotal)*110), 4);
+          const repH  = Math.max(Math.round((w.repeat_count/maxTotal)*110), w.repeat_count>0?4:0);
           return `
-            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0">
-              <div style="font-size:10px;font-weight:700;color:#6366f1">+${w.new_count}</div>
-              <div style="width:100%;display:flex;flex-direction:column;justify-content:flex-end;height:120px;gap:1px">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0;position:relative">
+              <div style="font-size:9px;font-weight:700;color:#6366f1;margin-bottom:2px">+${w.new_count}</div>
+              <div style="width:100%;display:flex;flex-direction:column;justify-content:flex-end;gap:1px">
                 ${repH>0?`<div style="width:100%;height:${repH}px;background:#a5b4fc;border-radius:4px 4px 0 0" title="${w.repeat_count} returning"></div>`:''}
                 <div style="width:100%;height:${newH}px;background:#6366f1;border-radius:${repH>0?'0':'4px 4px'} 0 0" title="${w.new_count} new"></div>
               </div>
-              <div style="font-size:9px;color:var(--text-muted);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;max-width:80px" title="${esc(w.title)}">${esc((w.title||'').slice(0,14)+(w.title&&w.title.length>14?'…':''))}</div>
-              <div style="font-size:8px;color:var(--text-muted)">${w.date?w.date.slice(5):''}</div>
             </div>`;
         }).join('')}
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:8px">
+        ${webinars.map(w => `
+          <div style="flex:1;min-width:0;text-align:center">
+            <div style="font-size:9px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(w.title)}">${esc((w.title||'').slice(0,12)+(w.title&&w.title.length>12?'…':''))}</div>
+            <div style="font-size:8px;color:var(--text-muted)">${w.date?w.date.slice(5):''}</div>
+          </div>`).join('')}
       </div>
       <div style="display:flex;gap:16px;font-size:11px;color:var(--text-muted)">
         <div style="display:flex;align-items:center;gap:6px"><div style="width:12px;height:12px;border-radius:3px;background:#6366f1"></div>New registrants (first time)</div>
@@ -2881,7 +2890,7 @@ async function loadWebinarFunnel(id, w) {
         <div class="funnel-section">
           <div class="sec-hd"><span class="sec-title">Webinar Funnel</span></div>
           <div class="funnel-stages">${stageItems}</div>
-          ${funnel.insight ? `<div class="funnel-insight">${esc(funnel.insight)}</div>` : ''}
+          ${funnel.insight ? `<div class="funnel-insight">${escAI(funnel.insight)}</div>` : ''}
         </div>`;
     }
   } catch(e) { /* silently skip */ }
@@ -3294,7 +3303,7 @@ function renderAIPanel(panel, data) {
           <div class="aip-insight-icon-wrap">${getInsightIcon(s.title)}</div>
           <div class="aip-insight-body">
             <div class="aip-insight-title">${esc(s.title)}</div>
-            <div class="aip-insight-text">${esc(s.insight)}</div>
+            <div class="aip-insight-text">${escAI(s.insight)}</div>
             <div class="aip-insight-tag">${esc(s.highlight)}</div>
           </div>
         </div>`).join('')}
@@ -3819,13 +3828,13 @@ async function _renderAIInsights(body) {
             <div style="flex:1;min-width:0">
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
                 <span style="font-size:10px;font-weight:800;letter-spacing:1px;color:${cfg.color};background:${cfg.color}18;border:1px solid ${cfg.color}30;border-radius:20px;padding:2px 10px">${cfg.label}</span>
-                ${ins.metric ? `<span style="font-size:12px;font-weight:700;color:${cfg.color};background:${cfg.color}15;border-radius:20px;padding:2px 10px">${esc(ins.metric)}</span>` : ''}
+                ${ins.metric ? `<span style="font-size:12px;font-weight:700;color:${cfg.color};background:${cfg.color}15;border-radius:20px;padding:2px 10px">${escAI(ins.metric)}</span>` : ''}
               </div>
-              <div style="font-weight:800;font-size:16px;color:var(--text-primary);margin-bottom:8px;line-height:1.35">${esc(ins.headline)}</div>
-              <div style="font-size:13.5px;color:var(--text-secondary);line-height:1.65;margin-bottom:14px">${esc(ins.detail)}</div>
+              <div style="font-weight:800;font-size:16px;color:var(--text-primary);margin-bottom:8px;line-height:1.35">${escAI(ins.headline)}</div>
+              <div style="font-size:13.5px;color:var(--text-secondary);line-height:1.65;margin-bottom:14px">${escAI(ins.detail)}</div>
               <div style="display:flex;align-items:flex-start;gap:8px;background:${cfg.color}10;border-left:3px solid ${cfg.color};border-radius:0 8px 8px 0;padding:10px 14px">
                 <span style="font-size:14px;flex-shrink:0">→</span>
-                <span style="font-size:13px;font-weight:600;color:var(--text-primary)">${esc(ins.action)}</span>
+                <span style="font-size:13px;font-weight:600;color:var(--text-primary)">${escAI(ins.action)}</span>
               </div>
             </div>
           </div>
@@ -3838,11 +3847,11 @@ async function _renderAIInsights(body) {
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
               <span style="font-size:16px">${cfg.icon}</span>
               <span style="font-size:10px;font-weight:800;letter-spacing:1px;color:${cfg.color}">${cfg.label}</span>
-              ${ins.metric ? `<span style="font-size:11px;font-weight:700;color:${cfg.color};margin-left:auto">${esc(ins.metric)}</span>` : ''}
+              ${ins.metric ? `<span style="font-size:11px;font-weight:700;color:${cfg.color};margin-left:auto">${escAI(ins.metric)}</span>` : ''}
             </div>
-            <div style="font-weight:700;font-size:14px;color:var(--text-primary);margin-bottom:6px;line-height:1.35">${esc(ins.headline)}</div>
-            <div style="font-size:12.5px;color:var(--text-muted);line-height:1.6;margin-bottom:10px">${esc(ins.detail)}</div>
-            <div style="font-size:12px;font-weight:600;color:${cfg.color};border-top:1px solid ${cfg.border};padding-top:8px">→ ${esc(ins.action)}</div>
+            <div style="font-weight:700;font-size:14px;color:var(--text-primary);margin-bottom:6px;line-height:1.35">${escAI(ins.headline)}</div>
+            <div style="font-size:12.5px;color:var(--text-muted);line-height:1.6;margin-bottom:10px">${escAI(ins.detail)}</div>
+            <div style="font-size:12px;font-weight:600;color:${cfg.color};border-top:1px solid ${cfg.border};padding-top:8px">→ ${escAI(ins.action)}</div>
           </div>
         </div>`;
     };
@@ -4380,13 +4389,22 @@ async function refreshTopics() {
 }
 
 async function loadTopics() {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 55000);
   try {
-    const data = await api('/api/topics');
+    const r = await fetch('/api/topics', { signal: controller.signal });
+    clearTimeout(timer);
+    if (!r.ok) throw new Error(await r.text());
+    const data = await r.json();
     _topicsCache = data;
     renderTopicCards(data);
   } catch(e) {
+    clearTimeout(timer);
     const grid = document.getElementById('topics-grid');
-    if (grid) grid.innerHTML = `<div class="topics-error"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span>${esc(e.message || 'Failed to generate topics')}</span></div>`;
+    const msg = e.name === 'AbortError'
+      ? 'Topic generation timed out. Click Refresh Topics to try again.'
+      : (e.message || 'Failed to generate topics');
+    if (grid) grid.innerHTML = `<div class="topics-error"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span>${esc(msg)}</span><button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="refreshTopics()">Retry</button></div>`;
   }
 }
 
@@ -4416,11 +4434,11 @@ function renderTopicCards(data) {
       <div class="topic-card">
         <div class="topic-card-num">${i+1}</div>
         <div class="topic-card-body">
-          <div class="topic-title">${esc(t.title)}</div>
-          <div class="topic-hook">${esc(t.hook)}</div>
+          <div class="topic-title">${escAI(t.title)}</div>
+          <div class="topic-hook">${escAI(t.hook)}</div>
           <div class="topic-angle">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            ${esc(t.angle)}
+            ${escAI(t.angle)}
           </div>
           <div class="topic-footer">
             <span class="topic-exp" style="color:${expColor};background:${expColor}18;border-color:${expColor}30">
@@ -4990,7 +5008,7 @@ function renderComparePanel(panel, data) {
         <span class="aip-header-badge">vs ${esc(data.comparison_basis)}</span>
       </div>
 
-      <div class="cmp-headline">${esc(a.headline || '')}</div>
+      <div class="cmp-headline">${escAI(a.headline || "")}</div>
 
       <div class="cmp-context">
         <div class="cmp-card cmp-card-cur">
@@ -5441,7 +5459,7 @@ ${aiData && typeof aiData === 'object' ? `
     ${(aiData.sections||[]).map(s=>`
     <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px">
       <div style="font-size:11px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${s.icon||''} ${esc(s.title)}</div>
-      <div style="font-size:13px;line-height:1.65;color:#374151;margin-bottom:8px">${esc(s.insight)}</div>
+      <div style="font-size:13px;line-height:1.65;color:#374151;margin-bottom:8px">${escAI(s.insight)}</div>
       ${s.highlight ? `<div style="font-size:12px;font-weight:700;color:#111827;border-top:1px solid #e5e7eb;padding-top:8px">${esc(s.highlight)}</div>` : ''}
     </div>`).join('')}
   </div>` : ''}

@@ -2035,20 +2035,21 @@ async def get_topic_suggestions():
     ]
     try:
         import re as _re
-        for feed_url in NEWS_FEEDS:
-            try:
-                r = httpx.get(feed_url, timeout=5.0, follow_redirects=True,
-                              headers={"User-Agent": "Mozilla/5.0 (WebinarIQ/1.0)"})
-                if r.status_code == 200:
-                    titles = _re.findall(r'<title><!\[CDATA\[(.*?)\]\]></title>', r.text)[:8]
-                    if not titles:
-                        titles = _re.findall(r'<title>(.*?)</title>', r.text)[1:9]
-                    headlines = [t.strip() for t in titles if len(t.strip()) > 10]
-                    if headlines:
-                        news_context += "\n".join(f"- {h}" for h in headlines[:6]) + "\n"
-                        break
-            except Exception:
-                continue
+        async with httpx.AsyncClient(timeout=5.0) as _nc:
+            for feed_url in NEWS_FEEDS:
+                try:
+                    r = await _nc.get(feed_url, follow_redirects=True,
+                                      headers={"User-Agent": "Mozilla/5.0 (WebinarIQ/1.0)"})
+                    if r.status_code == 200:
+                        titles = _re.findall(r'<title><!\[CDATA\[(.*?)\]\]></title>', r.text)[:8]
+                        if not titles:
+                            titles = _re.findall(r'<title>(.*?)</title>', r.text)[1:9]
+                        headlines = [t.strip() for t in titles if len(t.strip()) > 10]
+                        if headlines:
+                            news_context += "\n".join(f"- {h}" for h in headlines[:6]) + "\n"
+                            break
+                except Exception:
+                    continue
     except Exception:
         pass
 
@@ -2097,14 +2098,14 @@ HARD RULES:
 7. Return ONLY valid JSON, no markdown."""
 
     try:
-        resp = httpx.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
-                     "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
-            json={"model": AI_MODEL, "max_tokens": 4000,
-                  "messages": [{"role": "user", "content": prompt}]},
-            timeout=45.0
-        )
+        async with httpx.AsyncClient(timeout=50.0) as client:
+            resp = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+                         "HTTP-Referer": OPENROUTER_REFERER, "X-Title": "WebinarIQ"},
+                json={"model": AI_MODEL, "max_tokens": 4000,
+                      "messages": [{"role": "user", "content": prompt}]},
+            )
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"].strip()
         topics = _strip_em_dashes(_extract_json(raw))
