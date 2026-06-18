@@ -10,7 +10,7 @@
 :root {
   /* Backgrounds */
   --bg:       #f7f8fa;
-  --sidebar:  #0f1117;
+  --sidebar:  rgba(255,255,255,0.45);
   --topbar:   rgba(247,248,250,0.96);
   --card:     #ffffff;
   --border:   #e8eaed;
@@ -20,14 +20,14 @@
   --text:      #111827;
   --text-2:    #6b7280;
   --text-3:    #9ca3af;
-  --text-link: #c41e3a;
+  --text-link: #7C3AED;
 
-  /* Accent — remapped to RH red (was indigo) */
-  --accent:      #c41e3a;
+  /* Accent — Trilliant purple/indigo */
+  --accent:      #7C3AED;
   --accent-2:    #0ea5e9;
   --accent-3:    #10b981;
-  --accent-bg:   rgba(196,30,58,0.07);
-  --accent-glow: rgba(196,30,58,0.18);
+  --accent-bg:   rgba(124,58,237,0.07);
+  --accent-glow: rgba(124,58,237,0.18);
 
   /* Semantic */
   --rose:    #ef4444;
@@ -36,20 +36,20 @@
   --gold:    #f59e0b;
   --amber:   #f97316;
 
-  /* Chart — keep readable colours, reg bar uses RH red */
-  --c-reg:  #c41e3a;
+  /* Chart colours */
+  --c-reg:  #7C3AED;
   --c-att:  #10b981;
   --c-nosh: #ef4444;
   --c-dup:  #f59e0b;
   --c-rate: #0ea5e9;
 
-  /* Gradients — primary now RH red */
-  --grad-primary:         linear-gradient(135deg, #c41e3a 0%, #9b1530 100%);
+  /* Gradients — Trilliant purple/indigo */
+  --grad-primary:         linear-gradient(135deg, #7C3AED 0%, #4F46E5 100%);
   --grad-rose:            linear-gradient(135deg, #ef4444 0%, #f87171 100%);
   --grad-cyan:            linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
   --grad-emerald:         linear-gradient(135deg, #10b981 0%, #059669 100%);
   --grad-gold:            linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  --grad-rainbow:         linear-gradient(90deg, #c41e3a, #9b1530, #0ea5e9, #10b981);
+  --grad-rainbow:         linear-gradient(90deg, #7C3AED, #4F46E5, #0ea5e9, #10b981);
   --grad-shimmer:         linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.8) 50%, transparent 100%);
   --grad-gold-metallic:   linear-gradient(135deg, #fde68a 0%, #f59e0b 40%, #fbbf24 60%, #d97706 100%);
   --grad-silver-metallic: linear-gradient(135deg, #e2e8f0 0%, #94a3b8 40%, #cbd5e1 60%, #64748b 100%);
@@ -61,7 +61,7 @@
   --shadow:      0 10px 20px rgba(0,0,0,0.05), 0 4px 6px rgba(0,0,0,0.03);
   --shadow-md:   0 20px 30px rgba(0,0,0,0.07), 0 8px 12px rgba(0,0,0,0.04);
   --shadow-lg:   0 25px 50px rgba(0,0,0,0.10), 0 12px 24px rgba(0,0,0,0.06);
-  --shadow-glow: 0 0 20px rgba(196,30,58,0.18), 0 8px 24px rgba(196,30,58,0.10);
+  --shadow-glow: 0 0 20px rgba(124,58,237,0.18), 0 8px 24px rgba(124,58,237,0.10);
 
   --r:      14px;
   --r-sm:   9px;
@@ -77,7 +77,7 @@
 /* ── Dark mode (opt-in via html.dark) ── */
 html.dark {
   --bg:        #0c0c0f;
-  --sidebar:   #080809;
+  --sidebar:   rgba(30,41,59,0.45);
   --topbar:    rgba(12,12,15,0.94);
   --card:      #141418;
   --border:    rgba(255,255,255,0.07);
@@ -86,13 +86,13 @@ html.dark {
   --text:      #f9fafb;
   --text-2:    #9ca3af;
   --text-3:    #4b5563;
-  --text-link: #e05a6e;
+  --text-link: #A78BFA;
 
-  --accent:      #e05a6e;
+  --accent:      #A78BFA;
   --accent-2:    #38bdf8;
   --accent-3:    #34d399;
-  --accent-bg:   rgba(196,30,58,0.12);
-  --accent-glow: rgba(196,30,58,0.25);
+  --accent-bg:   rgba(124,58,237,0.12);
+  --accent-glow: rgba(124,58,237,0.25);
 
   --shadow-xs:   0 1px 4px rgba(0,0,0,0.50);
   --shadow-sm:   0 2px 16px rgba(0,0,0,0.60);
@@ -2467,57 +2467,57 @@ html.dark .ad-platform-badge.twitterx { background: #ffffff15; color: #e7e9ea; }
    ════════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* === Editorial palette === */
-  --rh-bg:        #f5f4ef;        /* warm cream paper */
-  --rh-surface:   #ffffff;
-  --rh-surface-2: #fafaf7;
-  --rh-border:    #e2e0d8;
-  --rh-border-2:  #ebe8e0;
-  --rh-text-1:    #171717;        /* near-black */
-  --rh-text-2:    #525252;
-  --rh-text-3:    #8a8a85;
-  --rh-text-4:    #b0afa9;
+  /* === Trilliant palette (mapped from --rh-* legacy tokens) === */
+  --rh-bg:        #F8FAFC;
+  --rh-surface:   rgba(255,255,255,0.85);
+  --rh-surface-2: rgba(255,255,255,0.6);
+  --rh-border:    rgba(0,0,0,0.08);
+  --rh-border-2:  rgba(0,0,0,0.04);
+  --rh-text-1:    #1E1B4B;
+  --rh-text-2:    #475569;
+  --rh-text-3:    #9CA3AF;
+  --rh-text-4:    #CBD5E1;
 
-  /* Accent: deep editorial black + serif red highlight */
-  --rh-ink:       #0a0a0a;
-  --rh-red:       #c41e3a;        /* NYT/FT editorial red */
-  --rh-green:     #15803d;
-  --rh-amber:     #b45309;
-  --rh-blue:      #1e3a8a;
+  /* Accent: Trilliant purple/indigo */
+  --rh-ink:       #1E1B4B;
+  --rh-red:       #7C3AED;
+  --rh-green:     #10B981;
+  --rh-amber:     #F59E0B;
+  --rh-blue:      #6366F1;
 
   /* Subtle backgrounds for status */
-  --rh-tint-red:    #fef1f2;
-  --rh-tint-green:  #ecfdf5;
-  --rh-tint-amber:  #fef7e6;
-  --rh-tint-blue:   #eff6ff;
-  --rh-tint-paper:  #fef9c3;     /* paper-yellow highlight */
+  --rh-tint-red:    rgba(124,58,237,0.06);
+  --rh-tint-green:  rgba(16,185,129,0.06);
+  --rh-tint-amber:  rgba(245,158,11,0.06);
+  --rh-tint-blue:   rgba(99,102,241,0.06);
+  --rh-tint-paper:  rgba(124,58,237,0.04);
 
   /* Typography */
-  --rh-serif:  'Fraunces', 'Source Serif Pro', Georgia, serif;
-  --rh-sans:   'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  --rh-mono:   'JetBrains Mono', 'IBM Plex Mono', 'Roboto Mono', ui-monospace, monospace;
+  --rh-serif:  'Fraunces', ui-serif, Georgia, serif;
+  --rh-sans:   'Inter', system-ui, -apple-system, sans-serif;
+  --rh-mono:   'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
 }
 
 html.dark {
-  --rh-bg:        #0a0a0a;        /* true black */
-  --rh-surface:   #141414;
-  --rh-surface-2: #1a1a1a;
-  --rh-border:    #262626;
-  --rh-border-2:  #1f1f1f;
-  --rh-text-1:    #fafafa;
-  --rh-text-2:    #a3a3a3;
-  --rh-text-3:    #6b6b6b;
-  --rh-text-4:    #4a4a4a;
-  --rh-ink:       #ffffff;
-  --rh-red:       #f87171;
-  --rh-green:     #22c55e;
-  --rh-amber:     #f59e0b;
-  --rh-blue:      #60a5fa;
-  --rh-tint-red:    rgba(220,38,38,0.10);
-  --rh-tint-green:  rgba(34,197,94,0.10);
-  --rh-tint-amber:  rgba(245,158,11,0.10);
-  --rh-tint-blue:   rgba(96,165,250,0.10);
-  --rh-tint-paper:  rgba(250,204,21,0.10);
+  --rh-bg:        #0F172A;
+  --rh-surface:   rgba(30,41,59,0.85);
+  --rh-surface-2: rgba(51,65,85,0.6);
+  --rh-border:    rgba(255,255,255,0.10);
+  --rh-border-2:  rgba(255,255,255,0.06);
+  --rh-text-1:    #F1F5F9;
+  --rh-text-2:    #CBD5E1;
+  --rh-text-3:    #94A3B8;
+  --rh-text-4:    #64748B;
+  --rh-ink:       #F1F5F9;
+  --rh-red:       #A78BFA;
+  --rh-green:     #34D399;
+  --rh-amber:     #FBBF24;
+  --rh-blue:      #818CF8;
+  --rh-tint-red:    rgba(167,139,250,0.12);
+  --rh-tint-green:  rgba(52,211,153,0.12);
+  --rh-tint-amber:  rgba(251,191,36,0.12);
+  --rh-tint-blue:   rgba(129,140,248,0.12);
+  --rh-tint-paper:  rgba(167,139,250,0.08);
 }
 
 /* ── Reset base ── */
@@ -2622,7 +2622,7 @@ body::before, body::after { display: none !important; }
 }
 .sb-item.active {
   background: rgba(196,30,58,0.08);
-  color: var(--rh-red, #c41e3a);
+  color: var(--rh-red, #7C3AED);
   font-weight: 600;
 }
 .sb-item.active svg { opacity: 1; }
@@ -2752,7 +2752,7 @@ html.dark .nav-link.active svg { color: #000 !important; }
   background: rgba(0,0,0,0.04);
 }
 .nav-mobile-menu .nav-link.active {
-  background: var(--rh-red, #c41e3a);
+  background: var(--rh-red, #7C3AED);
   color: #fff;
 }
 
@@ -4543,7 +4543,7 @@ html.dark .kpi-card.kc-gold {
 .kpi-card.kc-emerald::before,
 .kpi-card.kc-gold::before {
   height: 3px !important;
-  background: var(--rh-red, #c41e3a) !important;
+  background: var(--rh-red, #7C3AED) !important;
   animation: none !important;
   background-size: unset !important;
 }
@@ -4599,7 +4599,7 @@ html.dark .kpi-card.kc-gold .kpi-card-value {
   color: #f5f5f5 !important;
   -webkit-text-fill-color: #f5f5f5 !important;
 }
-.kpi-card.alert .kpi-card-value { color: var(--rh-red, #c41e3a) !important; -webkit-text-fill-color: var(--rh-red, #c41e3a) !important; }
+.kpi-card.alert .kpi-card-value { color: var(--rh-red, #7C3AED) !important; -webkit-text-fill-color: var(--rh-red, #7C3AED) !important; }
 
 /* Hover — subtle lift */
 .kpi-card:hover,
@@ -4639,7 +4639,7 @@ html.dark .kpi-card.kc-gold .kpi-card-value {
   align-items: center;
   justify-content: center;
   margin-bottom: 24px;
-  color: var(--rh-red, #c41e3a);
+  color: var(--rh-red, #7C3AED);
 }
 .empty-state-v2 .es-title {
   font-family: var(--rh-serif, 'Fraunces', serif);
@@ -4676,7 +4676,7 @@ html.dark .kpi-card.kc-gold .kpi-card-value {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: var(--rh-red, #c41e3a);
+  background: var(--rh-red, #7C3AED);
   color: #fff;
   font-size: 11px;
   font-weight: 700;

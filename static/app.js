@@ -1396,7 +1396,7 @@ function _drawWebinarDetail(w) {
               <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
                 ${w.category?`<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--rh-surface);border:1px solid var(--rh-border);color:var(--rh-text-2)">${esc(w.category)}</span>`:''}
                 ${w.language?`<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--rh-surface);border:1px solid var(--rh-border);color:var(--rh-text-2)">${esc(w.language)}</span>`:''}
-                ${w.tags?(w.tags.split(',').map(t=>t.trim()).filter(Boolean).map(t=>`<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:rgba(196,30,58,0.07);color:var(--rh-red);border:1px solid rgba(196,30,58,0.15)">#${esc(t)}</span>`).join('')):''}
+                ${w.tags?(w.tags.split(',').map(t=>t.trim()).filter(Boolean).map(t=>`<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:rgba(124,58,237,0.07);color:var(--rh-red);border:1px solid rgba(124,58,237,0.15)">#${esc(t)}</span>`).join('')):''}
                 ${w.recording_url?`<a href="${esc(w.recording_url)}" target="_blank" style="font-size:11px;padding:2px 10px;border-radius:20px;background:rgba(16,185,129,0.08);color:#10b981;border:1px solid rgba(16,185,129,0.2);text-decoration:none">▶ Recording</a>`:''}
               </div>
               ${w.notes?`<div style="margin-top:8px;padding:8px 12px;background:rgba(245,158,11,0.07);border-left:3px solid #f59e0b;border-radius:0 6px 6px 0;font-size:12px;color:var(--rh-text-2)"><strong style="color:#f59e0b">Notes:</strong> ${esc(w.notes)}</div>`:''}
@@ -6284,7 +6284,7 @@ function _aiTabContent() {
       </div>`;
     }
     return `<div id="iq-dashboard" style="text-align:center;padding:48px 20px;">
-      <div style="width:56px;height:56px;border-radius:16px;background:rgba(196,30,58,0.08);border:1.5px solid rgba(196,30,58,0.2);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:26px;">📊</div>
+      <div style="width:56px;height:56px;border-radius:16px;background:rgba(124,58,237,0.08);border:1.5px solid rgba(124,58,237,0.2);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:26px;">📊</div>
       <div style="font-size:19px;font-weight:700;color:var(--rh-text-1);margin-bottom:8px;font-family:var(--rh-serif);">Programme Intelligence</div>
       <div style="font-size:13.5px;color:var(--rh-text-2);margin-bottom:28px;max-width:400px;margin-left:auto;margin-right:auto;line-height:1.7;">
         ML analysis across your <strong>${S.webinars.filter(w=>w.status==='completed').length} completed webinars</strong> with AI-generated insights and forecasts.
@@ -6636,7 +6636,7 @@ function _commCard(m, results) {
 function _highlightPlaceholders(text) {
   // Highlight any remaining unfilled [PLACEHOLDER] tokens in red
   return esc(text).replace(/\[([A-Z_]+)\]/g,
-    '<mark style="background:rgba(196,30,58,0.12);color:var(--rh-red);border-radius:3px;padding:0 3px;font-size:0.9em;">[$1]</mark>');
+    '<mark style="background:rgba(124,58,237,0.12);color:var(--rh-red);border-radius:3px;padding:0 3px;font-size:0.9em;">[$1]</mark>');
 }
 
 function _commRenderResult(moduleId, r) {
@@ -6689,7 +6689,7 @@ function _commRenderResult(moduleId, r) {
   const allText = Object.values(filled).join(' ');
   const remaining = [...new Set((allText.match(/\[[A-Z_]+\]/g)||[]))];
   if (remaining.length) {
-    html += `<div style="margin-bottom:8px;padding:7px 10px;background:rgba(196,30,58,0.06);border:1px solid rgba(196,30,58,0.2);border-radius:6px;font-size:11px;color:var(--rh-red);">
+    html += `<div style="margin-bottom:8px;padding:7px 10px;background:rgba(124,58,237,0.06);border:1px solid rgba(124,58,237,0.2);border-radius:6px;font-size:11px;color:var(--rh-red);">
       Fill in the fields above to auto-replace: ${remaining.map(p=>`<code>${p}</code>`).join(', ')}
     </div>`;
   }
