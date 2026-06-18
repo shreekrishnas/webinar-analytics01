@@ -28,7 +28,7 @@ COMPANY_DESC        = os.environ.get("COMPANY_DESC",         "an Indian financia
 COMPANY_DOMAIN      = os.environ.get("COMPANY_DOMAIN",       "righthorizons.com")
 APP_URL             = os.environ.get("APP_URL",              "https://webinar-analytics-six.vercel.app")
 OPENROUTER_REFERER  = os.environ.get("OPENROUTER_REFERER",   APP_URL)
-AI_MODEL            = os.environ.get("AI_MODEL",             "google/gemini-2.0-flash-exp:free")
+AI_MODEL            = os.environ.get("AI_MODEL",             "anthropic/claude-sonnet-4-5")
 # Optional API key to protect endpoints. Set API_KEY env var in Vercel to enable.
 API_KEY             = os.environ.get("API_KEY", "")
 
