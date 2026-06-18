@@ -2870,3 +2870,177 @@ html.dark .gap-rec { background: rgba(16,185,129,0.12); color: #6EE7B7; }
 .btn-gradient:hover:not(:disabled) { box-shadow: 0 8px 22px rgba(124,58,237,0.55) !important; transform: translateY(-1px) !important; }
 .btn-gradient:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-gradient.ai-done { background: var(--status-success) !important; box-shadow: 0 4px 12px rgba(16,185,129,0.40) !important; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   v4.0 - ICON-RAIL SIDEBAR + FLAT CLEAN CARDS (per reference design)
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Remove atmosphere blur background ── */
+body::before {
+  display: none !important;
+}
+
+/* ── Clean base background ── */
+html, body {
+  background: #F8FAFC !important;
+}
+html.dark, html.dark body {
+  background: #0F172A !important;
+}
+
+/* ── Icon-rail sidebar (96px, icons only) ── */
+.sidebar {
+  width: 96px !important;
+  background: rgba(255,255,255,0.85) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border-right: 1px solid rgba(0,0,0,0.06) !important;
+  top: 0 !important;
+  padding-top: 0 !important;
+  z-index: 300 !important;
+}
+html.dark .sidebar {
+  background: rgba(15,23,42,0.9) !important;
+  border-right-color: rgba(255,255,255,0.08) !important;
+}
+
+.sidebar-scroll {
+  padding: 20px 0 40px !important;
+  align-items: center !important;
+}
+
+/* Hide group labels and dividers in icon rail */
+.sb-group-label {
+  display: none !important;
+}
+.sb-divider {
+  width: 40px !important;
+  margin: 8px auto !important;
+  background: rgba(0,0,0,0.06) !important;
+}
+html.dark .sb-divider {
+  background: rgba(255,255,255,0.08) !important;
+}
+
+/* Icon-only nav items */
+.sb-item {
+  width: 56px !important;
+  height: 56px !important;
+  padding: 0 !important;
+  justify-content: center !important;
+  border-radius: 16px !important;
+  font-size: 0 !important;
+  color: transparent !important;
+  gap: 0 !important;
+  margin: 2px 0 !important;
+  transition: background 0.15s, box-shadow 0.15s !important;
+}
+.sb-item svg {
+  width: 22px !important;
+  height: 22px !important;
+  opacity: 0.5 !important;
+  color: var(--text-secondary) !important;
+  flex-shrink: 0 !important;
+}
+.sb-item:hover {
+  background: rgba(0,0,0,0.04) !important;
+}
+.sb-item:hover svg {
+  opacity: 0.8 !important;
+  color: var(--text-primary) !important;
+}
+.sb-item.active {
+  background: rgba(124,58,237,0.10) !important;
+  box-shadow: none !important;
+}
+.sb-item.active svg {
+  opacity: 1 !important;
+  color: #7C3AED !important;
+}
+html.dark .sb-item:hover {
+  background: rgba(255,255,255,0.06) !important;
+}
+html.dark .sb-item.active {
+  background: rgba(124,58,237,0.18) !important;
+}
+html.dark .sb-item.active svg {
+  color: #A78BFA !important;
+}
+
+/* ── Adjust main content for 96px sidebar ── */
+.site-main {
+  margin-left: 96px !important;
+  margin-top: var(--topbar-height) !important;
+}
+
+/* ── Navbar adjusts to sit next to icon rail ── */
+.navbar {
+  left: 96px !important;
+  right: 0 !important;
+  width: auto !important;
+  background: rgba(255,255,255,0.92) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+}
+html.dark .navbar {
+  background: rgba(15,23,42,0.92) !important;
+}
+
+/* ── Clean flat cards (no glassmorphism blur) ── */
+.card, .wb-card, .wb-list-card, .act-feed-card, .ad-card, .spk-card, .speaker-topics-card,
+.an-stat-card, .an-kpi-card, .kpi-card, .aip, .stat-card, .modal-box,
+.dash-hero, .wd-hero {
+  background: #FFFFFF !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid rgba(0,0,0,0.06) !important;
+  border-radius: 1.25rem !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+}
+html.dark .card, html.dark .wb-card, html.dark .wb-list-card, html.dark .act-feed-card,
+html.dark .ad-card, html.dark .spk-card, html.dark .speaker-topics-card,
+html.dark .an-stat-card, html.dark .an-kpi-card, html.dark .kpi-card, html.dark .aip,
+html.dark .stat-card, html.dark .modal-box, html.dark .dash-hero, html.dark .wd-hero {
+  background: #1E293B !important;
+  border-color: rgba(255,255,255,0.08) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2) !important;
+}
+
+/* KPI cards - clean with colored left border */
+.an-kpi-card, .kpi-card {
+  border-radius: 1rem !important;
+  background: #FFFFFF !important;
+  backdrop-filter: none !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+}
+html.dark .an-kpi-card, html.dark .kpi-card {
+  background: #1E293B !important;
+}
+
+/* Card hover - subtle, no transform */
+.wb-card:hover, .spk-card:hover, .speaker-topics-card:hover, .ad-card:hover {
+  background: #FFFFFF !important;
+  transform: none !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
+}
+html.dark .wb-card:hover, html.dark .spk-card:hover {
+  background: #1E293B !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+}
+
+/* ── Responsive: hide sidebar on mobile ── */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 96px !important;
+    transform: translateX(-100%) !important;
+  }
+  .sidebar.mobile-open {
+    transform: translateX(0) !important;
+  }
+  .site-main {
+    margin-left: 0 !important;
+  }
+  .navbar {
+    left: 0 !important;
+  }
+}

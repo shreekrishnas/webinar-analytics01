@@ -2621,7 +2621,7 @@ body::before, body::after { display: none !important; }
   color: var(--rh-text-1, #111);
 }
 .sb-item.active {
-  background: rgba(196,30,58,0.08);
+  background: rgba(124,58,237,0.08);
   color: var(--rh-red, #7C3AED);
   font-weight: 600;
 }
