@@ -3387,7 +3387,7 @@ let _intelHotLeadsCache = null;
 let _intelInsightsCache = null;
 
 async function renderIntelligence() {
-  if (!S._intelTab) S._intelTab = 'aiinsights';
+  if (!S._intelTab) S._intelTab = 'scoreboard';
   setContent(`
     <div class="intel-page">
       <div class="page-hd">
@@ -3817,7 +3817,20 @@ function _renderNextPlay(body, data) {
     </div>`;
 }
 
-async function _renderAIInsights(body) {
+async function _renderAIInsights(body, generate=false) {
+  if (!generate && !_intelInsightsCache) {
+    body.innerHTML = `
+      <div class="intel-section">
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;text-align:center;">
+          <div style="width:56px;height:56px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:26px;">✨</div>
+          <div style="font-weight:700;font-size:18px;color:var(--rh-text-1);font-family:var(--rh-serif);">AI Insights</div>
+          <div style="font-size:13.5px;color:var(--rh-text-2);max-width:380px;line-height:1.7;">Claude analyses all your webinars, speaker performance, ICP patterns, and attendance trends to surface actionable insights.</div>
+          <button onclick="_generateAIInsights()" class="btn btn-primary" style="font-size:14px;padding:12px 32px;">Generate Insights</button>
+        </div>
+      </div>`;
+    return;
+  }
+
   body.innerHTML = `
     <div class="intel-section">
       <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 0;gap:14px">
@@ -3911,7 +3924,7 @@ async function _renderAIInsights(body) {
             <h2 style="font-size:20px;font-weight:800;margin:0;color:var(--text-primary)">Smart Recommendations</h2>
             <p style="font-size:13px;color:var(--text-muted);margin:4px 0 0">AI analysis of ${completed.length} completed webinars · ${fmt(totalReg)} registrations · ${fmt(totalAtt)} attendees</p>
           </div>
-          <button class="btn btn-ghost btn-sm" style="display:flex;align-items:center;gap:6px" onclick="_intelInsightsCache=null;S._intelTab='aiinsights';renderIntelligence()">
+          <button class="btn btn-ghost btn-sm" style="display:flex;align-items:center;gap:6px" onclick="_generateAIInsights()">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             Refresh Analysis
           </button>
@@ -4349,6 +4362,12 @@ const FORMAT_ICONS = {
   event:    '🎟️',
   other:    '📌',
 };
+
+async function _generateAIInsights() {
+  _intelInsightsCache = null;
+  const body = document.getElementById('intel-body');
+  if (body) await _renderAIInsights(body, true);
+}
 
 
 async function renderTopics() {

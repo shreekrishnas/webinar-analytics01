@@ -39,10 +39,5 @@
       "maxDuration": 60
     }
   },
-  "crons": [
-    {
-      "path": "/api/competitor-research/weekly",
-      "schedule": "0 3 * * 1"
-    }
-  ]
+  "crons": []
 }
