@@ -85,6 +85,8 @@ class NoCacheStaticFiles(StaticFiles):
             response.headers["Surrogate-Control"] = "no-store"
             response.headers["CDN-Cache-Control"] = "no-store"
             response.headers["Vercel-CDN-Cache-Control"] = "no-store"
+            response.headers["CDN-Cache-Control"] = "no-store"
+            response.headers["Vercel-CDN-Cache-Control"] = "no-store"
         return response
 
 

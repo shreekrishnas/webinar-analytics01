@@ -12,9 +12,10 @@
       "src": "/(.*)",
       "dest": "api/index.py",
       "headers": {
-        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0",
         "Surrogate-Control": "no-store",
         "CDN-Cache-Control": "no-store",
+        "Vercel-CDN-Cache-Control": "no-store",
         "Pragma": "no-cache",
         "Expires": "0"
       }
