@@ -28,7 +28,7 @@ COMPANY_DESC        = os.environ.get("COMPANY_DESC",         "an Indian financia
 COMPANY_DOMAIN      = os.environ.get("COMPANY_DOMAIN",       "righthorizons.com")
 APP_URL             = os.environ.get("APP_URL",              "https://webinar-analytics-six.vercel.app")
 OPENROUTER_REFERER  = os.environ.get("OPENROUTER_REFERER",   APP_URL)
-AI_MODEL            = os.environ.get("AI_MODEL",             "anthropic/claude-sonnet-4-5")
+AI_MODEL            = os.environ.get("AI_MODEL",             "google/gemini-2.0-flash-exp:free")
 # Optional API key to protect endpoints. Set API_KEY env var in Vercel to enable.
 API_KEY             = os.environ.get("API_KEY", "")
 
@@ -3198,7 +3198,7 @@ async def _ml_ai_module(topic: str, system_msg: str, user_msg: str, max_tokens: 
         resp = await client.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": "anthropic/claude-sonnet-4-5", "max_tokens": max_tokens, "messages": [
+            json={"model": AI_MODEL, "max_tokens": max_tokens, "messages": [
                 {"role": "system", "content": system_msg},
                 {"role": "user", "content": user_msg},
             ]},
