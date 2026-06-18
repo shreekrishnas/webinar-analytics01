@@ -144,9 +144,9 @@ html.dark .navbar.scrolled { background: rgba(10,10,30,0.75) !important; }
 /* Brand */
 .nav-brand-name {
   font-family: var(--font-ui) !important;
-  font-weight: 700 !important;
-  font-size: 16px !important;
-  letter-spacing: -0.01em !important;
+  font-weight: 800 !important;
+  font-size: 18px !important;
+  letter-spacing: -0.02em !important;
   color: var(--text-primary) !important;
   background: none !important;
   -webkit-text-fill-color: var(--text-primary) !important;
@@ -162,13 +162,18 @@ html.dark .navbar.scrolled { background: rgba(10,10,30,0.75) !important; }
   color: transparent !important;
 }
 .nav-logo-mark {
-  width: 38px !important; height: 38px !important;
-  border-radius: 11px !important;
-  background: var(--grad-logo) !important;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 4px 12px rgba(99,102,241,0.30) !important;
+  width: 42px !important; height: 42px !important;
+  border-radius: 14px !important;
+  background: linear-gradient(135deg, #7C3AED, #4F46E5) !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  box-shadow: 0 6px 18px rgba(124,58,237,0.35) !important;
+  transition: transform 0.15s, box-shadow 0.15s !important;
 }
-.nav-logo-mark svg { width: 18px !important; height: 16px !important; }
+.nav-logo-mark:hover {
+  transform: scale(1.04) !important;
+  box-shadow: 0 8px 24px rgba(124,58,237,0.45) !important;
+}
+.nav-logo-mark svg { width: 22px !important; height: 22px !important; }
 
 /* Nav segmented pill */
 .nav-links {
@@ -2907,6 +2912,30 @@ html.dark .sidebar {
 .sidebar-scroll {
   padding: 20px 0 40px !important;
   align-items: center !important;
+}
+
+/* Sidebar logo at top */
+.sb-logo {
+  width: 56px !important;
+  height: 56px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 18px !important;
+  background: linear-gradient(135deg, #7C3AED, #4F46E5) !important;
+  color: #fff !important;
+  cursor: pointer !important;
+  margin: 4px 0 4px !important;
+  box-shadow: 0 6px 20px rgba(124,58,237,0.35) !important;
+  transition: transform 0.15s, box-shadow 0.15s !important;
+  flex-shrink: 0 !important;
+}
+.sb-logo:hover {
+  transform: scale(1.05) !important;
+  box-shadow: 0 8px 28px rgba(124,58,237,0.45) !important;
+}
+html.dark .sb-logo {
+  box-shadow: 0 6px 20px rgba(124,58,237,0.25) !important;
 }
 
 /* Hide group labels and dividers in icon rail */

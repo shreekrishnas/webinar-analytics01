@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>WebinarIQ · Webinar Intelligence</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
 
   <!-- Trilliant typography stack: Inter UI, Fraunces display, JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -53,10 +54,15 @@
     <!-- Brand -->
     <div class="nav-brand" onclick="nav('home')">
       <div class="nav-logo-mark">
-        <svg width="22" height="20" viewBox="0 0 24 22" fill="none">
-          <polyline points="2,6 6.5,19 12,11.5 17.5,19 22,6"
-                    stroke="white" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
-          <circle cx="12" cy="3.2" r="2.1" fill="white"/>
+        <svg width="22" height="22" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Signal/pulse line representing webinar analytics -->
+          <path d="M4 20 L8 12 L12 18 L16 6 L20 18 L24 12 L28 20" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <!-- Dot accents on peaks -->
+          <circle cx="16" cy="6" r="2" fill="white" opacity="0.9"/>
+          <circle cx="8" cy="12" r="1.5" fill="white" opacity="0.6"/>
+          <circle cx="24" cy="12" r="1.5" fill="white" opacity="0.6"/>
+          <!-- Bottom bar -->
+          <rect x="8" y="25" width="16" height="2" rx="1" fill="white" opacity="0.4"/>
         </svg>
       </div>
       <span class="nav-brand-name">Webinar<em class="brand-iq">IQ</em></span>
@@ -158,6 +164,19 @@
 <!-- ── LEFT SIDEBAR ──────────────────────────────────────── -->
 <nav class="sidebar" id="sidebar">
   <div class="sidebar-scroll">
+
+    <!-- Sidebar logo mark -->
+    <div class="sb-logo" onclick="nav('home')">
+      <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 20 L8 12 L12 18 L16 6 L20 18 L24 12 L28 20" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="16" cy="6" r="2" fill="currentColor" opacity="0.9"/>
+        <circle cx="8" cy="12" r="1.5" fill="currentColor" opacity="0.6"/>
+        <circle cx="24" cy="12" r="1.5" fill="currentColor" opacity="0.6"/>
+        <rect x="8" y="25" width="16" height="2" rx="1" fill="currentColor" opacity="0.4"/>
+      </svg>
+    </div>
+
+    <div class="sb-divider"></div>
 
     <!-- Overview -->
     <button class="sb-item" data-page="home" onclick="nav('home')">
