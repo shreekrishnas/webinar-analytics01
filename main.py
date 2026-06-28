@@ -2049,34 +2049,91 @@ async def get_topic_suggestions():
 
     # Use Claude Sonnet to generate speaker topics based on its training knowledge
     news_context = ""
-    # Try to fetch live Indian financial news via free RSS feeds (no key required)
-    NEWS_FEEDS = [
-        "https://economictimes.indiatimes.com/markets/rss.cms",
-        "https://economictimes.indiatimes.com/wealth/rss.cms",
-        "https://www.moneycontrol.com/rss/results.xml",
-    ]
-    try:
-        import re as _re
-        async with httpx.AsyncClient(timeout=5.0) as _nc:
-            for feed_url in NEWS_FEEDS:
-                try:
-                    r = await _nc.get(feed_url, follow_redirects=True,
-                                      headers={"User-Agent": "Mozilla/5.0 (WebinarIQ/1.0)"})
-                    if r.status_code == 200:
-                        titles = _re.findall(r'<title><!\[CDATA\[(.*?)\]\]></title>', r.text)[:8]
-                        if not titles:
-                            titles = _re.findall(r'<title>(.*?)</title>', r.text)[1:9]
-                        headlines = [t.strip() for t in titles if len(t.strip()) > 10]
-                        if headlines:
-                            news_context += "\n".join(f"- {h}" for h in headlines[:6]) + "\n"
-                            break
-                except Exception:
-                    continue
-    except Exception:
-        pass
+    news_source = "none"
+
+    # PRIMARY: Tavily search API for current news + trending topics
+    # Targeted queries per speaker theme so context is relevant, not generic
+    tavily_key = os.environ.get("TAVILY_API_KEY")
+    if tavily_key:
+        tavily_queries = [
+            "India stock market news this week SEBI RBI policy",
+            "India NRI investment GIFT City PMS portfolio news",
+            "India ESOPs tax budget mutual funds latest",
+            "India retirement planning SWP SIP wealth news",
+            "India small midcap IPO sectoral trends this week",
+        ]
+        try:
+            async with httpx.AsyncClient(timeout=8.0) as _tc:
+                tavily_headlines = []
+                for q in tavily_queries:
+                    try:
+                        r = await _tc.post(
+                            "https://api.tavily.com/search",
+                            json={
+                                "api_key": tavily_key,
+                                "query": q,
+                                "search_depth": "basic",
+                                "topic": "news",
+                                "max_results": 3,
+                                "days": 7,
+                                "include_answer": False,
+                            },
+                        )
+                        if r.status_code == 200:
+                            data = r.json()
+                            for item in data.get("results", [])[:3]:
+                                title = (item.get("title") or "").strip()
+                                content = (item.get("content") or "").strip()[:160]
+                                if title and len(title) > 10:
+                                    line = f"- {title}"
+                                    if content:
+                                        line += f" — {content}"
+                                    tavily_headlines.append(line)
+                    except Exception:
+                        continue
+                if tavily_headlines:
+                    # dedupe by first 50 chars of title
+                    seen, unique = set(), []
+                    for h in tavily_headlines:
+                        key = h[:60].lower()
+                        if key not in seen:
+                            seen.add(key)
+                            unique.append(h)
+                    news_context = "\n".join(unique[:15])
+                    news_source = "tavily"
+        except Exception:
+            pass
+
+    # FALLBACK: RSS feeds if Tavily unavailable / failed
+    if not news_context:
+        NEWS_FEEDS = [
+            "https://economictimes.indiatimes.com/markets/rss.cms",
+            "https://economictimes.indiatimes.com/wealth/rss.cms",
+            "https://www.moneycontrol.com/rss/results.xml",
+        ]
+        try:
+            import re as _re
+            async with httpx.AsyncClient(timeout=5.0) as _nc:
+                for feed_url in NEWS_FEEDS:
+                    try:
+                        r = await _nc.get(feed_url, follow_redirects=True,
+                                          headers={"User-Agent": "Mozilla/5.0 (WebinarIQ/1.0)"})
+                        if r.status_code == 200:
+                            titles = _re.findall(r'<title><!\[CDATA\[(.*?)\]\]></title>', r.text)[:8]
+                            if not titles:
+                                titles = _re.findall(r'<title>(.*?)</title>', r.text)[1:9]
+                            headlines = [t.strip() for t in titles if len(t.strip()) > 10]
+                            if headlines:
+                                news_context += "\n".join(f"- {h}" for h in headlines[:6]) + "\n"
+                                news_source = "rss"
+                                break
+                    except Exception:
+                        continue
+        except Exception:
+            pass
 
     if news_context:
-        context_block = f"Today is {today}. Here are LIVE headlines from Indian financial news (use these to make topics timely and specific):\n{news_context}\nAlso use your knowledge of recent RBI decisions, SEBI updates, budget developments, and macroeconomic trends."
+        context_block = f"Today is {today}. Here are LIVE headlines and snippets from Indian financial news (last 7 days, via Tavily web search):\n{news_context}\n\nUse SPECIFIC numbers, names, and events from these headlines in your topic titles and hooks. Also factor in recent RBI decisions, SEBI updates, budget developments, and macroeconomic trends."
     else:
         context_block = f"Today is {today}. Use your knowledge of Indian financial markets, recent regulatory changes, budget developments, RBI decisions, SEBI updates, and macroeconomic trends."
 
@@ -2131,7 +2188,7 @@ HARD RULES:
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"].strip()
         topics = _strip_em_dashes(_extract_json(raw))
-        return {"topics": topics, "generated_on": today, "news_context": news_context or None}
+        return {"topics": topics, "generated_on": today, "news_context": news_context or None, "news_source": news_source}
     except ValueError as e:
         raise HTTPException(status_code=500, detail=f"AI returned invalid JSON: {e}")
     except Exception as e:
