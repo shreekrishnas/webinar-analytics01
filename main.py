@@ -65,11 +65,21 @@ def _score_label(score: int) -> str:
 
 def _compute_static_version() -> str:
     h = hashlib.md5()
-    for fname in ["app.js", "styles.css", "trilliant.css"]:
+    # File content (catches local edits)
+    for fname in ["app.js", "styles.css", "trilliant.css", "index.html"]:
         fpath = os.path.join(BASE_DIR, "static", fname)
         if os.path.exists(fpath):
             with open(fpath, "rb") as f:
                 h.update(f.read())
+    # Vercel deploy ID / commit SHA (guarantees a new version on every deploy
+    # even if file contents are byte-identical)
+    deploy_id = (
+        os.environ.get("VERCEL_GIT_COMMIT_SHA")
+        or os.environ.get("VERCEL_DEPLOYMENT_ID")
+        or os.environ.get("VERCEL_URL")
+        or ""
+    )
+    h.update(deploy_id.encode("utf-8"))
     return h.hexdigest()[:12]
 
 STATIC_VERSION = _compute_static_version()

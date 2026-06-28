@@ -1,3 +1,21 @@
+/* ── Cache busting: force no-store on all same-origin fetch requests ───── */
+(function() {
+  const _origFetch = window.fetch;
+  window.fetch = function(input, init) {
+    init = init || {};
+    const url = (typeof input === 'string') ? input : (input && input.url) || '';
+    // Only override for same-origin / relative API requests
+    if (url.startsWith('/') || url.startsWith(window.location.origin)) {
+      init.cache = 'no-store';
+      init.headers = Object.assign({}, init.headers, {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      });
+    }
+    return _origFetch.call(this, input, init);
+  };
+})();
+
 /* ── State ──────────────────────────────────────────────────────────────── */
 const S = {
   webinars: [], speakers: [], stats: null,
@@ -322,7 +340,15 @@ function buildActivityFeed() {
 
 /* ── API ────────────────────────────────────────────────────────────────── */
 async function api(url, method='GET', body=null) {
-  const opts = { method, headers: {'Content-Type':'application/json'} };
+  const opts = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache'
+    },
+    cache: 'no-store'
+  };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(url, opts);
   if (r.status === 204) return null;
