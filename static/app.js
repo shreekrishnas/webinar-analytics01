@@ -4391,15 +4391,17 @@ async function renderTopics() {
         </button>
       </div>
       <div class="topics-grid" id="topics-grid">
-        <div class="topics-loading">
-          <div class="tl-ring"></div>
-          <span>Generating topics with AI…</span>
+        <div style="text-align:center;padding:48px 24px">
+          <p style="color:var(--rh-text-2);margin-bottom:16px">Click below to generate AI-powered topic suggestions for your speakers.</p>
+          <button class="btn btn-primary" onclick="refreshTopics()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+            Generate Topics
+          </button>
         </div>
       </div>
     </div>`);
 
   loadTopicPerformance();
-  await loadTopics();
 }
 
 async function loadTopicPerformance() {
