@@ -2877,20 +2877,31 @@ html.dark .gap-rec { background: rgba(16,185,129,0.12); color: #6EE7B7; }
 .btn-gradient.ai-done { background: var(--status-success) !important; box-shadow: 0 4px 12px rgba(16,185,129,0.40) !important; }
 
 /* ════════════════════════════════════════════════════════════════════════════
-   v4.0 - ICON-RAIL SIDEBAR + FLAT CLEAN CARDS (per reference design)
+   v4.0 - ICON-RAIL SIDEBAR + TRILLIANT GLASSMORPHISM (per Design.md)
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* ── Remove atmosphere blur background ── */
+/* ── Atmosphere blur background ── */
 body::before {
-  display: none !important;
+  content: '' !important;
+  display: block !important;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: -1 !important;
+  filter: blur(80px) !important;
+  background:
+    radial-gradient(circle at 20% 20%, #e0e7ff 0%, transparent 40%),
+    radial-gradient(circle at 80% 10%, #fae8ff 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, #f1f5f9 0%, transparent 100%),
+    radial-gradient(circle at 10% 80%, #dcfce7 0%, transparent 40%),
+    radial-gradient(circle at 90% 90%, #fef9c3 0%, transparent 40%) !important;
 }
-
-/* ── Clean base background ── */
-html, body {
-  background: #F8FAFC !important;
-}
-html.dark, html.dark body {
-  background: #0F172A !important;
+html.dark body::before {
+  background:
+    radial-gradient(circle at 20% 20%, #1e1b4b 0%, transparent 40%),
+    radial-gradient(circle at 80% 10%, #3b0764 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, #0f172a 0%, transparent 100%),
+    radial-gradient(circle at 10% 80%, #064e3b 0%, transparent 40%),
+    radial-gradient(circle at 90% 90%, #1c1917 0%, transparent 40%) !important;
 }
 
 /* ── Icon-rail sidebar (96px, icons only) ── */
@@ -3015,46 +3026,61 @@ html.dark .navbar {
   background: rgba(15,23,42,0.92) !important;
 }
 
-/* ── Clean flat cards (no glassmorphism blur) ── */
+/* ── Glassmorphism cards (per Design.md) ── */
 .card, .wb-card, .wb-list-card, .act-feed-card, .ad-card, .spk-card, .speaker-topics-card,
-.an-stat-card, .an-kpi-card, .kpi-card, .aip, .stat-card, .modal-box,
+.an-stat-card, .an-kpi-card, .kpi-card, .aip, .stat-card,
 .dash-hero, .wd-hero {
-  background: #FFFFFF !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  border: 1px solid rgba(0,0,0,0.06) !important;
-  border-radius: 1.25rem !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+  background: rgba(255,255,255,0.65) !important;
+  backdrop-filter: blur(16px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(140%) !important;
+  border: 1px solid rgba(255,255,255,0.65) !important;
+  border-radius: 1.5rem !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04) !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease !important;
 }
 html.dark .card, html.dark .wb-card, html.dark .wb-list-card, html.dark .act-feed-card,
 html.dark .ad-card, html.dark .spk-card, html.dark .speaker-topics-card,
 html.dark .an-stat-card, html.dark .an-kpi-card, html.dark .kpi-card, html.dark .aip,
-html.dark .stat-card, html.dark .modal-box, html.dark .dash-hero, html.dark .wd-hero {
-  background: #1E293B !important;
+html.dark .stat-card, html.dark .dash-hero, html.dark .wd-hero {
+  background: rgba(30,41,59,0.85) !important;
   border-color: rgba(255,255,255,0.08) !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.2), 0 1px 4px rgba(0,0,0,0.12) !important;
 }
 
-/* KPI cards - clean with colored left border */
+/* Modal glass */
+.modal-box {
+  background: rgba(255,255,255,0.92) !important;
+  backdrop-filter: blur(40px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(180%) !important;
+  border: 1px solid rgba(255,255,255,0.70) !important;
+  border-radius: 2rem !important;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.14), 0 8px 24px rgba(99,102,241,0.10), inset 0 1px 0 rgba(255,255,255,0.8) !important;
+}
+html.dark .modal-box {
+  background: rgba(30,41,59,0.95) !important;
+  border-color: rgba(255,255,255,0.10) !important;
+}
+
+/* KPI cards - glass with colored left border */
 .an-kpi-card, .kpi-card {
   border-radius: 1rem !important;
-  background: #FFFFFF !important;
-  backdrop-filter: none !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+  background: rgba(255,255,255,0.65) !important;
+  backdrop-filter: blur(16px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(140%) !important;
 }
 html.dark .an-kpi-card, html.dark .kpi-card {
-  background: #1E293B !important;
+  background: rgba(30,41,59,0.85) !important;
 }
 
-/* Card hover - subtle, no transform */
+/* Card hover - glass lift effect */
 .wb-card:hover, .spk-card:hover, .speaker-topics-card:hover, .ad-card:hover {
-  background: #FFFFFF !important;
-  transform: none !important;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
+  background: rgba(255,255,255,0.82) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06) !important;
 }
 html.dark .wb-card:hover, html.dark .spk-card:hover {
-  background: #1E293B !important;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+  background: rgba(30,41,59,0.92) !important;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.15) !important;
 }
 
 /* ── Responsive: hide sidebar on mobile ── */
