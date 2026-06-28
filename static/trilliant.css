@@ -3007,23 +3007,37 @@ html.dark .sb-item.active svg {
   color: #A78BFA !important;
 }
 
-/* ── Adjust main content for 96px sidebar ── */
+/* ── Adjust main content for 96px sidebar + 72px topbar ── */
 .site-main {
   margin-left: 96px !important;
-  margin-top: var(--topbar-height) !important;
+  margin-top: 72px !important;
+}
+.site-container {
+  padding: 20px 24px 40px !important;
+  max-width: 1280px !important;
 }
 
-/* ── Navbar adjusts to sit next to icon rail ── */
+/* ── Navbar: fixed, 72px, glassmorphism, sits next to icon rail ── */
 .navbar {
+  position: fixed !important;
+  top: 0 !important;
   left: 96px !important;
   right: 0 !important;
   width: auto !important;
+  height: 72px !important;
   background: rgba(255,255,255,0.92) !important;
   backdrop-filter: blur(20px) !important;
   -webkit-backdrop-filter: blur(20px) !important;
+  border-bottom: 1px solid rgba(0,0,0,0.06) !important;
+  z-index: 300 !important;
+}
+.nav-container {
+  height: 72px !important;
+  padding: 0 24px !important;
 }
 html.dark .navbar {
   background: rgba(15,23,42,0.92) !important;
+  border-bottom-color: rgba(255,255,255,0.08) !important;
 }
 
 /* ── Glassmorphism cards (per Design.md) ── */
@@ -3083,6 +3097,63 @@ html.dark .wb-card:hover, html.dark .spk-card:hover {
   box-shadow: 0 16px 40px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.15) !important;
 }
 
+/* ── Override v25 flat styles: restore glassmorphism everywhere ── */
+.wb-card:hover, .spk-card:hover, .speaker-topics-card:hover, .ad-card:hover,
+.act-feed-card:hover, .att-wb-card:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06) !important;
+  background: rgba(255,255,255,0.82) !important;
+}
+html.dark .wb-card:hover, html.dark .spk-card:hover, html.dark .speaker-topics-card:hover,
+html.dark .ad-card:hover, html.dark .act-feed-card:hover {
+  background: rgba(30,41,59,0.92) !important;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.15) !important;
+}
+
+.speaker-topics-card, .act-feed-card, .spk-card, .att-wb-card {
+  background: rgba(255,255,255,0.65) !important;
+  backdrop-filter: blur(16px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(140%) !important;
+  border: 1px solid rgba(255,255,255,0.65) !important;
+  border-radius: 1.5rem !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04) !important;
+}
+html.dark .speaker-topics-card, html.dark .act-feed-card,
+html.dark .spk-card, html.dark .att-wb-card {
+  background: rgba(30,41,59,0.85) !important;
+  border-color: rgba(255,255,255,0.08) !important;
+}
+
+.modal-box {
+  box-shadow: 0 32px 80px rgba(0,0,0,0.14), 0 8px 24px rgba(99,102,241,0.10), inset 0 1px 0 rgba(255,255,255,0.8) !important;
+}
+
+.an-stat-card {
+  background: rgba(255,255,255,0.65) !important;
+  backdrop-filter: blur(16px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(140%) !important;
+  border: 1px solid rgba(255,255,255,0.65) !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04) !important;
+}
+html.dark .an-stat-card {
+  background: rgba(30,41,59,0.85) !important;
+  border-color: rgba(255,255,255,0.08) !important;
+}
+
+/* Tighten gaps: reduce excessive margins and padding */
+.dash-hero {
+  padding: 24px 28px !important;
+  margin-bottom: 20px !important;
+  border-radius: 1.5rem !important;
+}
+.kpi-banner, .stats-strip {
+  margin-bottom: 18px !important;
+}
+.wb-grid {
+  gap: 16px !important;
+}
+
 /* ── Responsive: hide sidebar on mobile ── */
 @media (max-width: 768px) {
   .sidebar {
@@ -3094,8 +3165,16 @@ html.dark .wb-card:hover, html.dark .spk-card:hover {
   }
   .site-main {
     margin-left: 0 !important;
+    margin-top: 72px !important;
   }
   .navbar {
     left: 0 !important;
+    height: 72px !important;
+  }
+  .nav-container {
+    height: 72px !important;
+  }
+  .site-container {
+    padding: 16px 16px 32px !important;
   }
 }
