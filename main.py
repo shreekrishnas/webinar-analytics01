@@ -110,21 +110,21 @@ async def lifespan(app: FastAPI):
             logger.info("Local dev DB seeded")
         except Exception as e:
             logger.warning(f"DB seed skipped: {e}")
-    try:
-        db = SessionLocal()
-        from sqlalchemy import func as _f
-        exists = db.query(models.Speaker).filter(_f.lower(models.Speaker.name) == "shakthi prabhu").first()
-        if not exists:
-            db.add(models.Speaker(name="Shakthi Prabhu", email="shakthi.prabhu@finright.in", bio="Insurance and risk management specialist with expertise in term plans, health cover, and estate planning."))
-            db.commit()
-            logger.info("Added speaker: Shakthi Prabhu")
-        db.close()
-    except Exception as e:
-        logger.warning(f"Speaker migration skipped: {e}")
     yield
 
 
 app = FastAPI(title="WebinarIQ Analytics", version="2.0.0", lifespan=lifespan)
+
+try:
+    _mdb = SessionLocal()
+    from sqlalchemy import func as _mf
+    if not _mdb.query(models.Speaker).filter(_mf.lower(models.Speaker.name) == "shakthi prabhu").first():
+        _mdb.add(models.Speaker(name="Shakthi Prabhu", email="shakthi.prabhu@finright.in", bio="Insurance and risk management specialist with expertise in term plans, health cover, and estate planning."))
+        _mdb.commit()
+        logger.info("Added speaker: Shakthi Prabhu")
+    _mdb.close()
+except Exception:
+    pass
 
 
 @app.middleware("http")
