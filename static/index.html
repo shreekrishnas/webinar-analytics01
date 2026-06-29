@@ -295,9 +295,9 @@
           <input class="form-input" id="nw-time" type="text" placeholder="e.g. 10:00 AM IST" />
         </div>
       </div>
-      <div class="form-row">
+      <div class="form-row" style="display:none">
         <div class="form-field speaker-dropdown" id="speaker-dd-wrap">
-          <label class="form-label">Speaker <span class="req">*</span></label>
+          <label class="form-label">Speaker</label>
           <input class="form-input" id="nw-speaker" type="text" placeholder="Search speakers…" autocomplete="off"
             oninput="speakerDropdownFilter('speaker-dd-wrap','nw-speaker')"
             onfocus="speakerDropdownOpen('speaker-dd-wrap','nw-speaker')"
@@ -356,41 +356,7 @@
             <option value="AIF">AIF</option>
           </select>
         </div>
-        <div class="form-field">
-          <label class="form-label">Language</label>
-          <select class="form-input" id="nw-language">
-            <option value="">Select language</option>
-            <option value="English">English</option>
-            <option value="Hindi">Hindi</option>
-            <option value="Kannada">Kannada</option>
-            <option value="Tamil">Tamil</option>
-            <option value="Telugu">Telugu</option>
-            <option value="Marathi">Marathi</option>
-            <option value="Gujarati">Gujarati</option>
-          </select>
         </div>
-      </div>
-      <div class="form-row">
-        <div class="form-field">
-          <label class="form-label">Expected Registrations</label>
-          <input class="form-input" id="nw-expected" type="number" min="0" placeholder="e.g. 500" />
-        </div>
-        <div class="form-field">
-          <label class="form-label">Tags <span style="font-size:10px;color:var(--rh-text-3)">(comma separated)</span></label>
-          <input class="form-input" id="nw-tags" type="text" placeholder="e.g. nri, taxation, 2025" />
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-field" style="flex:2">
-          <label class="form-label">Recording URL <span class="opt">(after event)</span></label>
-          <input class="form-input" id="nw-recording" type="url" placeholder="https://zoom.us/rec/…" />
-        </div>
-        <div class="form-field">
-          <label class="form-label">Series <span class="opt">(optional)</span></label>
-          <input class="form-input" id="nw-series" type="text" placeholder="e.g. NRI Tax Masterclass" list="series-list" />
-          <datalist id="series-list"></datalist>
-        </div>
-      </div>
       <div class="form-field">
         <label class="form-label">Status</label>
         <div class="status-pills" id="nw-status-pills">

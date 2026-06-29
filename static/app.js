@@ -1895,6 +1895,68 @@ function renderAnalytics() {
         </div>
       </div>
 
+      <!-- Conversion Trend Chart -->
+      ${trendData.length >= 2 ? (() => {
+        const chartItems = trendData.map(w => ({
+          label: w.title?.substring(0,18) || 'Webinar',
+          reg: w.total_registrations || 0,
+          att: w.total_attendees || 0,
+          rate: w.total_registrations > 0 ? Math.round((w.total_attendees/w.total_registrations)*100) : 0,
+          date: w.date || ''
+        }));
+        const maxVal = Math.max(...chartItems.map(c => c.reg), 1);
+        const firstHalf = chartItems.slice(0, Math.ceil(chartItems.length/2));
+        const secondHalf = chartItems.slice(Math.ceil(chartItems.length/2));
+        const avgRateFirst = firstHalf.length ? Math.round(firstHalf.reduce((s,c) => s+c.rate, 0)/firstHalf.length) : 0;
+        const avgRateSecond = secondHalf.length ? Math.round(secondHalf.reduce((s,c) => s+c.rate, 0)/secondHalf.length) : 0;
+        const rateChange = avgRateSecond - avgRateFirst;
+        const improving = rateChange > 0;
+        return `
+      <div class="fa-glass-card">
+        <div class="fa-section-header">
+          <div class="fa-section-icon" style="color:#8b5cf6;background:rgba(139,92,246,0.1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+          <div style="flex:1">
+            <div class="fa-section-title">Registration vs Attendance Trend</div>
+            <div class="fa-section-sub">Conversion performance across your last ${chartItems.length} webinars</div>
+          </div>
+          <div class="fa-trend-badge fa-trend-badge--${improving?'up':'down'}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="${improving?'23 6 13.5 15.5 8.5 10.5 1 18':'23 18 13.5 8.5 8.5 13.5 1 6'}"/></svg>
+            ${improving?'+':''}${rateChange}% conversion
+          </div>
+        </div>
+        <div class="fa-conv-legend">
+          <span class="fa-conv-leg-item"><span class="fa-conv-leg-dot" style="background:#6366f1"></span>Registrations</span>
+          <span class="fa-conv-leg-item"><span class="fa-conv-leg-dot" style="background:#10b981"></span>Attendees</span>
+          <span class="fa-conv-leg-item"><span class="fa-conv-leg-dot" style="background:linear-gradient(135deg,#8b5cf6,#ec4899);width:10px;height:3px;border-radius:2px"></span>Conversion %</span>
+        </div>
+        <div class="fa-conv-chart">
+          ${chartItems.map((c,i) => `
+            <div class="fa-conv-col">
+              <div class="fa-conv-bars">
+                <div class="fa-conv-rate-dot" style="bottom:${Math.max(c.rate,5)}%;--dot-color:${c.rate>=40?'#10b981':c.rate>=25?'#f59e0b':'#f43f5e'}" title="${c.rate}% conversion">
+                  <span class="fa-conv-rate-label">${c.rate}%</span>
+                </div>
+                <div class="fa-conv-bar fa-conv-bar--reg" style="height:${Math.max(Math.round(c.reg/maxVal*100),4)}%" title="${c.reg} registrations"></div>
+                <div class="fa-conv-bar fa-conv-bar--att" style="height:${Math.max(Math.round(c.att/maxVal*100),4)}%" title="${c.att} attendees"></div>
+              </div>
+              <div class="fa-conv-label" title="${esc(c.label)}">${esc(c.label.substring(0,10))}${c.label.length>10?'...':''}</div>
+            </div>`).join('')}
+        </div>
+        <div class="fa-conv-summary">
+          <div class="fa-conv-summary-item">
+            <span class="fa-conv-summary-label">Earlier avg conversion</span>
+            <span class="fa-conv-summary-val" style="color:#6366f1">${avgRateFirst}%</span>
+          </div>
+          <div class="fa-conv-summary-arrow">${improving?'&rarr;':'&rarr;'}</div>
+          <div class="fa-conv-summary-item">
+            <span class="fa-conv-summary-label">Recent avg conversion</span>
+            <span class="fa-conv-summary-val" style="color:${improving?'#10b981':'#f43f5e'}">${avgRateSecond}%</span>
+          </div>
+          <div class="fa-conv-summary-change fa-conv-summary-change--${improving?'up':'down'}">${improving?'+':''}${rateChange}pp</div>
+        </div>
+      </div>`;
+      })() : ''}
+
       <!-- New leads per webinar -->
       <div class="fa-glass-card" id="new-leads-chart-section">
         <div class="fa-section-header">
@@ -2695,11 +2757,6 @@ async function submitWebinarModal() {
     showToast('Please choose a date', 'error');
     return;
   }
-  if (!speaker) {
-    document.getElementById('nw-speaker').focus();
-    showToast('Please enter a speaker name', 'error');
-    return;
-  }
 
   // Disable button & show loading
   const btn = document.querySelector('#modal-overlay .btn-primary');
@@ -2717,11 +2774,11 @@ async function submitWebinarModal() {
     icp:                   (document.getElementById('nw-icp') || {value:'Others'}).value || 'Others',
     platform:              gv('nw-platform'),
     category:              gv('nw-category'),
-    language:              gv('nw-language'),
-    recording_url:         gv('nw-recording'),
-    tags:                  gv('nw-tags'),
-    expected_registrations: (() => { const v = document.getElementById('nw-expected')?.value; return v ? parseInt(v) : null; })(),
-    series:                gv('nw-series'),
+    language:              null,
+    recording_url:         null,
+    tags:                  null,
+    expected_registrations: null,
+    series:                null,
   };
 
   const isEdit = !!_editWebinarId;

@@ -23,6 +23,7 @@ def _seed_speakers_webinars(db):
         {"name": "Rajesh Kumar", "email": "rajesh.kumar@taxedge.in", "bio": "CA and Certified Tax Consultant specialising in tax planning for HNIs."},
         {"name": "Meera Nair", "email": "meera.nair@retireright.in", "bio": "Retirement planning specialist and founder of RetireRight Advisory."},
         {"name": "Vikram Patel", "email": "vikram.patel@equityiq.in", "bio": "Equity research veteran and portfolio manager with 20 years on Dalal Street."},
+        {"name": "Shakthi Prabhu", "email": "shakthi.prabhu@finright.in", "bio": "Insurance and risk management specialist with expertise in term plans, health cover, and estate planning."},
     ]
 
     speakers = []
@@ -54,6 +55,10 @@ def _seed_speakers_webinars(db):
         ("Stock Market Fundamentals", date(2024, 2, 20), "3:00 PM", speakers[4], "Understanding market mechanics, indices, and company analysis.", "completed"),
         ("Portfolio Diversification Strategies", date(2024, 9, 3), "11:00 AM", speakers[4], "Building a resilient, diversified portfolio across asset classes.", "completed"),
         ("Sectoral Outlook: Where to Invest in 2026", date(2026, 7, 1), "3:00 PM", speakers[4], "Vikram's top sector picks and macro themes for 2026.", "upcoming"),
+        ("Term Insurance: Protecting Your Family's Future", date(2024, 4, 10), "10:00 AM", speakers[5], "How to choose the right term plan and calculate adequate cover.", "completed"),
+        ("Health Insurance Deep Dive", date(2024, 8, 15), "2:00 PM", speakers[5], "Understanding riders, sub-limits, and choosing between individual vs family floater plans.", "completed"),
+        ("Estate Planning and Will Drafting", date(2025, 2, 12), "11:00 AM", speakers[5], "Practical guide to wills, trusts, and succession planning for families.", "completed"),
+        ("Insurance Myths Busted: What You Really Need", date(2026, 7, 20), "3:00 PM", speakers[5], "Common misconceptions about insurance and data-backed recommendations.", "upcoming"),
     ]
 
     sources = ["email", "social", "direct", "referral"]
