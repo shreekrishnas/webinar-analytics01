@@ -1796,142 +1796,199 @@ function renderAnalytics() {
   // New registrations per webinar (last 6) for sparkline
   const sparkMax = Math.max(...recentWebinars.map(w=>w.total_registrations||0),1);
 
+  const avgAttPerWebinar = completed.length > 0 ? Math.round(totalAtt/completed.length) : 0;
+  const avgRegPerWebinar = completed.length > 0 ? Math.round(totalReg/completed.length) : 0;
+  const noShowRate = totalReg > 0 ? Math.round(noShow/totalReg*100) : 0;
+
   setContent(`
-    <div>
-      <div class="page-hd">
-        <div>
-          <h1 class="page-title">Funnel Analytics</h1>
-          <p class="page-sub">Platform-wide performance · ${S.webinars.length} webinars · ${completed.length} completed with data</p>
+    <div class="fa-page">
+      <!-- Hero header -->
+      <div class="fa-hero">
+        <div class="fa-hero-content">
+          <div class="fa-hero-text">
+            <h1 class="fa-title">Funnel Analytics</h1>
+            <p class="fa-subtitle">${S.webinars.length} webinars tracked · ${completed.length} completed with data</p>
+          </div>
+          <div class="fa-hero-stats">
+            <div class="fa-hero-stat">
+              <span class="fa-hero-stat-val">${convRate}%</span>
+              <span class="fa-hero-stat-label">Conversion</span>
+            </div>
+            <div class="fa-hero-stat-divider"></div>
+            <div class="fa-hero-stat">
+              <span class="fa-hero-stat-val">${fmt(totalAtt)}</span>
+              <span class="fa-hero-stat-label">Attendees</span>
+            </div>
+            <div class="fa-hero-stat-divider"></div>
+            <div class="fa-hero-stat">
+              <span class="fa-hero-stat-val">${fmt(totalReg)}</span>
+              <span class="fa-hero-stat-label">Registrations</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- KPI strip -->
-      <div class="an-kpi-strip" style="grid-template-columns:repeat(6,1fr)">
+      <!-- KPI cards row -->
+      <div class="fa-kpi-row">
         ${[
-          { label:'Total Webinars', val:st.total_webinars, color:'#6366f1' },
-          { label:'Completed', val:st.completed_webinars||completed.length, color:'#10b981' },
-          { label:'Registrations', val:fmt(totalReg), color:'#6366f1' },
-          { label:'Attendees', val:fmt(totalAtt), color:'#10b981' },
-          { label:'Avg Attendance', val:st.overall_attendance_rate+'%', color:'#f59e0b', benchmark:'40%', aboveBench: st.overall_attendance_rate >= 40 },
-          { label:'Conversion Rate', val:convRate+'%', color: convRate>=40?'#10b981':convRate>=25?'#f59e0b':'#f43f5e', benchmark:'40%', aboveBench: convRate >= 40 },
+          { label:'Total Webinars', val:st.total_webinars, icon:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>', color:'#6366f1', bg:'rgba(99,102,241,0.08)' },
+          { label:'Completed', val:st.completed_webinars||completed.length, icon:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>', color:'#10b981', bg:'rgba(16,185,129,0.08)' },
+          { label:'Registrations', val:fmt(totalReg), icon:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>', color:'#6366f1', bg:'rgba(99,102,241,0.08)' },
+          { label:'Attendees', val:fmt(totalAtt), icon:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>', color:'#10b981', bg:'rgba(16,185,129,0.08)' },
+          { label:'Avg Attendance', val:st.overall_attendance_rate+'%', icon:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>', color:'#f59e0b', bg:'rgba(245,158,11,0.08)', badge:st.overall_attendance_rate>=40?'above':'below' },
+          { label:'Conversion Rate', val:convRate+'%', icon:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>', color:convRate>=40?'#10b981':convRate>=25?'#f59e0b':'#f43f5e', bg:convRate>=40?'rgba(16,185,129,0.08)':convRate>=25?'rgba(245,158,11,0.08)':'rgba(244,63,94,0.08)', badge:convRate>=40?'above':'below' },
         ].map(k=>`
-          <div class="an-kpi-card" style="border-top:3px solid ${k.color}">
-            <div class="an-kpi-val" style="color:${k.color}">${k.val}</div>
-            <div class="an-kpi-label">${k.label}</div>
-            ${k.benchmark ? `<div style="font-size:10px;color:${k.aboveBench?'#10b981':'#f59e0b'};margin-top:3px">${k.aboveBench?'Above':'Below'} 40% benchmark</div>` : ''}
+          <div class="fa-kpi-card">
+            <div class="fa-kpi-icon" style="color:${k.color};background:${k.bg}">${k.icon}</div>
+            <div class="fa-kpi-val" style="color:${k.color}">${k.val}</div>
+            <div class="fa-kpi-label">${k.label}</div>
+            ${k.badge ? `<div class="fa-kpi-badge fa-kpi-badge--${k.badge}">${k.badge==='above'?'Above':'Below'} 40%</div>` : ''}
           </div>`).join('')}
       </div>
 
-      <!-- Big visual funnel -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px 32px;margin-bottom:24px">
-        <div style="font-weight:700;font-size:16px;margin-bottom:24px;color:var(--text-primary)">Programme Conversion Funnel</div>
-        <div style="display:flex;flex-direction:column;gap:0;max-width:680px;margin:0 auto">
+      <!-- Conversion Funnel - premium visual -->
+      <div class="fa-funnel-card">
+        <div class="fa-section-header">
+          <div class="fa-section-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></div>
+          <div>
+            <div class="fa-section-title">Programme Conversion Funnel</div>
+            <div class="fa-section-sub">Registration to attendance pipeline</div>
+          </div>
+        </div>
+        <div class="fa-funnel-visual">
           ${funnelStages.map((s,i) => {
-            const width = Math.max(s.pct, 15);
-            const isNoShow = s.label === 'No-show';
+            const width = Math.max(s.pct, 18);
             return `
-              <div style="position:relative;margin-bottom:${isNoShow?0:2}px">
-                <div style="display:flex;align-items:center;gap:16px">
-                  <div style="width:${width}%;background:${s.color};border-radius:${i===0?'10px 10px 0 0':i===funnelStages.length-1?'0 0 10px 10px':'0'};padding:14px 20px;display:flex;align-items:center;justify-content:space-between;min-width:200px;transition:width .6s ease">
-                    <span style="color:#fff;font-weight:700;font-size:15px">${esc(s.label)}</span>
-                    <span style="color:#fff;font-size:13px;opacity:0.9">${s.pct}%</span>
-                  </div>
-                  <div style="flex:1">
-                    <div style="font-size:22px;font-weight:800;color:var(--text-primary)">${fmt(s.count)}</div>
-                    <div style="font-size:12px;color:var(--text-muted)">${s.label === 'Registered' ? 'total signups' : s.label==='Attended' ? `of registered · ${100-s.pct}% drop-off` : `missed · ${Math.round(noShow/(totalAtt||1)*100)}% no-show rate`}</div>
-                  </div>
+            <div class="fa-funnel-stage" style="--stage-color:${s.color}">
+              <div class="fa-funnel-bar-row">
+                <div class="fa-funnel-bar" style="width:${width}%">
+                  <span class="fa-funnel-bar-label">${esc(s.label)}</span>
+                  <span class="fa-funnel-bar-pct">${s.pct}%</span>
                 </div>
-                ${i < funnelStages.length-1 && !isNoShow ? `<div style="width:${Math.max(funnelStages[i+1].pct,15)}%;height:4px;background:linear-gradient(${s.color},${funnelStages[i+1].color});margin-left:0;opacity:.4"></div>` : ''}
-              </div>`;
+                <div class="fa-funnel-meta">
+                  <span class="fa-funnel-count">${fmt(s.count)}</span>
+                  <span class="fa-funnel-desc">${s.label==='Registered'?'total signups':s.label==='Attended'?'converted':'missed'}</span>
+                </div>
+              </div>
+              ${i < funnelStages.length-1 ? `<div class="fa-funnel-connector"><svg width="24" height="20" viewBox="0 0 24 20"><path d="M12 0 L12 16 M8 12 L12 16 L16 12" stroke="${s.color}" stroke-width="1.5" fill="none" opacity="0.4"/></svg></div>` : ''}
+            </div>`;
           }).join('')}
         </div>
-        <div style="display:flex;gap:24px;margin-top:24px;justify-content:center;flex-wrap:wrap">
-          <div style="text-align:center;padding:14px 24px;background:#6366f108;border:1px solid #6366f140;border-radius:10px">
-            <div style="font-size:20px;font-weight:800;color:#6366f1">${convRate}%</div>
-            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Reg → Attendee</div>
-            <div style="font-size:10px;color:${convRate>=40?'#10b981':'#f59e0b'};margin-top:3px">${convRate>=40?'Above':'Below'} 40% benchmark</div>
+        <div class="fa-funnel-insights">
+          <div class="fa-insight-pill" style="--pill-color:#6366f1">
+            <span class="fa-insight-val">${convRate}%</span>
+            <span class="fa-insight-label">Reg to Attendee</span>
+            <span class="fa-insight-badge fa-insight-badge--${convRate>=40?'good':'warn'}">${convRate>=40?'Above':'Below'} 40%</span>
           </div>
-          <div style="text-align:center;padding:14px 24px;background:#10b98108;border:1px solid #10b98140;border-radius:10px">
-            <div style="font-size:20px;font-weight:800;color:#10b981">${completed.length > 0 ? Math.round(totalAtt/completed.length) : 0}</div>
-            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Avg Attendees/Webinar</div>
+          <div class="fa-insight-pill" style="--pill-color:#10b981">
+            <span class="fa-insight-val">${avgAttPerWebinar}</span>
+            <span class="fa-insight-label">Avg Attendees</span>
           </div>
-          <div style="text-align:center;padding:14px 24px;background:#f59e0b08;border:1px solid #f59e0b40;border-radius:10px">
-            <div style="font-size:20px;font-weight:800;color:#f59e0b">${completed.length > 0 ? Math.round(totalReg/completed.length) : 0}</div>
-            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Avg Registrations/Webinar</div>
+          <div class="fa-insight-pill" style="--pill-color:#f59e0b">
+            <span class="fa-insight-val">${avgRegPerWebinar}</span>
+            <span class="fa-insight-label">Avg Registrations</span>
+          </div>
+          <div class="fa-insight-pill" style="--pill-color:#f43f5e">
+            <span class="fa-insight-val">${noShowRate}%</span>
+            <span class="fa-insight-label">No-show Rate</span>
           </div>
         </div>
       </div>
 
-      <!-- New leads per webinar - loaded async -->
-      <div id="new-leads-chart-section" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px 28px;margin-bottom:24px">
-        <div style="font-weight:700;font-size:15px;margin-bottom:4px;color:var(--text-primary)">New Leads per Webinar</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">First-time email addresses seen in each webinar vs returning registrants</div>
+      <!-- New leads per webinar -->
+      <div class="fa-glass-card" id="new-leads-chart-section">
+        <div class="fa-section-header">
+          <div class="fa-section-icon" style="color:#6366f1;background:rgba(99,102,241,0.1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg></div>
+          <div>
+            <div class="fa-section-title">New Leads per Webinar</div>
+            <div class="fa-section-sub">First-time email addresses vs returning registrants</div>
+          </div>
+        </div>
         <div id="new-leads-chart-body"><div class="pg-loading" style="padding:20px 0"><div class="spinner"></div></div></div>
       </div>
 
       <!-- Monthly trend + ICP breakdown -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
+      <div class="fa-two-col">
         ${months.length >= 2 ? `
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px 28px">
-          <div style="font-weight:700;font-size:15px;margin-bottom:20px">Monthly Trend</div>
+        <div class="fa-glass-card">
+          <div class="fa-section-header">
+            <div class="fa-section-icon" style="color:#6366f1;background:rgba(99,102,241,0.1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+            <div class="fa-section-title">Monthly Trend</div>
+          </div>
           ${renderMonthlyBars(months)}
         </div>` : ''}
         ${icpRows.length ? `
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px 28px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-            <div style="font-weight:700;font-size:15px">Attendees by ICP</div>
-            <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#f59e0b"><span style="display:inline-block;width:12px;height:2px;background:#f59e0b;border-top:2px dashed #f59e0b"></span>40% benchmark</div>
+        <div class="fa-glass-card">
+          <div class="fa-section-header">
+            <div class="fa-section-icon" style="color:#f59e0b;background:rgba(245,158,11,0.1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>
+            <div>
+              <div class="fa-section-title">Attendees by ICP</div>
+              <div class="fa-section-sub">Audience segment breakdown</div>
+            </div>
           </div>
+          <div class="fa-icp-list">
           ${icpRows.map(([icp,d]) => {
             const attRate = d.att>0&&d.reg>0 ? Math.round(d.att/d.reg*100) : 0;
             const barPct = Math.round(d.att/maxIcpAtt*100);
-            const benchPct = Math.min(40/100*maxIcpAtt/maxIcpAtt*100, 100);
             const rateColor = attRate >= 40 ? '#10b981' : attRate >= 25 ? '#f59e0b' : '#f43f5e';
             return `
-            <div style="margin-bottom:12px">
-              <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-                <span style="font-size:13px;font-weight:600">${esc(icp)}</span>
-                <span style="font-size:12px;color:${rateColor};font-weight:600">${fmt(d.att)} attended · ${attRate>0?attRate+'%':'-'}</span>
+            <div class="fa-icp-row">
+              <div class="fa-icp-header">
+                <span class="fa-icp-name">${esc(icp)}</span>
+                <span class="fa-icp-stats"><span style="color:${rateColor};font-weight:700">${attRate}%</span> · ${fmt(d.att)} attended</span>
               </div>
-              <div style="height:8px;background:var(--border);border-radius:4px;position:relative">
-                <div style="height:100%;width:${barPct}%;background:#6366f1;border-radius:4px"></div>
+              <div class="fa-icp-bar-track">
+                <div class="fa-icp-bar-fill" style="width:${barPct}%;background:linear-gradient(90deg,#6366f1,#818cf8)"></div>
+                <div class="fa-icp-benchmark" style="left:40%"></div>
               </div>
             </div>`;
           }).join('')}
+          </div>
         </div>` : ''}
       </div>
 
       <!-- Top lists -->
-      <div class="an-grid">
-        <div class="an-card">
-          <div class="an-title">Top 8 by Registrations</div>
-          ${top10reg.map(w => `
-            <div class="an-row" onclick="nav('webinar',${w.id})" style="cursor:pointer">
-              <span class="an-row-lbl" title="${esc(w.title)}">${esc(w.title)}</span>
-              <div class="an-bar-wrap"><div class="an-bar-fill" style="width:${Math.round(w.total_registrations/maxReg*100)}%;background:#6366f1"></div></div>
-              <span class="an-row-val">${fmt(w.total_registrations)}</span>
-            </div>`).join('')}
-        </div>
-        <div class="an-card">
-          <div class="an-title" style="display:flex;align-items:center;justify-content:space-between">
-            Top 8 by Attendance Rate
-            <span style="font-size:10px;font-weight:500;color:#f59e0b;display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:14px;border-top:2px dashed #f59e0b"></span>40% target</span>
+      <div class="fa-two-col">
+        <div class="fa-glass-card">
+          <div class="fa-section-header">
+            <div class="fa-section-icon" style="color:#6366f1;background:rgba(99,102,241,0.1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div>
+            <div class="fa-section-title">Top 8 by Registrations</div>
           </div>
-          ${top10att.length ? top10att.map(w => {
+          <div class="fa-ranking-list">
+          ${top10reg.map((w,i) => `
+            <div class="fa-rank-row" onclick="nav('webinar',${w.id})">
+              <span class="fa-rank-num">${i+1}</span>
+              <span class="fa-rank-name" title="${esc(w.title)}">${esc(w.title)}</span>
+              <div class="fa-rank-bar-wrap"><div class="fa-rank-bar-fill" style="width:${Math.round(w.total_registrations/maxReg*100)}%;background:linear-gradient(90deg,#6366f1,#818cf8)"></div></div>
+              <span class="fa-rank-val">${fmt(w.total_registrations)}</span>
+            </div>`).join('')}
+          </div>
+        </div>
+        <div class="fa-glass-card">
+          <div class="fa-section-header">
+            <div class="fa-section-icon" style="color:#10b981;background:rgba(16,185,129,0.1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+            <div>
+              <div class="fa-section-title">Top 8 by Attendance Rate</div>
+              <div class="fa-section-sub">40% benchmark target</div>
+            </div>
+          </div>
+          <div class="fa-ranking-list">
+          ${top10att.length ? top10att.map((w,i) => {
             const rate = w.attendance_rate || 0;
             const barW = Math.min(rate/maxAtt*100, 100);
-            const benchW = Math.min(40/maxAtt*100, 100);
             const barColor = rate >= 40 ? '#10b981' : rate >= 25 ? '#f59e0b' : '#f43f5e';
             return `
-            <div class="an-row" onclick="nav('webinar',${w.id})" style="cursor:pointer">
-              <span class="an-row-lbl" title="${esc(w.title)}">${esc(w.title)}</span>
-              <div class="an-bar-wrap" style="position:relative">
-                <div class="an-bar-fill" style="width:${barW}%;background:${barColor}"></div>
-                <div style="position:absolute;top:0;bottom:0;left:${benchW}%;width:2px;background:#f59e0b;opacity:0.7;border-radius:1px"></div>
+            <div class="fa-rank-row" onclick="nav('webinar',${w.id})">
+              <span class="fa-rank-num">${i+1}</span>
+              <span class="fa-rank-name" title="${esc(w.title)}">${esc(w.title)}</span>
+              <div class="fa-rank-bar-wrap" style="position:relative">
+                <div class="fa-rank-bar-fill" style="width:${barW}%;background:${barColor}"></div>
+                <div style="position:absolute;top:0;bottom:0;left:${Math.min(40/maxAtt*100,100)}%;width:2px;background:#f59e0b;opacity:0.6;border-radius:1px"></div>
               </div>
-              <span class="an-row-val" style="color:${barColor}">${fmtPct(rate)}</span>
+              <span class="fa-rank-val" style="color:${barColor}">${fmtPct(rate)}</span>
             </div>`;
-          }).join('') : '<div style="color:var(--text-3);font-size:12px;padding:8px 0">No completed webinars with attendance data yet.</div>'}
+          }).join('') : '<div style="color:var(--text-muted);font-size:13px;padding:12px 0">No completed webinars with attendance data yet.</div>'}
+          </div>
         </div>
       </div>
 

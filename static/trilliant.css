@@ -3524,3 +3524,472 @@ html.dark .topic-angle {
   .stc-topics { grid-template-columns: 1fr !important; padding: 16px !important; }
   .stc-header { padding: 14px 16px !important; }
 }
+
+
+/* ═══════════════════════════════════════════════════════
+   FUNNEL ANALYTICS - Premium Glassmorphism Redesign
+═══════════════════════════════════════════════════════ */
+
+.fa-page {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 20px !important;
+}
+
+/* Hero header */
+.fa-hero {
+  background: linear-gradient(135deg, rgba(99,102,241,0.12) 0%, rgba(139,92,246,0.08) 50%, rgba(16,185,129,0.06) 100%) !important;
+  border: 1px solid rgba(99,102,241,0.15) !important;
+  border-radius: 20px !important;
+  padding: 28px 32px !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+.fa-hero::before {
+  content: '' !important;
+  position: absolute !important;
+  top: -50% !important;
+  right: -20% !important;
+  width: 300px !important;
+  height: 300px !important;
+  background: radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%) !important;
+  pointer-events: none !important;
+}
+html.dark .fa-hero {
+  background: linear-gradient(135deg, rgba(99,102,241,0.15) 0%, rgba(139,92,246,0.10) 50%, rgba(16,185,129,0.06) 100%) !important;
+  border-color: rgba(99,102,241,0.25) !important;
+}
+.fa-hero-content {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+.fa-title {
+  font-size: 26px !important;
+  font-weight: 800 !important;
+  color: var(--rh-text) !important;
+  letter-spacing: -0.5px !important;
+  margin: 0 0 4px !important;
+}
+.fa-subtitle {
+  font-size: 13px !important;
+  color: var(--rh-text-2) !important;
+  margin: 0 !important;
+}
+.fa-hero-stats {
+  display: flex !important;
+  align-items: center !important;
+  gap: 20px !important;
+}
+.fa-hero-stat {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 2px !important;
+}
+.fa-hero-stat-val {
+  font-size: 24px !important;
+  font-weight: 800 !important;
+  color: #6366f1 !important;
+  letter-spacing: -0.5px !important;
+}
+.fa-hero-stat-label {
+  font-size: 11px !important;
+  color: var(--rh-text-2) !important;
+  font-weight: 500 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+}
+.fa-hero-stat-divider {
+  width: 1px !important;
+  height: 36px !important;
+  background: rgba(99,102,241,0.2) !important;
+}
+
+/* KPI cards */
+.fa-kpi-row {
+  display: grid !important;
+  grid-template-columns: repeat(6, 1fr) !important;
+  gap: 14px !important;
+}
+.fa-kpi-card {
+  background: rgba(255,255,255,0.7) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255,255,255,0.5) !important;
+  border-radius: 16px !important;
+  padding: 18px 16px !important;
+  text-align: center !important;
+  transition: transform 0.25s ease, box-shadow 0.25s ease !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04), 0 0 0 1px rgba(99,102,241,0.06) !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+html.dark .fa-kpi-card {
+  background: rgba(30,27,75,0.5) !important;
+  border-color: rgba(99,102,241,0.15) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.2), 0 0 0 1px rgba(99,102,241,0.1) !important;
+}
+.fa-kpi-card:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 8px 28px rgba(99,102,241,0.12), 0 0 0 1px rgba(99,102,241,0.15) !important;
+}
+.fa-kpi-icon {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 10px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 auto 10px !important;
+}
+.fa-kpi-val {
+  font-size: 24px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.5px !important;
+}
+.fa-kpi-label {
+  font-size: 11px !important;
+  color: var(--rh-text-2) !important;
+  font-weight: 500 !important;
+  margin-top: 4px !important;
+}
+.fa-kpi-badge {
+  display: inline-block !important;
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  padding: 2px 8px !important;
+  border-radius: 99px !important;
+  margin-top: 6px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.3px !important;
+}
+.fa-kpi-badge--above { background: rgba(16,185,129,0.12) !important; color: #059669 !important; }
+.fa-kpi-badge--below { background: rgba(245,158,11,0.12) !important; color: #d97706 !important; }
+
+/* Glass card base */
+.fa-glass-card {
+  background: rgba(255,255,255,0.7) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255,255,255,0.5) !important;
+  border-radius: 18px !important;
+  padding: 24px 28px !important;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.04), 0 0 0 1px rgba(99,102,241,0.05) !important;
+}
+html.dark .fa-glass-card {
+  background: rgba(30,27,75,0.45) !important;
+  border-color: rgba(99,102,241,0.15) !important;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.2) !important;
+}
+
+/* Section headers */
+.fa-section-header {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  margin-bottom: 20px !important;
+}
+.fa-section-icon {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 10px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: rgba(99,102,241,0.1) !important;
+  color: #6366f1 !important;
+  flex-shrink: 0 !important;
+}
+.fa-section-title {
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  color: var(--rh-text) !important;
+}
+.fa-section-sub {
+  font-size: 12px !important;
+  color: var(--rh-text-2) !important;
+  margin-top: 1px !important;
+}
+
+/* Funnel card */
+.fa-funnel-card {
+  background: rgba(255,255,255,0.75) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(255,255,255,0.5) !important;
+  border-radius: 20px !important;
+  padding: 28px 32px !important;
+  box-shadow: 0 4px 24px rgba(99,102,241,0.06), 0 0 0 1px rgba(99,102,241,0.08) !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+html.dark .fa-funnel-card {
+  background: rgba(30,27,75,0.5) !important;
+  border-color: rgba(99,102,241,0.2) !important;
+}
+.fa-funnel-card::after {
+  content: '' !important;
+  position: absolute !important;
+  bottom: -60px !important;
+  left: -60px !important;
+  width: 200px !important;
+  height: 200px !important;
+  background: radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%) !important;
+  pointer-events: none !important;
+}
+
+.fa-funnel-visual {
+  max-width: 640px !important;
+  margin: 0 auto 24px !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+.fa-funnel-stage {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+}
+
+.fa-funnel-bar-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 18px !important;
+  width: 100% !important;
+}
+
+.fa-funnel-bar {
+  background: var(--stage-color) !important;
+  border-radius: 12px !important;
+  padding: 16px 20px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  min-width: 160px !important;
+  transition: width 0.8s cubic-bezier(0.22,1,0.36,1), box-shadow 0.3s ease !important;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--stage-color) 25%, transparent) !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+.fa-funnel-bar::before {
+  content: '' !important;
+  position: absolute !important;
+  inset: 0 !important;
+  background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%) !important;
+  pointer-events: none !important;
+}
+.fa-funnel-bar:hover {
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--stage-color) 35%, transparent) !important;
+}
+
+.fa-funnel-bar-label {
+  color: #fff !important;
+  font-weight: 700 !important;
+  font-size: 14px !important;
+  position: relative !important;
+}
+.fa-funnel-bar-pct {
+  color: rgba(255,255,255,0.85) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  position: relative !important;
+}
+
+.fa-funnel-meta {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1px !important;
+}
+.fa-funnel-count {
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  color: var(--rh-text) !important;
+  letter-spacing: -0.3px !important;
+}
+.fa-funnel-desc {
+  font-size: 11px !important;
+  color: var(--rh-text-2) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+}
+
+.fa-funnel-connector {
+  display: flex !important;
+  justify-content: center !important;
+  padding: 2px 0 !important;
+  opacity: 0.5 !important;
+}
+
+/* Funnel insight pills */
+.fa-funnel-insights {
+  display: flex !important;
+  gap: 12px !important;
+  justify-content: center !important;
+  flex-wrap: wrap !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+.fa-insight-pill {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 3px !important;
+  padding: 14px 22px !important;
+  background: rgba(255,255,255,0.6) !important;
+  border: 1px solid rgba(255,255,255,0.5) !important;
+  border-radius: 14px !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+  min-width: 100px !important;
+}
+html.dark .fa-insight-pill {
+  background: rgba(30,27,75,0.4) !important;
+  border-color: rgba(99,102,241,0.15) !important;
+}
+.fa-insight-pill:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.06) !important;
+}
+.fa-insight-val {
+  font-size: 20px !important;
+  font-weight: 800 !important;
+  color: var(--pill-color) !important;
+  letter-spacing: -0.3px !important;
+}
+.fa-insight-label {
+  font-size: 10px !important;
+  color: var(--rh-text-2) !important;
+  font-weight: 500 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.4px !important;
+}
+.fa-insight-badge {
+  font-size: 8px !important;
+  font-weight: 700 !important;
+  padding: 1px 6px !important;
+  border-radius: 99px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.3px !important;
+}
+.fa-insight-badge--good { background: rgba(16,185,129,0.12) !important; color: #059669 !important; }
+.fa-insight-badge--warn { background: rgba(245,158,11,0.12) !important; color: #d97706 !important; }
+
+/* Two-column layout */
+.fa-two-col {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 20px !important;
+}
+
+/* ICP breakdown */
+.fa-icp-list { display: flex !important; flex-direction: column !important; gap: 14px !important; }
+.fa-icp-row { }
+.fa-icp-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-bottom: 6px !important;
+}
+.fa-icp-name { font-size: 13px !important; font-weight: 600 !important; color: var(--rh-text) !important; }
+.fa-icp-stats { font-size: 12px !important; color: var(--rh-text-2) !important; }
+.fa-icp-bar-track {
+  height: 8px !important;
+  background: rgba(99,102,241,0.08) !important;
+  border-radius: 99px !important;
+  overflow: visible !important;
+  position: relative !important;
+}
+html.dark .fa-icp-bar-track { background: rgba(255,255,255,0.06) !important; }
+.fa-icp-bar-fill {
+  height: 100% !important;
+  border-radius: 99px !important;
+  transition: width 0.6s cubic-bezier(0.22,1,0.36,1) !important;
+  box-shadow: 0 2px 6px rgba(99,102,241,0.2) !important;
+}
+.fa-icp-benchmark {
+  position: absolute !important;
+  top: -3px !important;
+  bottom: -3px !important;
+  width: 2px !important;
+  background: #f59e0b !important;
+  border-radius: 1px !important;
+  opacity: 0.6 !important;
+}
+
+/* Ranking lists */
+.fa-ranking-list { display: flex !important; flex-direction: column !important; gap: 6px !important; }
+.fa-rank-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 8px 10px !important;
+  border-radius: 10px !important;
+  cursor: pointer !important;
+  transition: background 0.2s ease !important;
+}
+.fa-rank-row:hover { background: rgba(99,102,241,0.05) !important; }
+html.dark .fa-rank-row:hover { background: rgba(99,102,241,0.1) !important; }
+.fa-rank-num {
+  width: 22px !important;
+  height: 22px !important;
+  border-radius: 6px !important;
+  background: rgba(99,102,241,0.08) !important;
+  color: #6366f1 !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+}
+.fa-rank-name {
+  font-size: 12px !important;
+  color: var(--rh-text) !important;
+  font-weight: 500 !important;
+  width: 180px !important;
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.fa-rank-bar-wrap {
+  flex: 1 !important;
+  height: 8px !important;
+  background: rgba(99,102,241,0.06) !important;
+  border-radius: 99px !important;
+  overflow: hidden !important;
+}
+html.dark .fa-rank-bar-wrap { background: rgba(255,255,255,0.06) !important; }
+.fa-rank-bar-fill {
+  height: 100% !important;
+  border-radius: 99px !important;
+  transition: width 0.6s cubic-bezier(0.22,1,0.36,1) !important;
+}
+.fa-rank-val {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: var(--rh-text) !important;
+  min-width: 44px !important;
+  text-align: right !important;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .fa-kpi-row { grid-template-columns: repeat(3, 1fr) !important; }
+  .fa-two-col { grid-template-columns: 1fr !important; }
+  .fa-hero-content { flex-direction: column !important; gap: 16px !important; text-align: center !important; }
+  .fa-hero-stats { justify-content: center !important; }
+  .fa-rank-name { width: 120px !important; }
+}
+@media (max-width: 600px) {
+  .fa-kpi-row { grid-template-columns: repeat(2, 1fr) !important; }
+  .fa-funnel-bar-row { flex-direction: column !important; align-items: stretch !important; gap: 6px !important; }
+  .fa-funnel-bar { width: 100% !important; }
+  .fa-funnel-insights { flex-direction: column !important; }
+}
