@@ -110,6 +110,17 @@ async def lifespan(app: FastAPI):
             logger.info("Local dev DB seeded")
         except Exception as e:
             logger.warning(f"DB seed skipped: {e}")
+    try:
+        db = SessionLocal()
+        from sqlalchemy import func as _f
+        exists = db.query(models.Speaker).filter(_f.lower(models.Speaker.name) == "shakthi prabhu").first()
+        if not exists:
+            db.add(models.Speaker(name="Shakthi Prabhu", email="shakthi.prabhu@finright.in", bio="Insurance and risk management specialist with expertise in term plans, health cover, and estate planning."))
+            db.commit()
+            logger.info("Added speaker: Shakthi Prabhu")
+        db.close()
+    except Exception as e:
+        logger.warning(f"Speaker migration skipped: {e}")
     yield
 
 
