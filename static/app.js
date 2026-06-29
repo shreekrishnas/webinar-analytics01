@@ -1272,7 +1272,6 @@ function webinarCardHTML(w) {
               ${w.has_attendee_data ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : '○'} Attendees
             </span>`
         }
-        ${w.has_attendee_data ? `<a href="/api/webinars/${w.id}/attendees/download" onclick="event.stopPropagation()" download title="Download attendees CSV" class="upload-tag has" style="text-decoration:none;margin-left:auto;padding:3px 8px;font-size:11px;display:flex;align-items:center;gap:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> CSV</a>` : ''}
       </div>
     </div>`;
 }
@@ -1443,10 +1442,6 @@ function _drawWebinarDetail(w) {
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Export Report
               </button>` : ''}
-              ${w.has_attendee_data ? `<a href="/api/webinars/${w.id}/attendees/download" download title="Download attendees CSV" class="btn btn-ghost btn-sm" style="font-size:12px;display:flex;align-items:center;gap:5px;border-radius:8px;height:32px;padding:0 12px;text-decoration:none;color:inherit;">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Attendees CSV
-              </a>` : ''}
               <button class="btn btn-ghost btn-sm" onclick="copyWebinarTitle('${esc(w.title).replace(/'/g,"\\'")}');event.stopPropagation()" title="Copy title" style="font-size:12px;display:flex;align-items:center;gap:5px;border-radius:8px;height:32px;padding:0 12px">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                 Copy
@@ -2755,6 +2750,11 @@ async function submitWebinarModal() {
   if (!dateVal) {
     document.getElementById('nw-date').focus();
     showToast('Please choose a date', 'error');
+    return;
+  }
+  if (!speaker) {
+    document.getElementById('nw-speaker').focus();
+    showToast('Please enter a speaker name', 'error');
     return;
   }
 
