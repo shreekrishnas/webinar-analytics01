@@ -4909,6 +4909,7 @@ html.dark .kpi-card.kc-gold .kpi-card-value {
 /* speaker dropdown */
 .speaker-dropdown {
   position: relative;
+  z-index: 10;
 }
 .speaker-dropdown-list {
   position: absolute;
@@ -4918,8 +4919,8 @@ html.dark .kpi-card.kc-gold .kpi-card-value {
   background: var(--rh-surface, #fff);
   border: 1px solid var(--rh-border, #e5e7eb);
   border-radius: 10px;
-  box-shadow: 0 4px 20px rgba(0,0,0,.12);
-  z-index: 999;
+  box-shadow: 0 8px 30px rgba(0,0,0,.18);
+  z-index: 9999;
   max-height: 220px;
   overflow-y: auto;
 }
