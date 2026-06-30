@@ -1394,13 +1394,15 @@ def get_hot_leads(db: Session = Depends(get_db)):
     """)).fetchall()
 
     # Repeat attendees: attended 2+ different webinars
-    repeat = db.execute(_t("""
+    _is_pg = "postgresql" in str(engine.url)
+    _agg_fn = "STRING_AGG(DISTINCT COALESCE(w2.icp,'Others'), ',')" if _is_pg else "GROUP_CONCAT(DISTINCT COALESCE(w2.icp,'Others'))"
+    repeat = db.execute(_t(f"""
         SELECT
             r.attendee_name AS name,
             r.email,
             COUNT(DISTINCT a.webinar_id) AS webinar_count,
             MAX(a.duration_minutes) AS max_duration,
-            (SELECT STRING_AGG(DISTINCT COALESCE(w2.icp,'Others'), ',') FROM attendances a2 JOIN registrations r2 ON r2.id=a2.registration_id JOIN webinars w2 ON w2.id=a2.webinar_id WHERE a2.attended=TRUE AND r2.email=r.email) AS icps,
+            (SELECT {_agg_fn} FROM attendances a2 JOIN registrations r2 ON r2.id=a2.registration_id JOIN webinars w2 ON w2.id=a2.webinar_id WHERE a2.attended=TRUE AND r2.email=r.email) AS icps,
             COALESCE(p.status, 'not_added') AS pipeline_status
         FROM attendances a
         JOIN registrations r ON r.id = a.registration_id
