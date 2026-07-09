@@ -1882,13 +1882,16 @@ async def chat(payload: dict, db: Session = Depends(get_db)):
 
     # All webinars index (compact list so AI can answer first/last/specific date questions)
     all_webinars = db.execute(text("""
-        SELECT w.title, w.date, COALESCE(s.name,'Unknown') as speaker, COALESCE(w.icp,'Others') as icp, w.status
+        SELECT w.title, w.date, COALESCE(s.name,'Unknown') as speaker, COALESCE(w.icp,'Others') as icp, w.status,
+          (SELECT COUNT(*) FROM registrations r WHERE r.webinar_id=w.id) as regs,
+          (SELECT COUNT(*) FROM attendances a WHERE a.webinar_id=w.id AND a.attended=TRUE) as att
         FROM webinars w LEFT JOIN speakers s ON s.id=w.speaker_id
         ORDER BY w.date ASC
     """)).fetchall()
     ctx_parts.append(f"\nALL {len(all_webinars)} WEBINARS (chronological, earliest first):")
     for i, w in enumerate(all_webinars, 1):
-        ctx_parts.append(f"  #{i} [{w.date}] {w.title} | {w.speaker} | {w.icp}")
+        rate = round(w.att / w.regs * 100, 1) if w.regs else 0
+        ctx_parts.append(f"  #{i} [{w.date}] {w.title} | {w.speaker} | {w.icp} | Regs: {w.regs} | Att: {w.att} ({rate}%)")
 
     # ── Person lookup: detect names/emails in the question and fetch their data
     import re
